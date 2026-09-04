@@ -1,0 +1,26 @@
+{
+  "root": true,
+  "env": { "es2021": true, "node": true },
+  "parserOptions": { "ecmaVersion": 2021, "sourceType": "script" },
+  "extends": "eslint:recommended",
+  "globals": {
+    "SpreadsheetApp": "readonly",
+    "HtmlService": "readonly",
+    "PropertiesService": "readonly",
+    "CacheService": "readonly",
+    "LockService": "readonly",
+    "Utilities": "readonly",
+    "Logger": "readonly",
+    "ScriptApp": "readonly"
+  },
+  "overrides": [
+    {
+      "files": ["test/**/*.js"],
+      "env": { "jest": true, "node": true }
+    }
+  ],
+  "rules": {
+    "no-unused-vars": ["warn", { "args": "none" }],
+    "no-undef": "off"
+  }
+}

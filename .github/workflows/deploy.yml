@@ -1,0 +1,29 @@
+name: Deploy to Apps Script
+
+# Manuel tetiklenir. Çalışması için repo Secrets'ta şunlar tanımlı olmalı:
+#   CLASPRC_JSON  -> `clasp login` sonrası oluşan ~/.clasprc.json dosyasının içeriği
+#   CLASP_JSON    -> .clasp.json.example'daki gibi { "scriptId": "...", "rootDir": "src" }
+# Detaylar için README.md > "Dağıtım (CI/CD)" bölümüne bakın.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test -- --ci
+      - name: clasp kimlik bilgilerini geri yükle
+        run: echo "$CLASPRC_JSON" > ~/.clasprc.json
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      - name: clasp proje ayarını geri yükle
+        run: echo "$CLASP_JSON" > .clasp.json
+        env:
+          CLASP_JSON: ${{ secrets.CLASP_JSON }}
+      - run: npx clasp push --force
