@@ -22,6 +22,9 @@ function createFakeSheet(name, rows) {
     deleteRows: function (startRow, numRows) {
       rows.splice(startRow - 1, numRows);
     },
+    deleteRow: function (rowIndex) {
+      rows.splice(rowIndex - 1, 1);
+    },
     getRange: function (row, col) {
       return {
         setValue: function (v) {
@@ -177,16 +180,26 @@ function installGasMocks(opts) {
   };
 
   global.HtmlService = {
-    createHtmlOutputFromFile: function () {
+    createHtmlOutputFromFile: function (name) {
       var out = {
         setTitle: function () {
           return out;
         },
         addMetaTag: function () {
           return out;
+        },
+        getContent: function () {
+          return '<!-- ' + name + ' -->';
         }
       };
       return out;
+    },
+    createTemplateFromFile: function (name) {
+      return {
+        evaluate: function () {
+          return global.HtmlService.createHtmlOutputFromFile(name);
+        }
+      };
     }
   };
 

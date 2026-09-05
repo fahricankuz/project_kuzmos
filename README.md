@@ -1,225 +1,213 @@
-# Kuzmos · Kasa
+# Kuzmos
 
-Kuzmos Kasa & Nakit Akış Modülü + Sipariş modülü — Google Apps Script
-backend + web arayüzü, rol bazlı yetkilendirme ile tek projede birleşik.
+Sipariş + Kasa yönetimi tek uygulamada: Google Apps Script backend, rol bazlı
+web arayüzü, veritabanı olarak Google Sheets.
 
-Bu proje, tek dosyalık (`Macro.gs` + `Index.html`) eski sürümün, git ile
-versiyonlanan, test edilebilir, modüler ve çok kullanıcılı bir Apps Script
-projesine dönüştürülmüş halidir. Veritabanı hâlâ Google Sheets'tir (bilinçli
-tercih — bkz. aşağıdaki "Neden hâlâ Google Sheets?" bölümü); asıl değişen,
-kodun yapısı, kimlik doğrulama/yetkilendirme modeli ve geliştirme/dağıtım
-süreci.
-
-Başlangıçta sipariş formu ve kasa raporu ayrı Apps Script projeleriydi
-(sipariş sistemine kasa tarafından sadece salt okuma erişimi vardı). Artık
-ikisi tek bir projede, ortak kullanıcı/rol tablosu üzerinden birleştirildi:
-mağaza, muhasebe ve yönetici aynı uygulamayı, kendi rolüne göre farklı
-görüp farklı işlem yapabildikleri tek bir arayüzden kullanıyor.
+Mağaza siparişi girer, tahsilatı işler; tahsilat aynı anda kasaya gelir olarak
+düşer; muhasebe ve yönetici aynı veriden rapor alır. Mağaza kasanın tamamını
+göremez, muhasebe kullanıcı yönetemez.
 
 ## Roller
 
-Üç rol var (`src/Auth.js` → `ROLLER`):
-
-| Rol | Sipariş oluştur/gör | Kasa hareketleri, cari, banka, tekrar, rapor | Kullanıcı yönetimi |
+| Yetki | magaza | muhasebe | yonetici |
 | --- | --- | --- | --- |
-| **magaza** | ✅ (kendi girdiğini düzenler/siler; hepsini görür) | ❌ | ❌ |
-| **muhasebe** | ✅ (hepsini düzenler/siler) + finansal özet | ✅ | ❌ |
-| **yonetici** | ✅ (hepsini düzenler/siler) + finansal özet | ✅ | ✅ |
+| Sipariş oluştur / düzenle / tahsilat / iade | ✅ | ✅ | ✅ |
+| Müşteriler, pipeline, mağaza paneli | ✅ | ✅ | ✅ |
+| Mağaza masrafı girme | ✅ | ✅ | ✅ |
+| Günün/ayın kasası özeti | ✅ | ✅ | ✅ |
+| Kasa hareketleri, rapor, cari, banka, yıllık | ❌ | ✅ | ✅ |
+| Personel / marka / hedef / oran ayarları | ❌ | ✅ | ✅ |
+| Kullanıcı hesabı yönetimi | ❌ | ❌ | ✅ |
+| Siparişi kalıcı silme | ❌ | ✅ | ✅ |
 
-Eski sürümdeki `admin`/`personel` rolleri sırasıyla `yonetici` ve
-`muhasebe`'ye otomatik eşlenir (`rolNormallestir_`), böylece bu değişiklikten
-önce eklenmiş kullanıcılar koda dokunulmadan çalışmaya devam eder.
+Eski sürümdeki `admin` / `personel` rolleri girişte otomatik olarak `yonetici`
+ve `muhasebe`ye eşlenir (`rolNormallestir_`).
 
-## Eski sürüme göre neler değişti?
+**Satış personeli ≠ kullanıcı hesabı.** Mağazada herkes aynı tableti ve aynı
+"Mağaza" hesabını kullandığı için satışı kimin yaptığı ve bir kaydı kimin
+değiştirdiği `Personel` sayfasındaki listeden seçilir; her işlem `Log`
+sayfasına o kişinin adıyla yazılır.
 
-- **Sipariş formu artık ayrı bir proje değil.** `src/Siparis.js`, eskiden
-  ayrı bir Google Sheets projesinden salt okuma yapan bir modülken, şimdi
-  Kasa ile aynı spreadsheet içinde kendi sayfasına (`Siparisler`) hem yazan
-  hem okuyan tam bir CRUD modülü (`siparisEkle`, `siparisGuncelle`,
-  `siparisSil`, `siparisListele`, `siparisOzetiGetir`).
-- **Rol modeli ikiden üçe çıktı.** `admin`/`personel` yerine
-  `yonetici`/`muhasebe`/`magaza` — yukarıdaki tabloya bakın.
-- **Tek dosya yerine modüler proje.** `Macro.gs` tek bir dosyaydı; artık
-  `src/` altında sorumluluğa göre ayrılmış dosyalar var (`Auth.js`,
-  `Hareketler.js`, `Cari.js`, `Banka.js`, `Tekrar.js`, `Siparis.js`,
-  `Rapor.js`, `Setup.js`, `Main.js`, `Utils.js`, `Crypto.js`,
-  `SheetService.js`, `Config.js`).
-- **Ortak tek şifre yerine kişisel kullanıcı hesapları.** Her kullanıcının
-  kendi e-postası ve şifresi var (`Kullanicilar` sayfası); kim ne zaman
-  giriş yaptı, kim hangi hareketi/siparişi kaydetti izlenebilir.
-- **Şifreler artık hash'lenmiş.** Düz metin veya tek SHA-256 yerine,
-  kullanıcıya özel salt ile binlerce kez zincirlenmiş HMAC-SHA256
-  (poor-man's PBKDF2) kullanılıyor — bkz. `src/Crypto.js`.
-- **Kaba kuvvet koruması.** 15 dakikada 5 başarısız girişten sonra hesap
-  geçici olarak kilitlenir (`src/Auth.js`).
-- **Spreadsheet ID'si artık kodda değil.** Script Properties'te tutulur
-  (`ilkKurulum` ile bir kez ayarlanır), böylece ID git geçmişine karışmaz.
-- **"Kaydeden" alanı artık sahtesi yapılamaz.** Eskiden serbest metin
-  girilebiliyordu; artık sunucu, oturum açan kullanıcının adını/e-postasını
-  otomatik yazar.
-- **Test edilebilir.** `test/` altında Jest testleri ve Apps Script
-  global'lerinin (SpreadsheetApp, PropertiesService, CacheService,
-  Utilities...) sahte (fake) implementasyonları var.
-- **CI.** Her push'ta lint + test otomatik çalışır
-  (`.github/workflows/ci.yml`).
+## Sipariş modülü
 
-Frontend (`Index.html`) rol bazlı: `yonetici`/`muhasebe` Özet, Rapor,
-Hareketler, Planlanan, Banka, Yıllık, Sipariş ve Ayarlar sekmelerini görür;
-`magaza` sadece Sipariş ve (sadece "Hesabım"ı içeren) Ayarlar sekmesini
-görür. Giriş ekranına e-posta alanı, Ayarlar sayfasına "Hesabım" ve
-(yalnızca yönetici için) "Kullanıcılar" paneli eklendi.
+- Sipariş no sunucuda kilitle üretilir (`DK-AA-YY-0001`) — aynı anda kaydeden
+  iki kişi çakışmaz.
+- Ürün satırı: **Marka** (kategori → marka iki aşamalı seçici, "Diğer" ile elle
+  giriş), ürün/model, adet, ekartman, köprü, kol, birim fiyat. Elle yazılan
+  marka listeye otomatik eklenir.
+- Ara toplam otomatik; genel toplam elle düşürülürse indirim tutarı ve yüzdesi
+  hesaplanır, KDV dağıtımı bu indirime göre yapılır.
+- **Çoklu tahsilat**: sınırsız kapora/tahsilat, her biri kendi tarihi ve
+  yöntemiyle (nakit / kredi kartı + banka + taksit). İade negatif tahsilattır.
+- Reçete (uzak/yakın × sağ/sol: sph, cyl, ax, pdm, yükseklik, not) sipariş ve
+  müşteri kartında saklanır.
+- Teslim tarihi elle girilmez: durum "Teslim Edildi" yapıldığında o gün, tamamı
+  tahsil edildiğinde son ödeme tarihi olarak yazılır.
+- A4 tek sayfa yazdırma, pipeline (sürükle-bırak, gecikme rozetleri), çöp
+  kutusu (3 gün sonra sunucu tarafında temizlenir), CSV dışa aktarma.
 
-## Neden hâlâ Google Sheets?
+## Kasa entegrasyonu
 
-Bu projeyi başlatırken üç seçenek konuşuldu: (1) Next.js + PostgreSQL gibi
-tam bağımsız bir web uygulamasına geçmek, (2) ayrı backend/frontend servisi
-kurmak, (3) mevcut Google Apps Script + Sheets altyapısını profesyonelleştirmek.
-Üçüncü seçenek tercih edildi çünkü: kurulum/hosting maliyeti sıfır (Google
-hesabı yeterli), ve muhasebeci/işletme sahibi verinin ham haline (kasa
-hareketleri ve sipariş kayıtları dahil, artık aynı spreadsheet'te) Sheets
-üzerinden her zaman erişebiliyor. Ölçek büyürse (çok yüksek
-işlem hacmi, gerçek zamanlı çoklu kullanıcı çakışmaları) gerçek bir
-veritabanına geçiş bu modüler yapı sayesinde daha kolay olacaktır — iş
-mantığı zaten `SheetService.js` arkasında soyutlanmış durumda.
+`siparis_kasa_entegrasyon` ayarı açıkken her tahsilat otomatik bir kasa
+hareketine dönüşür:
+
+| Tahsilat | Kasa hareketi |
+| --- | --- |
+| Nakit | GELİR · "Nakit Satış" · nakit hesabı |
+| Kredi kartı | GELİR · "POS / Kredi Kartı Satışı" · "&lt;Banka&gt; POS" hesabı |
+| İade | GİDER · "Satış İadesi" |
+
+Hareketin tarihi ödemenin kendi tarihidir (nakit esaslı), sipariş tarihi değil.
+Ödeme silinir/değişirse hareket de güncellenir; sipariş çöpe atılırsa
+hareketleri kalkar, geri alınırsa döner. Bu hareketler listede "⚙️ otomatik"
+işaretiyle görünür ve elle düzenlenemez.
+
+## Mağaza paneli ve kasa özeti
+
+- Aylık **hedef**: gerçekleşen, yüzde, kalan güne göre gereken günlük tempo.
+- Ciro / kasaya giren (KDV, komisyon+prim, net) / bekleyen alacak kartları.
+- Günlük tahsilat grafiği; personel, kategori, marka ve yıllık performans
+  tabloları (kasa, KDV, komisyon, net, net ortalama, indirim).
+- Başlıktaki **Bugün (Kasa)** / **Bu Ay (Kasa)** kutularına tıklayınca:
+  nakit satış · POS satış · toplam → personel kırılımı → masraflar →
+  **net nakit** (nakit satış − nakit masraf) ve devirli nakit kasa bakiyesi.
 
 ## Proje yapısı
 
 ```
 src/
-  appsscript.json     — Apps Script manifest (webapp erişimi, saat dilimi)
-  Index.html           — Frontend (tek sayfa uygulama)
-  Config.js            — Script Properties tabanlı yapılandırma
-  Utils.js             — Saf yardımcı fonksiyonlar (cln_, dstr_, num_)
-  Crypto.js            — Şifre hash'leme (salt + iteratif HMAC-SHA256)
-  SheetService.js      — Genel spreadsheet/sayfa erişimi
-  Auth.js              — Kullanıcılar, oturum, giriş kilitleme
-  Ayarlar.js           — Anahtar/değer ayarları
-  Hareketler.js        — Gelir/gider hareketleri (CRUD)
-  Cari.js               — Tedarikçi bazlı planlanan ödemeler
-  Banka.js              — Haftalık banka bakiye doğrulaması
-  Tekrar.js             — Tekrarlayan ödemeler
-  Siparis.js            — Sipariş modülü (CRUD + finansal özet)
-  Rapor.js              — Aylık raporun Sheets'e yazılması
-  Setup.js              — ilkKurulum() — tek seferlik kurulum
-  Main.js               — doGet(), tumVeriGetir()
+  appsscript.json    — Apps Script manifest (webapp erişimi, saat dilimi)
+
+  Config.js          — Sayfa adları, Script Properties tabanlı yapılandırma
+  Utils.js           — Saf yardımcılar (cln_, dstr_, num_)
+  Crypto.js          — Şifre hash'leme (salt + iteratif HMAC-SHA256)
+  SheetService.js    — Spreadsheet/sayfa erişimi
+  Auth.js            — Kullanıcılar, oturum, roller, guard fonksiyonları
+  Log.js             — Değişiklik günlüğü (hesap + satış personeli)
+  Ayarlar.js         — Anahtar/değer ayarları, oran ve liste çözümleme
+  Kategori.js        — Kasa kategorileri, ürün kategorileri, markalar
+  Personel.js        — Satış personeli listesi
+  Musteri.js         — Müşteri kartları (reçete dahil)
+  Hareketler.js      — Kasa gelir/gider hareketleri (+ kaynak takibi)
+  Cari.js            — Tedarikçi bazlı planlanan ödemeler
+  Banka.js           — Haftalık banka bakiye doğrulaması
+  Tekrar.js          — Tekrarlayan ödemeler
+  KasaSenkron.js     — Sipariş tahsilatı → kasa hareketi senkronu
+  Siparis.js         — Sipariş CRUD, çoklu tahsilat, durum, çöp
+  Masraf.js          — Mağaza masrafı + günlük/aylık kasa özeti
+  Hedef.js           — Aylık mağaza hedefleri
+  Rapor.js           — Aylık raporun Sheets'e yazılması
+  Setup.js           — ilkKurulum() ve guncellemeKurulum()
+  Main.js            — doGet(), include(), tumVeriGetir()
+
+  Index.html         — Sayfa iskeleti (tüm ekranlar ve modallar)
+  Css.html           — Stiller (ekran + A4 yazdırma)
+  JsCore.html        — Durum, giriş, navigasyon, seçiciler, hesaplama motoru
+  JsSiparis.html     — Sipariş formu, kayıtlar, müşteriler, pipeline, çöp
+  JsPanel.html       — Mağaza paneli, kasa özeti, masraf, hedef, ayarlar
+  JsKasa.html        — Kasa özeti, rapor, hareketler, cari, banka, yıllık
+
 test/
-  gasMocks.js           — Apps Script global'lerinin Jest sahteleri
-  loadSrc.js            — src/*.js dosyalarını ortak global scope'a yükler
-  *.test.js             — Jest testleri
-.github/workflows/
-  ci.yml                — lint + test (her push'ta)
-  deploy.yml            — clasp push (manuel tetiklenir, secrets gerekir)
+  gasMocks.js        — Apps Script global'lerinin Jest sahteleri
+  loadSrc.js         — src/*.js dosyalarını ortak global scope'a yükler
+  *.test.js          — Jest testleri (76 test)
 ```
 
-## Geliştirme ortamı kurulumu
+Arayüz `HtmlService.createTemplateFromFile` ile birleştirilir; `Index.html`
+içindeki `<?!= include('Css') ?>` çağrıları diğer HTML dosyalarını gömer.
+
+## Sheets sayfaları
+
+| Sayfa | İçerik |
+| --- | --- |
+| `Siparisler` | Siparişler (ürünler, reçete, ödemeler JSON olarak) |
+| `Musteriler` | Müşteri kartları ve son reçete |
+| `Personel` | Satış personeli listesi (prim muafiyeti dahil) |
+| `Markalar` | Kategori → marka eşleşmeleri |
+| `Urun_Kategorileri` | Ürün kategorileri ve KDV oranları |
+| `Kategoriler` | Kasa gelir/gider kategori ağacı |
+| `Hareketler` | Kasa hareketleri (+ Kaynak / Kaynak ID) |
+| `Cari_Plan`, `Banka_Dogrulama`, `Tekrarlayan` | Kasa modülü |
+| `Kullanicilar` | Giriş hesapları (hash'li şifre) |
+| `Hedefler` | Aylık mağaza hedefleri |
+| `Ayarlar` | Oranlar, listeler, açılış kasası |
+| `Log` | Kim ne zaman ne değiştirdi |
+
+## Geliştirme
 
 ```bash
 npm install
-npm test          # Jest testlerini çalıştırır
-npm run lint       # ESLint
-npm run format     # Prettier ile src/ ve test/ dosyalarını biçimlendirir
+npm test          # Jest
+npm run lint      # ESLint
+npm run format    # Prettier (src/**/*.js, test/**/*.js)
 ```
 
-## Apps Script'e bağlama ve ilk kurulum
+## Kurulum
 
-1. [clasp](https://github.com/google/clasp) kurulu değilse: `npm install`
-   zaten devDependency olarak kurar; global kurulum isterseniz
-   `npm install -g @google/clasp`.
-2. `clasp login` ile Google hesabınızla giriş yapın.
-3. Yeni bir Apps Script projesi oluşturun (script.google.com üzerinden veya
-   `clasp create --type webapp --rootDir src`).
-4. `.clasp.json.example` dosyasını `.clasp.json` olarak kopyalayıp
-   `scriptId` alanına projenizin ID'sini yazın. `.clasp.json` git'e
-   eklenmez (`.gitignore`'da).
-5. `npm run clasp:push` ile `src/` içeriğini Apps Script'e gönderin.
-6. Apps Script editöründe **Setup.js** dosyasını açın, `ilkKurulum`
-   fonksiyonunu şu şekilde bir kez elle çalıştırın (fonksiyon adını
-   seçip "Çalıştır"a basmadan önce parametreleri geçici olarak
-   düzenleyip kaydedebilir, ya da Apps Script'in "Çalıştır" panelinden
-   parametre girerek çağırabilirsiniz — en kolayı editörde alttaki gibi
-   geçici bir sarmalayıcı fonksiyon yazıp onu çalıştırmaktır):
+1. Yeni bir Google E-Tablo oluşturun; adres çubuğundaki `/d/` ile `/edit`
+   arasındaki kimliği not alın.
+2. Tabloda **Uzantılar → Apps Script**'i açın.
+3. `src/` altındaki 21 `.js` dosyasını aynı adlarla (uzantısız) birer
+   **Komut Dosyası**, 6 `.html` dosyasını birer **HTML** dosyası olarak
+   ekleyip içeriklerini yapıştırın.
+4. Proje Ayarları'ndan `appsscript.json` görünürlüğünü açıp içeriğini
+   `src/appsscript.json` ile değiştirin.
+5. Editörde bir kez çalıştırın:
 
    ```js
    function _ilkKurulumCalistir() {
-     ilkKurulum(
-       'KASA_SPREADSHEET_ID_BURAYA',
-       'yonetici@sirket.com',
-       'Ad Soyad',
-       'en-az-8-karakterlik-gecici-sifre'
-     );
+     ilkKurulum('SPREADSHEET_ID', 'yonetici@sirket.com', 'Ad Soyad', 'gecici-sifre');
    }
    ```
 
-   Bu, gerekli sayfaları (kasa hareketleri, cari, banka, tekrarlayan,
-   kullanıcılar, sipariş) oluşturur ve ilk `yonetici` kullanıcısını ekler.
-7. **Dağıt > Yeni dağıtım > Web uygulaması**: Çalıştıran = *Ben*,
-   Erişim = *Bağlantıya sahip herkes* (bkz. `appsscript.json`).
-8. Yönetici hesabıyla giriş yapıp Ayarlar sayfasından diğer kullanıcıları
-   (rolüne göre `magaza`, `muhasebe` veya `yonetici` seçerek) ekleyin.
+   Bu, tüm sayfaları oluşturur, varsayılan kategori/marka/personel/oran
+   listelerini doldurur ve ilk `yonetici` kullanıcısını ekler.
+6. **Dağıt → Yeni dağıtım → Web uygulaması**: Çalıştıran = *Ben*,
+   Erişim = *Bağlantıya sahip herkes*.
 
-## Dağıtım (CI/CD)
+Kod güncellendiğinde: dosyaları yapıştırın ve bir kez `guncellemeKurulum()`
+çalıştırın — eksik sayfa ve ayarları tamamlar, mevcut veriye dokunmaz.
+Dağıtımda **mevcut dağıtımı düzenleyin**; yeni dağıtım oluşturmak yeni bir
+bağlantı üretir.
 
-`.github/workflows/deploy.yml` manuel tetiklenen (`workflow_dispatch`) bir
-GitHub Actions job'ıdır ve şu repo Secrets'larını gerektirir:
+Alternatif olarak [clasp](https://github.com/google/clasp) ile
+`npm run clasp:push` kullanılabilir (`.clasp.json.example` → `.clasp.json`).
 
-- `CLASPRC_JSON`: Yerel makinenizde `clasp login` çalıştırdıktan sonra
-  oluşan `~/.clasprc.json` dosyasının tüm içeriği.
-- `CLASP_JSON`: `.clasp.json.example` ile aynı biçimde, gerçek `scriptId`
-  içeren JSON.
+## Ayarlar (Sheets · `Ayarlar` sayfası)
 
-Bu secrets tanımlı değilse deploy workflow'u manuel çalıştırılmamalı;
-günlük geliştirme `npm run clasp:push` ile yerelden yapılabilir.
+| Anahtar | Örnek |
+| --- | --- |
+| `hesaplar` | `Nakit Kasa, Garanti POS` |
+| `nakit_hesap` | `Nakit Kasa` |
+| `bankalar` | `Akbank, QNB, Garanti, ...` |
+| `taksitler` | `Tek çekim, 2 Taksit, ...` |
+| `kk_komisyon` | `Tek çekim:3.5, 3 Taksit:9, Diğer:14.49` |
+| `personel_prim` | `4.5` |
+| `magaza_masraf_kalemleri` | `Temizlik / Sarf, Kargo, ...` |
+| `siparis_kasa_entegrasyon` | `evet` / `hayır` |
+| `siparis_no_onek` | `DK` |
+| `acilis_kasa`, `acilis_tarih`, `acilis_borc`, `borc_hesaplari` | kasa devri |
+
+Kategori, marka, personel ve hedef listeleri uygulamanın **Ayarlar** ekranından
+da düzenlenebilir.
 
 ## Güvenlik notları
 
-- **Şifre hash'leme.** Apps Script'te bcrypt/scrypt yerleşik değildir. Bu
-  yüzden `src/Crypto.js`, kullanıcıya özel bir salt ile HMAC-SHA256'yı
-  binlerce kez zincirleyerek (poor-man's PBKDF2) kaba kuvvete karşı
-  yavaşlatma sağlıyor. Bu, gerçek bcrypt/Argon2 kadar güçlü değildir.
-  Çok daha yüksek güvenlik gerekiyorsa, kimlik doğrulama gerçek bir
-  backend'e (örn. Firebase Auth, bir Cloud Function) taşınmalı.
-  Tek bir işletme için düz metin/zayıf hash'e göre büyük bir iyileştirme
-  olduğu için bu proje kapsamında yeterli görüldü.
-  `src/Crypto.js` içindeki `PBKDF_ITERATIONS` sabitini artırarak
-  güvenlik/performans dengesini ayarlayabilirsiniz.
-- **Oturumlar** `CacheService`'te 6 saat geçerli token'lar olarak tutulur.
-- **Giriş kilitleme**: 15 dakikada 5 başarısız denemeden sonra hesap
-  geçici kilitlenir.
-- **ESLint `no-undef: off`.** Apps Script'te tüm dosyalar tek bir global
-  scope paylaşır (modül/`import` yok), bu yüzden `cln_` gibi başka
-  dosyada tanımlı fonksiyonları çağırmak normaldir. ESLint bunu dosya
-  başına değerlendirdiği için `no-undef` false-positive üretir; bu yüzden
-  kapatıldı. Gerçek "tanımsız fonksiyon" hataları test suite'i ile
-  yakalanır (`npm test`).
+- Şifreler kullanıcıya özel salt ile binlerce kez zincirlenmiş HMAC-SHA256 ile
+  saklanır (`src/Crypto.js`). Apps Script'te bcrypt/Argon2 yerleşik değildir;
+  daha yüksek güvenlik için kimlik doğrulama gerçek bir backend'e taşınmalıdır.
+- Oturumlar `CacheService`'te 6 saat geçerli token'lardır; 15 dakikada 5
+  başarısız girişten sonra hesap geçici kilitlenir.
+- Rol kontrolü sunucudadır: arayüzde gizlenen ekranlara doğrudan çağrı ile de
+  erişilemez (`guardMuhasebe_`, `guardYonetici_`).
+- **ESLint `no-undef: off`** — Apps Script'te tüm dosyalar tek global scope
+  paylaşır; gerçek "tanımsız fonksiyon" hataları test suite'i ile yakalanır.
 
-## Test yaklaşımı
+## Bilinen sınırlamalar
 
-`test/gasMocks.js`, Apps Script'in `SpreadsheetApp`, `PropertiesService`,
-`CacheService`, `LockService` ve `Utilities` global'lerinin bellek-içi
-sahte (fake) sürümlerini kurar. `src/*.js` dosyaları GAS'takiyle birebir
-aynı kalır (build/transpile adımı yoktur); her dosyanın sonundaki
-
-```js
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { ... };
-  Object.keys(module.exports).forEach(function (k) { global[k] = module.exports[k]; });
-}
-```
-
-bloğu, Apps Script'te no-op'tur (`module` tanımsız olduğu için çalışmaz),
-ama Jest/Node içinde dosyanın fonksiyonlarını hem `require()` edilebilir
-hem de GAS'takiyle aynı şekilde global olarak erişilebilir yapar —
-böylece `test/loadSrc.js` dosyaları sırayla `require` ettiğinde, tıpkı
-Apps Script'in tüm dosyaları tek bir global scope'ta birleştirmesi gibi
-davranır.
-
-## Bilinen sınırlamalar / gelecek işler
-
-- Eski (ayrı proje) sipariş sisteminden geçmiş veri taşınmadı; yeni
-  `Siparisler` sayfası sıfırdan başlıyor. Açılış kasası `ilkKurulum`
-  sonrası Ayarlar sayfasından güncellenebilir.
-- Sipariş üzerinde iskonto/ekstra ücret gibi ürün toplamından bağımsız bir
-  "genel tutar" alanı yok; sipariş tutarı her zaman ürün satırlarının
-  (fiyat × adet) toplamıdır.
-- Şifre hash'leme gerçek bir backend'e taşınmadıkça bcrypt/Argon2
-  seviyesinde değildir (yukarıya bakın).
+- Eski sipariş/kasa sistemlerinden veri taşınmadı; sistem sıfırdan başlar.
+  Yıl sonu veri göçü ayrı planlanacaktır.
+- `tumVeriGetir` tüm siparişleri istemciye gönderir; kayıt sayısı çok
+  büyüdüğünde sunucu tarafı sayfalama gerekecektir.
+- Başlangıçtaki kategori ve marka listeleri örnektir; gerçek kullanımda
+  Ayarlar'dan düzenlenmelidir.

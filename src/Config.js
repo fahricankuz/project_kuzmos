@@ -1,22 +1,29 @@
 /**
- * Kuzmos · Kasa — Merkezi yapılandırma.
+ * Kuzmos — Merkezi yapılandırma.
  *
- * Spreadsheet ID'si artık kodun içine gömülmez; Script Properties'te
- * tutulur (bkz. Setup.js / ilkKurulum). Böylece ID git geçmişine karışmaz
- * ve aynı kod farklı ortamlara (test/prod) bağlanabilir.
- *
- * Sipariş modülü artık ayrı bir spreadsheet/proje değil; Kasa ile aynı
- * spreadsheet içinde bir sayfa (bkz. SHEET_NAMES.SIPARIS, src/Siparis.js).
+ * Spreadsheet ID'si kodun içine gömülmez; Script Properties'te tutulur
+ * (bkz. Setup.js / ilkKurulum). Kasa ve Sipariş modülleri aynı spreadsheet
+ * içinde, farklı sayfalarda yaşar.
  */
 
 var SHEET_NAMES = Object.freeze({
+  /* Kasa modülü */
   HAREKET: 'Hareketler',
   AYAR: 'Ayarlar',
   CARI: 'Cari_Plan',
   BANKA: 'Banka_Dogrulama',
   TEKRAR: 'Tekrarlayan',
   KULLANICI: 'Kullanicilar',
-  SIPARIS: 'Siparisler'
+  KASA_KATEGORI: 'Kategoriler',
+  /* Sipariş modülü */
+  SIPARIS: 'Siparisler',
+  MUSTERI: 'Musteriler',
+  PERSONEL: 'Personel',
+  MARKA: 'Markalar',
+  URUN_KATEGORI: 'Urun_Kategorileri',
+  /* Ortak */
+  HEDEF: 'Hedefler',
+  LOG: 'Log'
 });
 
 /** Script Properties'ten Kasa spreadsheet ID'sini okur. */
