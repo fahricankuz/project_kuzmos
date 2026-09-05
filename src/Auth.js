@@ -1,15 +1,32 @@
 /**
- * Kuzmos · Kasa — Kimlik doğrulama ve kullanıcı yönetimi.
+ * Kuzmos · Kasa — Kimlik doğrulama, kullanıcı yönetimi ve roller.
  *
- * Eski sürümde tek bir ortak şifre vardı. Burada her kullanıcının kendi
- * e-posta/şifresi var; oturumlar CacheService'te tutulur (6 saat), başarısız
- * girişler kısa süreli kilitlenir, ve yönetici (admin) rolü kullanıcı
- * ekleyip pasif hale getirebilir.
+ * Her kullanıcının kendi e-posta/şifresi var; oturumlar CacheService'te
+ * tutulur (6 saat), başarısız girişler kısa süreli kilitlenir.
+ *
+ * Üç rol var:
+ *  - yonetici: her şeye erişir, kullanıcı yönetir.
+ *  - muhasebe: kasa/rapor/sipariş verisine erişir, kullanıcı yönetemez.
+ *  - magaza: sadece sipariş oluşturur/görür; kasa verisini göremez.
+ *
+ * Eski sürümdeki 'admin'/'personel' rolleri sırasıyla 'yonetici' ve
+ * 'muhasebe'ye eşlenir (rolNormallestir_), böylece daha önce eklenmiş
+ * kullanıcılar koddaki bu değişiklikten etkilenmeden çalışmaya devam eder.
  */
+
+var ROLLER = Object.freeze({ YONETICI: 'yonetici', MUHASEBE: 'muhasebe', MAGAZA: 'magaza' });
 
 var SESSION_TTL_SECONDS = 21600; /* 6 saat */
 var LOGIN_LOCK_THRESHOLD = 5;
 var LOGIN_LOCK_WINDOW_SECONDS = 900; /* 15 dakika */
+
+/** Eski ('admin'/'personel') veya yeni rol değerini geçerli bir role indirger. */
+function rolNormallestir_(rol) {
+  if (rol === ROLLER.YONETICI || rol === ROLLER.MUHASEBE || rol === ROLLER.MAGAZA) return rol;
+  if (rol === 'admin') return ROLLER.YONETICI;
+  if (rol === 'personel') return ROLLER.MUHASEBE;
+  return ROLLER.MAGAZA;
+}
 
 function kullaniciSheet_() {
   return sheet_(SHEET_NAMES.KULLANICI, [
@@ -41,7 +58,7 @@ function kullaniciBul_(email) {
         ad: d[i][1],
         sifreHash: d[i][2],
         salt: d[i][3],
-        rol: d[i][4] || 'personel',
+        rol: rolNormallestir_(d[i][4]),
         aktif: String(d[i][5]).toLowerCase() !== 'false'
       };
     }
@@ -57,7 +74,7 @@ function kullaniciEkle_(email, ad, sifre, rol) {
     cln_(ad),
     hash,
     salt,
-    rol === 'admin' ? 'admin' : 'personel',
+    rolNormallestir_(rol),
     true,
     new Date(),
     ''
@@ -131,10 +148,20 @@ function guard_(token) {
   return s;
 }
 
-function guardAdmin_(token) {
+/** Oturumu geçerli kılar ve rolünün izinliRoller listesinde olmasını zorunlu kılar. */
+function guardRol_(token, izinliRoller) {
   var s = guard_(token);
-  if (s.rol !== 'admin') throw new Error('Bu işlem için yönetici yetkisi gerekli.');
+  if (izinliRoller.indexOf(s.rol) === -1) throw new Error('Bu işlem için yetkiniz yok.');
   return s;
+}
+
+function guardYonetici_(token) {
+  return guardRol_(token, [ROLLER.YONETICI]);
+}
+
+/** Kasa/rapor/sipariş özeti gibi finansal verilere erişim: yönetici + muhasebe. */
+function guardMuhasebe_(token) {
+  return guardRol_(token, [ROLLER.YONETICI, ROLLER.MUHASEBE]);
 }
 
 function mevcutKullaniciGetir(token) {
@@ -144,7 +171,7 @@ function mevcutKullaniciGetir(token) {
 
 /* ── yönetici: kullanıcı yönetimi ── */
 function kullaniciListele(token) {
-  guardAdmin_(token);
+  guardYonetici_(token);
   var s = kullaniciSheet_();
   var d = s.getDataRange().getValues();
   var out = [];
@@ -153,7 +180,7 @@ function kullaniciListele(token) {
     out.push({
       email: d[i][0],
       ad: d[i][1],
-      rol: d[i][4] || 'personel',
+      rol: rolNormallestir_(d[i][4]),
       aktif: String(d[i][5]).toLowerCase() !== 'false',
       sonGiris: d[i][7] ? dstr_(d[i][7]) : ''
     });
@@ -162,7 +189,7 @@ function kullaniciListele(token) {
 }
 
 function kullaniciEkleApi(token, kullanici) {
-  guardAdmin_(token);
+  guardYonetici_(token);
   var email = cln_(kullanici && kullanici.email).toLowerCase();
   var sifre = kullanici && kullanici.sifre;
   if (!email || !sifre) throw new Error('E-posta ve şifre gerekli.');
@@ -173,8 +200,8 @@ function kullaniciEkleApi(token, kullanici) {
 }
 
 function kullaniciDurumDegistir(token, email, aktif) {
-  var admin = guardAdmin_(token);
-  if (admin.email.toLowerCase() === cln_(email).toLowerCase() && !aktif) {
+  var yonetici = guardYonetici_(token);
+  if (yonetici.email.toLowerCase() === cln_(email).toLowerCase() && !aktif) {
     throw new Error('Kendi hesabınızı pasif yapamazsınız.');
   }
   var u = kullaniciBul_(email);
@@ -184,7 +211,7 @@ function kullaniciDurumDegistir(token, email, aktif) {
 }
 
 function kullaniciSifreDegistirAdmin(token, email, yeniSifre) {
-  guardAdmin_(token);
+  guardYonetici_(token);
   if (String(yeniSifre || '').length < 8) throw new Error('Şifre en az 8 karakter olmalı.');
   var u = kullaniciBul_(email);
   if (!u) throw new Error('Kullanıcı bulunamadı.');
@@ -204,9 +231,11 @@ function kullaniciSifreDegistir(token, yeniSifre) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    ROLLER: ROLLER,
     SESSION_TTL_SECONDS: SESSION_TTL_SECONDS,
     LOGIN_LOCK_THRESHOLD: LOGIN_LOCK_THRESHOLD,
     LOGIN_LOCK_WINDOW_SECONDS: LOGIN_LOCK_WINDOW_SECONDS,
+    rolNormallestir_: rolNormallestir_,
     kullaniciSheet_: kullaniciSheet_,
     kullaniciSayisi_: kullaniciSayisi_,
     kullaniciBul_: kullaniciBul_,
@@ -219,7 +248,9 @@ if (typeof module !== 'undefined' && module.exports) {
     girisYap: girisYap,
     oturumGetir_: oturumGetir_,
     guard_: guard_,
-    guardAdmin_: guardAdmin_,
+    guardRol_: guardRol_,
+    guardYonetici_: guardYonetici_,
+    guardMuhasebe_: guardMuhasebe_,
     mevcutKullaniciGetir: mevcutKullaniciGetir,
     kullaniciListele: kullaniciListele,
     kullaniciEkleApi: kullaniciEkleApi,
@@ -227,5 +258,7 @@ if (typeof module !== 'undefined' && module.exports) {
     kullaniciSifreDegistirAdmin: kullaniciSifreDegistirAdmin,
     kullaniciSifreDegistir: kullaniciSifreDegistir
   };
-  Object.keys(module.exports).forEach(function (k) { global[k] = module.exports[k]; });
+  Object.keys(module.exports).forEach(function (k) {
+    global[k] = module.exports[k];
+  });
 }

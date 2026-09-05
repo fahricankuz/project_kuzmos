@@ -25,12 +25,14 @@ function ayarYaz_(k, v) {
 }
 
 function ayarGuncelle(token, k, v) {
-  guardAdmin_(token);
+  guardYonetici_(token);
   ayarYaz_(cln_(k), v);
   return true;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { ayarOku_: ayarOku_, ayarYaz_: ayarYaz_, ayarGuncelle: ayarGuncelle };
-  Object.keys(module.exports).forEach(function (k) { global[k] = module.exports[k]; });
+  Object.keys(module.exports).forEach(function (k) {
+    global[k] = module.exports[k];
+  });
 }

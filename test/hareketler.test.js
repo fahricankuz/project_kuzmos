@@ -6,8 +6,8 @@ let token;
 beforeEach(() => {
   installGasMocks();
   loadSrc();
-  ilkKurulum('test-kasa-id', '', 'admin@ornek.com', 'Yönetici', 'dogruSifre1');
-  token = girisYap('admin@ornek.com', 'dogruSifre1').token;
+  ilkKurulum('test-kasa-id', 'yonetici@ornek.com', 'Yönetici', 'dogruSifre1');
+  token = girisYap('yonetici@ornek.com', 'dogruSifre1').token;
 });
 
 describe('hareketDogrula_', () => {

@@ -3,7 +3,7 @@
  */
 
 function hareketleriGetir(token) {
-  guard_(token);
+  guardMuhasebe_(token);
   var s = sheet_(SHEET_NAMES.HAREKET);
   var d = s.getDataRange().getValues();
   var out = [];
@@ -34,7 +34,7 @@ function hareketDogrula_(h) {
 }
 
 function hareketKaydet(token, h) {
-  var session = guard_(token);
+  var session = guardMuhasebe_(token);
   hareketDogrula_(h);
   var lock = LockService.getScriptLock();
   lock.waitLock(15000);
@@ -70,7 +70,7 @@ function hareketKaydet(token, h) {
 }
 
 function hareketSil(token, id) {
-  guard_(token);
+  guardMuhasebe_(token);
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -95,5 +95,7 @@ if (typeof module !== 'undefined' && module.exports) {
     hareketKaydet: hareketKaydet,
     hareketSil: hareketSil
   };
-  Object.keys(module.exports).forEach(function (k) { global[k] = module.exports[k]; });
+  Object.keys(module.exports).forEach(function (k) {
+    global[k] = module.exports[k];
+  });
 }

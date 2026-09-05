@@ -2,10 +2,12 @@
  * Kuzmos · Kasa — Genel yardımcı fonksiyonlar (saf mantık, test edilebilir).
  */
 
+// eslint-disable-next-line no-control-regex -- strips stray control chars pasted into Sheets cells
+var KONTROL_KARAKTER_RE_ = /[\x00-\x1F\x7F-\x9F]/g;
+
 function cln_(v) {
   if (v == null) return '';
-  // eslint-disable-next-line no-control-regex -- strips stray control chars pasted into Sheets cells
-  return String(v).replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+  return String(v).replace(KONTROL_KARAKTER_RE_, '').trim();
 }
 
 /** Tarih hücrelerini her koşulda YYYY-MM-DD stringe indirger. */
@@ -33,7 +35,10 @@ function dstr_(v) {
 function num_(v) {
   if (v == null || v === '') return 0;
   if (typeof v === 'number') return v;
-  var s = String(v).trim().replace(/\s/g, '').replace(/[^0-9.,-]/g, '');
+  var s = String(v)
+    .trim()
+    .replace(/\s/g, '')
+    .replace(/[^0-9.,-]/g, '');
   if (s.indexOf(',') > -1) {
     /* TR: nokta binlik, virgul ondalik */
     s = s.replace(/\./g, '').replace(',', '.');
@@ -48,5 +53,7 @@ function num_(v) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { cln_: cln_, dstr_: dstr_, num_: num_ };
-  Object.keys(module.exports).forEach(function (k) { global[k] = module.exports[k]; });
+  Object.keys(module.exports).forEach(function (k) {
+    global[k] = module.exports[k];
+  });
 }

@@ -1,15 +1,44 @@
 # Kuzmos · Kasa
 
-Kuzmos Kasa & Nakit Akış Modülü — Google Apps Script backend + web arayüzü.
+Kuzmos Kasa & Nakit Akış Modülü + Sipariş modülü — Google Apps Script
+backend + web arayüzü, rol bazlı yetkilendirme ile tek projede birleşik.
 
 Bu proje, tek dosyalık (`Macro.gs` + `Index.html`) eski sürümün, git ile
 versiyonlanan, test edilebilir, modüler ve çok kullanıcılı bir Apps Script
 projesine dönüştürülmüş halidir. Veritabanı hâlâ Google Sheets'tir (bilinçli
 tercih — bkz. aşağıdaki "Neden hâlâ Google Sheets?" bölümü); asıl değişen,
-kodun yapısı, kimlik doğrulama modeli ve geliştirme/dağıtım süreci.
+kodun yapısı, kimlik doğrulama/yetkilendirme modeli ve geliştirme/dağıtım
+süreci.
+
+Başlangıçta sipariş formu ve kasa raporu ayrı Apps Script projeleriydi
+(sipariş sistemine kasa tarafından sadece salt okuma erişimi vardı). Artık
+ikisi tek bir projede, ortak kullanıcı/rol tablosu üzerinden birleştirildi:
+mağaza, muhasebe ve yönetici aynı uygulamayı, kendi rolüne göre farklı
+görüp farklı işlem yapabildikleri tek bir arayüzden kullanıyor.
+
+## Roller
+
+Üç rol var (`src/Auth.js` → `ROLLER`):
+
+| Rol | Sipariş oluştur/gör | Kasa hareketleri, cari, banka, tekrar, rapor | Kullanıcı yönetimi |
+| --- | --- | --- | --- |
+| **magaza** | ✅ (kendi girdiğini düzenler/siler; hepsini görür) | ❌ | ❌ |
+| **muhasebe** | ✅ (hepsini düzenler/siler) + finansal özet | ✅ | ❌ |
+| **yonetici** | ✅ (hepsini düzenler/siler) + finansal özet | ✅ | ✅ |
+
+Eski sürümdeki `admin`/`personel` rolleri sırasıyla `yonetici` ve
+`muhasebe`'ye otomatik eşlenir (`rolNormallestir_`), böylece bu değişiklikten
+önce eklenmiş kullanıcılar koda dokunulmadan çalışmaya devam eder.
 
 ## Eski sürüme göre neler değişti?
 
+- **Sipariş formu artık ayrı bir proje değil.** `src/Siparis.js`, eskiden
+  ayrı bir Google Sheets projesinden salt okuma yapan bir modülken, şimdi
+  Kasa ile aynı spreadsheet içinde kendi sayfasına (`Siparisler`) hem yazan
+  hem okuyan tam bir CRUD modülü (`siparisEkle`, `siparisGuncelle`,
+  `siparisSil`, `siparisListele`, `siparisOzetiGetir`).
+- **Rol modeli ikiden üçe çıktı.** `admin`/`personel` yerine
+  `yonetici`/`muhasebe`/`magaza` — yukarıdaki tabloya bakın.
 - **Tek dosya yerine modüler proje.** `Macro.gs` tek bir dosyaydı; artık
   `src/` altında sorumluluğa göre ayrılmış dosyalar var (`Auth.js`,
   `Hareketler.js`, `Cari.js`, `Banka.js`, `Tekrar.js`, `Siparis.js`,
@@ -17,29 +46,28 @@ kodun yapısı, kimlik doğrulama modeli ve geliştirme/dağıtım süreci.
   `SheetService.js`, `Config.js`).
 - **Ortak tek şifre yerine kişisel kullanıcı hesapları.** Her kullanıcının
   kendi e-postası ve şifresi var (`Kullanicilar` sayfası); kim ne zaman
-  giriş yaptı, kim hangi hareketi kaydetti izlenebilir. Roller: `admin`
-  (kullanıcı ekleyip pasif hale getirebilir, şifre sıfırlayabilir) ve
-  `personel`.
+  giriş yaptı, kim hangi hareketi/siparişi kaydetti izlenebilir.
 - **Şifreler artık hash'lenmiş.** Düz metin veya tek SHA-256 yerine,
   kullanıcıya özel salt ile binlerce kez zincirlenmiş HMAC-SHA256
   (poor-man's PBKDF2) kullanılıyor — bkz. `src/Crypto.js`.
 - **Kaba kuvvet koruması.** 15 dakikada 5 başarısız girişten sonra hesap
   geçici olarak kilitlenir (`src/Auth.js`).
-- **Spreadsheet ID'leri artık kodda değil.** Script Properties'te tutulur
-  (`ilkKurulum` ile bir kez ayarlanır), böylece ID'ler git geçmişine
-  karışmaz.
+- **Spreadsheet ID'si artık kodda değil.** Script Properties'te tutulur
+  (`ilkKurulum` ile bir kez ayarlanır), böylece ID git geçmişine karışmaz.
 - **"Kaydeden" alanı artık sahtesi yapılamaz.** Eskiden serbest metin
-  girilebiliyordu; artık sunucu, oturum açan kullanıcının adını otomatik
-  yazar.
+  girilebiliyordu; artık sunucu, oturum açan kullanıcının adını/e-postasını
+  otomatik yazar.
 - **Test edilebilir.** `test/` altında Jest testleri ve Apps Script
   global'lerinin (SpreadsheetApp, PropertiesService, CacheService,
   Utilities...) sahte (fake) implementasyonları var.
 - **CI.** Her push'ta lint + test otomatik çalışır
   (`.github/workflows/ci.yml`).
 
-Frontend (`Index.html`) görünüş/kullanım olarak neredeyse aynı kaldı —
-ayrıca giriş ekranına e-posta alanı, Ayarlar sayfasına "Hesabım" ve
-(yöneticiler için) "Kullanıcılar" paneli eklendi.
+Frontend (`Index.html`) rol bazlı: `yonetici`/`muhasebe` Özet, Rapor,
+Hareketler, Planlanan, Banka, Yıllık, Sipariş ve Ayarlar sekmelerini görür;
+`magaza` sadece Sipariş ve (sadece "Hesabım"ı içeren) Ayarlar sekmesini
+görür. Giriş ekranına e-posta alanı, Ayarlar sayfasına "Hesabım" ve
+(yalnızca yönetici için) "Kullanıcılar" paneli eklendi.
 
 ## Neden hâlâ Google Sheets?
 
@@ -47,9 +75,9 @@ Bu projeyi başlatırken üç seçenek konuşuldu: (1) Next.js + PostgreSQL gibi
 tam bağımsız bir web uygulamasına geçmek, (2) ayrı backend/frontend servisi
 kurmak, (3) mevcut Google Apps Script + Sheets altyapısını profesyonelleştirmek.
 Üçüncü seçenek tercih edildi çünkü: kurulum/hosting maliyeti sıfır (Google
-hesabı yeterli), muhasebeci/işletme sahibi verinin ham haline Sheets
-üzerinden her zaman erişebiliyor, ve mevcut Sipariş sistemiyle entegrasyon
-zaten Sheets üzerinden okuma şeklinde çalışıyor. Ölçek büyürse (çok yüksek
+hesabı yeterli), ve muhasebeci/işletme sahibi verinin ham haline (kasa
+hareketleri ve sipariş kayıtları dahil, artık aynı spreadsheet'te) Sheets
+üzerinden her zaman erişebiliyor. Ölçek büyürse (çok yüksek
 işlem hacmi, gerçek zamanlı çoklu kullanıcı çakışmaları) gerçek bir
 veritabanına geçiş bu modüler yapı sayesinde daha kolay olacaktır — iş
 mantığı zaten `SheetService.js` arkasında soyutlanmış durumda.
@@ -70,7 +98,7 @@ src/
   Cari.js               — Tedarikçi bazlı planlanan ödemeler
   Banka.js              — Haftalık banka bakiye doğrulaması
   Tekrar.js             — Tekrarlayan ödemeler
-  Siparis.js            — Sipariş sisteminden SALT OKUMA
+  Siparis.js            — Sipariş modülü (CRUD + finansal özet)
   Rapor.js              — Aylık raporun Sheets'e yazılması
   Setup.js              — ilkKurulum() — tek seferlik kurulum
   Main.js               — doGet(), tumVeriGetir()
@@ -115,19 +143,19 @@ npm run format     # Prettier ile src/ ve test/ dosyalarını biçimlendirir
    function _ilkKurulumCalistir() {
      ilkKurulum(
        'KASA_SPREADSHEET_ID_BURAYA',
-       'SIPARIS_SPREADSHEET_ID_BURAYA', // opsiyonel, yoksa '' bırakın
-       'admin@sirket.com',
+       'yonetici@sirket.com',
        'Ad Soyad',
        'en-az-8-karakterlik-gecici-sifre'
      );
    }
    ```
 
-   Bu, gerekli sayfaları oluşturur ve ilk yönetici kullanıcıyı ekler.
+   Bu, gerekli sayfaları (kasa hareketleri, cari, banka, tekrarlayan,
+   kullanıcılar, sipariş) oluşturur ve ilk `yonetici` kullanıcısını ekler.
 7. **Dağıt > Yeni dağıtım > Web uygulaması**: Çalıştıran = *Ben*,
    Erişim = *Bağlantıya sahip herkes* (bkz. `appsscript.json`).
 8. Yönetici hesabıyla giriş yapıp Ayarlar sayfasından diğer kullanıcıları
-   ekleyin.
+   (rolüne göre `magaza`, `muhasebe` veya `yonetici` seçerek) ekleyin.
 
 ## Dağıtım (CI/CD)
 
@@ -187,9 +215,11 @@ davranır.
 
 ## Bilinen sınırlamalar / gelecek işler
 
-- Sipariş sistemi hâlâ ayrı bir Google Sheets projesi; entegrasyon salt
-  okuma ile sınırlı (bilinçli tercih, bkz. yukarıdaki kısıt kararı).
-- Geçmiş veri taşınmadı; sistem sıfırdan başlıyor (açılış kasası
-  `ilkKurulum` sonrası Ayarlar sayfasından güncellenebilir).
+- Eski (ayrı proje) sipariş sisteminden geçmiş veri taşınmadı; yeni
+  `Siparisler` sayfası sıfırdan başlıyor. Açılış kasası `ilkKurulum`
+  sonrası Ayarlar sayfasından güncellenebilir.
+- Sipariş üzerinde iskonto/ekstra ücret gibi ürün toplamından bağımsız bir
+  "genel tutar" alanı yok; sipariş tutarı her zaman ürün satırlarının
+  (fiyat × adet) toplamıdır.
 - Şifre hash'leme gerçek bir backend'e taşınmadıkça bcrypt/Argon2
   seviyesinde değildir (yukarıya bakın).

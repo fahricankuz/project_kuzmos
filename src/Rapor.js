@@ -4,7 +4,7 @@
  */
 
 function raporUret(token, ay) {
-  guard_(token);
+  guardMuhasebe_(token);
   if (!/^\d{4}-\d{2}$/.test(cln_(ay))) throw new Error('Ay YYYY-MM biçiminde olmalı.');
   var veri = tumVeriGetir(token);
   var ad = 'Rapor_' + String(ay).replace('-', '_');
@@ -19,7 +19,11 @@ function raporUret(token, ay) {
     grup[k] = (grup[k] || 0) + h.tutar;
   });
 
-  var rows = [['KUZMOS · AYLIK KASA RAPORU', ay, ''], ['', '', ''], ['Yön', 'Ana Kategori', 'Alt Kategori', 'Tutar']];
+  var rows = [
+    ['KUZMOS · AYLIK KASA RAPORU', ay, ''],
+    ['', '', ''],
+    ['Yön', 'Ana Kategori', 'Alt Kategori', 'Tutar']
+  ];
   Object.keys(grup)
     .sort()
     .forEach(function (k) {
@@ -45,5 +49,7 @@ function raporUret(token, ay) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { raporUret: raporUret };
-  Object.keys(module.exports).forEach(function (k) { global[k] = module.exports[k]; });
+  Object.keys(module.exports).forEach(function (k) {
+    global[k] = module.exports[k];
+  });
 }

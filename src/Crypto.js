@@ -40,5 +40,7 @@ if (typeof module !== 'undefined' && module.exports) {
     hashPassword_: hashPassword_,
     verifyPassword_: verifyPassword_
   };
-  Object.keys(module.exports).forEach(function (k) { global[k] = module.exports[k]; });
+  Object.keys(module.exports).forEach(function (k) {
+    global[k] = module.exports[k];
+  });
 }

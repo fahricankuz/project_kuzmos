@@ -3,7 +3,7 @@
  */
 
 function tekrarGetir(token) {
-  guard_(token);
+  guardMuhasebe_(token);
   var s = sheet_(SHEET_NAMES.TEKRAR);
   var d = s.getDataRange().getValues();
   var out = [];
@@ -24,7 +24,7 @@ function tekrarGetir(token) {
 }
 
 function tekrarKaydet(token, liste) {
-  guard_(token);
+  guardMuhasebe_(token);
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -50,5 +50,7 @@ function tekrarKaydet(token, liste) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { tekrarGetir: tekrarGetir, tekrarKaydet: tekrarKaydet };
-  Object.keys(module.exports).forEach(function (k) { global[k] = module.exports[k]; });
+  Object.keys(module.exports).forEach(function (k) {
+    global[k] = module.exports[k];
+  });
 }

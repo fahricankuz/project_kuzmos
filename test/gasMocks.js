@@ -104,7 +104,11 @@ function installGasMocks(opts) {
   var fakeSpreadsheet = createFakeSpreadsheet(opts.sheets || {});
   var uuidCounter = 0;
 
-  global.SpreadsheetApp = { openById: function () { return fakeSpreadsheet; } };
+  global.SpreadsheetApp = {
+    openById: function () {
+      return fakeSpreadsheet;
+    }
+  };
 
   global.PropertiesService = {
     getScriptProperties: function () {
@@ -153,8 +157,16 @@ function installGasMocks(opts) {
       return toSignedBytes(crypto.createHash('sha256').update(String(value)).digest());
     },
     newBlob: function (bytes) {
-      var buf = Buffer.from(bytes.map(function (b) { return b < 0 ? b + 256 : b; }));
-      return { getDataAsString: function () { return buf.toString('utf8'); } };
+      var buf = Buffer.from(
+        bytes.map(function (b) {
+          return b < 0 ? b + 256 : b;
+        })
+      );
+      return {
+        getDataAsString: function () {
+          return buf.toString('utf8');
+        }
+      };
     },
     base64Decode: function (str) {
       var buf = Buffer.from(str, 'base64');
@@ -167,8 +179,12 @@ function installGasMocks(opts) {
   global.HtmlService = {
     createHtmlOutputFromFile: function () {
       var out = {
-        setTitle: function () { return out; },
-        addMetaTag: function () { return out; }
+        setTitle: function () {
+          return out;
+        },
+        addMetaTag: function () {
+          return out;
+        }
       };
       return out;
     }

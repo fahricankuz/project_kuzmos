@@ -213,7 +213,7 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
 <div class="view" id="viewOzet">
   <div class="header">
     <div><div class="brand">Kuz<span>mos</span></div><div class="tagline">Kasa · Özet</div></div>
-    <div class="header-actions" id="nav1"></div>
+    <div class="header-actions" id="nav-viewOzet"></div>
   </div>
   <div class="sync-banner" id="syncBanner"><span class="sync-txt"><b id="syncCount">0</b> kayıt gönderilemedi</span><button class="btn btn-red btn-sm" onclick="retryQueue()">Tekrar dene</button></div>
   <div class="scroll">
@@ -240,7 +240,7 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
 <div class="view" id="viewRapor">
   <div class="header">
     <div><div class="brand">Kuz<span>mos</span></div><div class="tagline">Aylık Kasa Raporu</div></div>
-    <div class="header-actions" id="nav2"></div>
+    <div class="header-actions" id="nav-viewRapor"></div>
   </div>
   <div class="scroll">
     <div class="period-nav">
@@ -257,7 +257,7 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
 <div class="view" id="viewHareket">
   <div class="header">
     <div><div class="brand">Kuz<span>mos</span></div><div class="tagline">Hareketler</div></div>
-    <div class="header-actions" id="nav3"></div>
+    <div class="header-actions" id="nav-viewHareket"></div>
   </div>
   <div class="search-bar">
     <div class="search-box">🔍 <input type="text" id="hSearch" placeholder="Kategori, açıklama veya hesap ara..." oninput="renderHareketler()"></div>
@@ -270,7 +270,7 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
 <div class="view" id="viewCari">
   <div class="header">
     <div><div class="brand">Kuz<span>mos</span></div><div class="tagline">Planlanan Ödemeler</div></div>
-    <div class="header-actions" id="nav4"></div>
+    <div class="header-actions" id="nav-viewCari"></div>
   </div>
   <div class="scroll">
     <div class="period-nav">
@@ -291,7 +291,7 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
 <div class="view" id="viewBanka">
   <div class="header">
     <div><div class="brand">Kuz<span>mos</span></div><div class="tagline">Banka Pozisyonu</div></div>
-    <div class="header-actions" id="nav5"></div>
+    <div class="header-actions" id="nav-viewBanka"></div>
   </div>
   <div class="scroll">
     <div class="card"><div class="card-header"><h3>Haftalık doğrulama</h3><span class="sub" id="dogrulamaTarih">—</span></div>
@@ -309,7 +309,7 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
 <div class="view" id="viewYillik">
   <div class="header">
     <div><div class="brand">Kuz<span>mos</span></div><div class="tagline">Yıllık Özet</div></div>
-    <div class="header-actions" id="nav6"></div>
+    <div class="header-actions" id="nav-viewYillik"></div>
   </div>
   <div class="scroll">
     <div class="card"><div class="card-header"><h3>Yıllık performans</h3><span class="sub" id="yilLabel">—</span></div><div class="card-body" style="padding:0"><div class="table-wrap" id="yillikWrap"></div></div></div>
@@ -317,20 +317,32 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
   </div>
 </div>
 
+<div class="view" id="viewSiparis">
+  <div class="header">
+    <div><div class="brand">Kuz<span>mos</span></div><div class="tagline">Siparişler</div></div>
+    <div class="header-actions" id="nav-viewSiparis"></div>
+  </div>
+  <div class="search-bar">
+    <div class="search-box">🔍 <input type="text" id="spSearch" placeholder="Müşteri veya temsilci ara..." oninput="renderSiparisler()"></div>
+    <button class="btn btn-yellow btn-sm" onclick="openSiparisModal()">＋ Sipariş</button>
+  </div>
+  <div class="scroll" id="siparisList"></div>
+</div>
+
 <div class="view" id="viewAyar">
   <div class="header">
     <div><div class="brand">Kuz<span>mos</span></div><div class="tagline">Ayarlar</div></div>
-    <div class="header-actions" id="nav7"></div>
+    <div class="header-actions" id="nav-viewAyar"></div>
   </div>
   <div class="scroll">
-    <div class="card"><div class="card-header"><h3>Tekrarlayan ödemeler</h3><span class="sub">kira, maaş, SGK, aidat</span></div>
+    <div class="card" id="cardTekrar"><div class="card-header"><h3>Tekrarlayan ödemeler</h3><span class="sub">kira, maaş, SGK, aidat</span></div>
       <div class="card-body">
         <div id="tekrarList"></div>
         <button class="load-more" onclick="openTekrarModal()" style="margin-top:10px">＋ Tekrarlayan ödeme ekle</button>
       </div>
     </div>
-    <div class="card"><div class="card-header"><h3>Hesaplar</h3></div><div class="card-body"><div class="chip-row" id="hesapChips"></div><div class="mini-note">Hesap listesi Sheets'teki <b>Ayarlar</b> sayfasından düzenlenir.</div></div></div>
-    <div class="card"><div class="card-header"><h3>Açılış kasası</h3></div><div class="card-body">
+    <div class="card" id="cardHesaplar"><div class="card-header"><h3>Hesaplar</h3></div><div class="card-body"><div class="chip-row" id="hesapChips"></div><div class="mini-note">Hesap listesi Sheets'teki <b>Ayarlar</b> sayfasından düzenlenir.</div></div></div>
+    <div class="card" id="cardAcilis"><div class="card-header"><h3>Açılış kasası</h3></div><div class="card-body">
       <div class="split-row"><span class="split-name" id="acilisTarihLbl">—</span><span class="split-val" id="acilisTutarLbl">—</span></div>
       <div class="mini-note">Sheets'teki <b>Ayarlar</b> sayfasından değiştirilir.</div>
     </div></div>
@@ -448,7 +460,7 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
       <div class="form-row"><div class="field"><label>E-posta</label><input type="email" id="kEmail" placeholder="ornek@kuzmos.com"></div></div>
       <div class="form-row"><div class="field"><label>Geçici şifre</label><input type="text" id="kSifre" placeholder="En az 8 karakter"></div></div>
       <div class="form-row"><div class="field"><label>Rol</label>
-        <select id="kRol"><option value="personel">Personel</option><option value="admin">Yönetici</option></select>
+        <select id="kRol"><option value="magaza">Mağaza</option><option value="muhasebe">Muhasebe</option><option value="yonetici">Yönetici</option></select>
       </div></div>
     </div>
     <div class="modal-footer">
@@ -458,15 +470,53 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
   </div>
 </div>
 
+<div class="overlay" id="siparisOverlay" onclick="closeModal(event,'siparisOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="spTitle">Sipariş ekle</div>
+    <div class="modal-body">
+      <div class="form-row cols-2">
+        <div class="field"><label>Tarih</label><input type="date" id="spTarih"></div>
+        <div class="field"><label>Müşteri</label><input type="text" id="spMusteri" placeholder="Ad Soyad"></div>
+      </div>
+      <div class="form-row"><div class="field"><label>Satış Temsilcisi</label><input type="text" id="spTemsilci" placeholder="Ad Soyad"></div></div>
+      <div class="form-row">
+        <div class="field"><label>Ürünler</label>
+          <div id="spUrunList"></div>
+          <button class="btn btn-outline btn-sm" style="margin-top:8px;align-self:flex-start" onclick="spUrunEkle()">＋ Ürün ekle</button>
+        </div>
+      </div>
+      <div class="form-row cols-2">
+        <div class="field"><label>Kapora</label><input type="text" class="amount-input" id="spKapora" placeholder="0" oninput="fmtAmount(this)" onfocus="this.select()"></div>
+        <div class="field"><label>Kapora Yöntemi</label><select id="spKaporaYontem"><option value="nakit">Nakit</option><option value="kk">Kredi Kartı</option></select></div>
+      </div>
+      <div class="form-row cols-2">
+        <div class="field"><label>Bakiye</label><input type="text" class="amount-input" id="spBakiye" placeholder="0" oninput="fmtAmount(this)" onfocus="this.select()"></div>
+        <div class="field"><label>Bakiye Yöntemi</label><select id="spBakiyeYontem"><option value="nakit">Nakit</option><option value="kk">Kredi Kartı</option></select></div>
+      </div>
+      <div class="form-row"><div class="field"><label>Bakiye Tarihi</label><input type="date" id="spBakiyeTarih"></div></div>
+      <div class="form-row"><div class="field"><label>Not</label><input type="text" id="spNot" placeholder="Opsiyonel"></div></div>
+      <div class="mini-note">Toplam tutar (ürünlerden otomatik): <b id="spToplamGoster">0</b> ₺</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal(null,'siparisOverlay')">İptal</button>
+      <button class="btn btn-yellow" style="flex:2" onclick="saveSiparis()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <script>
 var KASA_CATS=[{"ad":"Nakit Satış","bolum":"OP","yon":"GELIR","alt":["Atrium Nakit (Mağaza)","Merkez Kasa","Diğer Nakit"]},{"ad":"POS / Kredi Kartı Satışı","bolum":"OP","yon":"GELIR","alt":["Atrium POS / Akbank","Atrium POS / QNB Finansbank","Atrium POS / Garanti","Atrium POS / İş Bankası","Atrium POS / Yapı Kredi","Atrium POS / Ziraat Bankası","Atrium POS / Halkbank","Atrium POS / TEB","Diğer POS / TZH Vakıf","Diğer POS / Diğer POS'lar"]},{"ad":"Optik Firmaları (Mal Alış)","bolum":"OP","yon":"GIDER","alt":["Ant Optik","BDT Optik","Cem-Fa Gözlük","Derigo Gözlük","Dita İthalat","Emko Optik","Marchon","Hantes","Hazel Optik","Mercan Optik","Merve Optik","Mykita","Optomod","Optiser","Safilo","Ser Optik","Turkuaz Toptan","Luxottica (Ziraat DBS)","Opticmet (Vanni)","Armati","İthalat ile Gözlük Alış","Diğer Optik"]},{"ad":"Cam Firmaları","bolum":"OP","yon":"GIDER","alt":["Adellens","Beta Optik","Seiko Optical","Turkuaz General","Opsa Camlar","Opak Optik","Sektör Optik","Opticon","Cemfa","Demirkaya","Diğer Cam"]},{"ad":"Lens Firmaları","bolum":"OP","yon":"GIDER","alt":["Opak Lens","Tech Contact Lens","Lens Medikal","Diğer Lens"]},{"ad":"Hizmet Firmaları","bolum":"OP","yon":"GIDER","alt":["Muhasebe / Mali Müşavir","Yazılım / İkas / Abonelik","Kargo / Reklam","Axa Sigorta","Sosyal Medya Danışmanlığı","İş Güvenliği","Diğer Hizmet"]},{"ad":"Personel & SGK Giderleri","bolum":"OP","yon":"GIDER","alt":["Mağaza / Maaş Ödemeleri","Mağaza / SGK Primleri","Mağaza / Prim / İkramiye","Mağaza / Yemek","Mağaza / Diğer Personel","Merkez / Maaş Ödemeleri","Merkez / SGK Primleri","Merkez / Prim / İkramiye","Merkez / Yemek","Merkez / Diğer Personel"]},{"ad":"Kira & Aidat","bolum":"OP","yon":"GIDER","alt":["Mağaza / Kira","Mağaza / Aidat","Merkez / Kira","Merkez / Aidat"]},{"ad":"Telefon / Elektrik / Doğalgaz","bolum":"OP","yon":"GIDER","alt":["Mağaza / Elektrik","Mağaza / Doğalgaz / Su","Mağaza / Telefon / İnternet","Merkez / Elektrik","Merkez / Doğalgaz / Su","Merkez / Telefon / İnternet"]},{"ad":"Masraflar","bolum":"OP","yon":"GIDER","alt":["Mağaza / Mağaza Günlük Kasa Masrafı (Mağaza)","Mağaza / Temizlik / Sarf","Mağaza / Bakım / Onarım","Mağaza / Diğer Masraf","Merkez / Temizlik / Sarf","Merkez / Bakım / Onarım","Merkez / Diğer Masraf"]},{"ad":"Kredi Kartı Kom. & Banka Masrafları","bolum":"OP","yon":"GIDER","alt":["Atrium KK Komisyon","Banka Masrafı (EFT/Hesap İşl.)","Banka KMH Faiz","POS Ücreti / Düşük Ciro","Diğer Banka Masraf"]},{"ad":"Vergi Giderleri","bolum":"OP","yon":"GIDER","alt":["KDV","Stopaj","Geçici / Kurumlar Vergisi","Diğer Vergi"]},{"ad":"Ortak / Sermaye Girişi","bolum":"FD","yon":"GELIR","alt":["Fahri Kuz Nakit Giriş","Diğer Ortak Giriş"]},{"ad":"Banka Kredisi / DBS Kullanımı","bolum":"FD","yon":"GELIR","alt":["Ziraat Kredi","Ziraat DBS Lux","Diğer Banka Kredisi"]},{"ad":"Kredi Kartı / KMH Kullanımı","bolum":"FD","yon":"GELIR","alt":["İşbank KK - Şirket","Garanti KK - Şirket","Garanti KK - Şahsi","Finansbank KK - Şirket","Finansbank KK - Şahsi","HSBC KK - Şahsi","Ziraat KMH","Ziraat KK - Şirket","Ziraat KK - Şahsi"]},{"ad":"Kira & Yatırım Geliri","bolum":"FD","yon":"GELIR","alt":["Kira Geliri","Faiz / Mevduat Geliri"]},{"ad":"Kur & Faiz Geliri","bolum":"FD","yon":"GELIR","alt":["Kur & Faiz Geliri"]},{"ad":"Kasa Fazlası","bolum":"FD","yon":"GELIR","alt":["Kasa Fazlası"]},{"ad":"Diğer Faaliyet Dışı Gelir","bolum":"FD","yon":"GELIR","alt":["Diğer Faaliyet Dışı Gelir"]},{"ad":"Ortak Çekiş","bolum":"FD","yon":"GIDER","alt":["Fahri Kuz Çekiş","Diğer Ortak Çekiş"]},{"ad":"Banka Kredi & K.Kartı Ödemeleri (Finansman)","bolum":"FD","yon":"GIDER","alt":["İşbank KK - Şirket","Garanti KK - Şirket","Garanti KK - Şahsi","Finansbank KK - Şirket","Finansbank KK - Şahsi","HSBC KK - Şahsi","Ziraat KMH","Ziraat KK - Şirket","Ziraat KK - Şahsi","Kredi Anapara / Faiz"]},{"ad":"Şahsi / Aile Harcamaları","bolum":"FD","yon":"GIDER","alt":["Fahri Kuz Şahsi Kart","Selma Kuz Şahsi Kart","Aile Harcaması","Sigortalar","Aidatlar","Faturalar","Şahsi Vergiler"]},{"ad":"Yatırım / Demirbaş Alımı","bolum":"FD","yon":"GIDER","alt":["Demirbaş / Ekipman","Tadilat / Dekorasyon","Diğer Yatırım"]},{"ad":"Diğer Faaliyet Dışı Gider","bolum":"FD","yon":"GIDER","alt":["Diğer Faaliyet Dışı Gider"]}];
 
 var AYLAR=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-var TOKEN=null, CURRENT_USER=null, DATA={ayar:{},hareketler:[],cari:[],banka:[],tekrar:[]}, SIP={tahsilat:[],personel:{},kategori:{}};
+var TOKEN=null, CURRENT_USER=null, DATA={ayar:{},hareketler:[],cari:[],banka:[],tekrar:[],siparis:[]}, SIP={tahsilat:[],personel:{},kategori:{}};
 var periodOffset=0, showDays=false, hLimit=100;
 var editingId=null, pickMode='h', pickStage='grup', pickGrup=null, curYon='GIDER';
 var cariCtx=null, sipLoaded=false;
+var editingSiparisId=null, spUrunler=[];
+var SP_KATEGORILER=['Optik Çerçeve','Optik Cam','Lens','Solüsyon','Optik Yedek Parça','Güneş Gözlüğü','Tamir/Aksesuar','Güneş Yedek Parça','Diğer'];
+var ROL_ETIKET={yonetici:'Yönetici',muhasebe:'Muhasebe',magaza:'Mağaza'};
 
 /* ── para ── */
 function pTR(s){ if(s==null||s==='')return 0; if(typeof s==='number')return s;
@@ -536,8 +586,11 @@ function gcall(fn,args,ok,fail){
 function loadAll(){
   toast('Veriler yükleniyor...');
   gcall('tumVeriGetir',[TOKEN],function(d){
-    DATA=d||DATA; buildNav(); renderAll(); show('viewOzet'); updSync();
-    if(!sipLoaded){ sipLoaded=true;
+    DATA=d||DATA; buildNav(); renderAll();
+    var rol=CURRENT_USER?CURRENT_USER.rol:'magaza';
+    show(rol==='magaza'?'viewSiparis':'viewOzet');
+    updSync();
+    if(rol!=='magaza'&&!sipLoaded){ sipLoaded=true;
       gcall('siparisOzetiGetir',[TOKEN],function(s){ SIP=s||SIP; renderOzet(); },function(){});
     }
   },function(e){
@@ -547,23 +600,33 @@ function loadAll(){
 }
 
 /* ── navigasyon ── */
-var NAVS=[['viewOzet','Özet'],['viewRapor','Rapor'],['viewHareket','Hareketler'],
-          ['viewCari','Planlanan'],['viewBanka','Banka'],['viewYillik','Yıllık'],['viewAyar','Ayarlar']];
-/* Nav butonlari her ekranda ayni sirada ve ayni yerde durur.
-   Bulunulan ekran kaybolmaz, sadece isaretlenir. */
+/* Her sekmenin 3. elemani, o sekmeyi gorebilecek roller listesidir. */
+var NAVS=[['viewOzet','Özet',['yonetici','muhasebe']],['viewRapor','Rapor',['yonetici','muhasebe']],
+          ['viewHareket','Hareketler',['yonetici','muhasebe']],['viewCari','Planlanan',['yonetici','muhasebe']],
+          ['viewBanka','Banka',['yonetici','muhasebe']],['viewYillik','Yıllık',['yonetici','muhasebe']],
+          ['viewSiparis','Sipariş',['yonetici','muhasebe','magaza']],['viewAyar','Ayarlar',['yonetici','muhasebe','magaza']]];
+/* Nav butonlari her ekranda ayni sirada ve ayni yerde durur (sadece rolun
+   gorebildigi sekmeler). Bulunulan ekran kaybolmaz, sadece isaretlenir. */
 function buildNav(){
-  for(var i=1;i<=7;i++){
-    var el=document.getElementById('nav'+i); if(!el)continue;
-    var cur=NAVS[i-1][0], h='';
-    NAVS.forEach(function(n){
-      var on=(n[0]===cur)?' on':'';
+  var rol=CURRENT_USER?CURRENT_USER.rol:'magaza';
+  var visible=NAVS.filter(function(n){ return n[2].indexOf(rol)>-1; });
+  visible.forEach(function(cur){
+    var el=document.getElementById('nav-'+cur[0]); if(!el)return;
+    var h='';
+    visible.forEach(function(n){
+      var on=(n[0]===cur[0])?' on':'';
       h+='<button class="btn btn-hdr btn-sm'+on+'" onclick="show(\''+n[0]+'\')">'+n[1]+'</button>';
     });
-    h+='<button class="btn btn-yellow btn-sm" onclick="openHareketModal()">＋ Hareket</button>';
+    h+=(rol==='magaza')
+      ?'<button class="btn btn-yellow btn-sm" onclick="openSiparisModal()">＋ Sipariş</button>'
+      :'<button class="btn btn-yellow btn-sm" onclick="openHareketModal()">＋ Hareket</button>';
     el.innerHTML=h;
-  }
+  });
 }
 function show(v){
+  var rol=CURRENT_USER?CURRENT_USER.rol:'magaza';
+  var nav=null; NAVS.forEach(function(n){ if(n[0]===v)nav=n; });
+  if(nav&&nav[2].indexOf(rol)===-1)return;
   document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active');});
   document.getElementById(v).classList.add('active');
   if(v==='viewRapor')renderRapor();
@@ -573,8 +636,14 @@ function show(v){
   if(v==='viewYillik')renderYillik();
   if(v==='viewAyar')renderAyar();
   if(v==='viewOzet')renderOzet();
+  if(v==='viewSiparis')renderSiparisler();
 }
-function renderAll(){ updPeriodUI(); renderOzet(); renderRapor(); renderHareketler(); renderCari(); renderBanka(); renderYillik(); renderAyar(); }
+function renderAll(){
+  updPeriodUI(); renderSiparisler();
+  var rol=CURRENT_USER?CURRENT_USER.rol:'magaza';
+  if(rol==='magaza'){ renderAyar(); return; }
+  renderOzet(); renderRapor(); renderHareketler(); renderCari(); renderBanka(); renderYillik(); renderAyar();
+}
 
 /* ── hesap listesi ── */
 function hesapList(){ return String(DATA.ayar.hesaplar||'Nakit Kasa').split(',').map(function(s){return s.trim();}).filter(Boolean); }
@@ -984,25 +1053,32 @@ function renderYillik(){
 
 /* ═══ AYARLAR ═══ */
 function renderAyar(){
-  var t=DATA.tekrar||[], h='';
-  if(!t.length)h='<div class="mini-note">Henüz tekrarlayan ödeme yok.</div>';
-  else t.forEach(function(x,i){
-    h+='<div class="split-row"><span class="split-name">'+esc(x.ad)+' <span style="color:var(--gray-400);font-size:11px">her ayın '+x.gun+'\'i · '+esc(x.alt||x.ana)+'</span></span>'
-      +'<span style="display:flex;align-items:center;gap:8px"><span class="split-val">'+fTR(x.tutar)+' ₺</span>'
-      +'<button class="icon-btn" onclick="delTekrar('+i+')">🗑</button></span></div>';
+  var rol=CURRENT_USER?CURRENT_USER.rol:'magaza';
+  var finans=(rol==='yonetici'||rol==='muhasebe');
+  ['cardTekrar','cardHesaplar','cardAcilis'].forEach(function(id){
+    var e=document.getElementById(id); if(e)e.style.display=finans?'':'none';
   });
-  document.getElementById('tekrarList').innerHTML=h;
-  document.getElementById('hesapChips').innerHTML=hesapList().map(function(x){return'<span class="chip">'+esc(x)+'</span>';}).join('');
-  document.getElementById('acilisTarihLbl').textContent=fDate(acilisTarih())+' açılışı';
-  var ae=document.getElementById('acilisTutarLbl');
-  ae.textContent=fTR(acilisKasa())+' ₺'; ae.style.color=acilisKasa()<0?'var(--red)':'var(--black)';
+  if(finans){
+    var t=DATA.tekrar||[], h='';
+    if(!t.length)h='<div class="mini-note">Henüz tekrarlayan ödeme yok.</div>';
+    else t.forEach(function(x,i){
+      h+='<div class="split-row"><span class="split-name">'+esc(x.ad)+' <span style="color:var(--gray-400);font-size:11px">her ayın '+x.gun+'\'i · '+esc(x.alt||x.ana)+'</span></span>'
+        +'<span style="display:flex;align-items:center;gap:8px"><span class="split-val">'+fTR(x.tutar)+' ₺</span>'
+        +'<button class="icon-btn" onclick="delTekrar('+i+')">🗑</button></span></div>';
+    });
+    document.getElementById('tekrarList').innerHTML=h;
+    document.getElementById('hesapChips').innerHTML=hesapList().map(function(x){return'<span class="chip">'+esc(x)+'</span>';}).join('');
+    document.getElementById('acilisTarihLbl').textContent=fDate(acilisTarih())+' açılışı';
+    var ae=document.getElementById('acilisTutarLbl');
+    ae.textContent=fTR(acilisKasa())+' ₺'; ae.style.color=acilisKasa()<0?'var(--red)':'var(--black)';
+  }
 
   if(CURRENT_USER){
     document.getElementById('hesabimAd').textContent=CURRENT_USER.ad||'—';
     document.getElementById('hesabimEmail').textContent=CURRENT_USER.email||'—';
-    document.getElementById('hesabimRol').textContent=CURRENT_USER.rol==='admin'?'Yönetici':'Personel';
+    document.getElementById('hesabimRol').textContent=ROL_ETIKET[CURRENT_USER.rol]||CURRENT_USER.rol;
     var kartEl=document.getElementById('cardKullanicilar');
-    if(CURRENT_USER.rol==='admin'){ kartEl.style.display=''; loadKullanicilar(); }
+    if(CURRENT_USER.rol==='yonetici'){ kartEl.style.display=''; loadKullanicilar(); }
     else { kartEl.style.display='none'; }
   }
 }
@@ -1049,7 +1125,7 @@ function loadKullanicilar(){
   gcall('kullaniciListele',[TOKEN],function(list){
     var h='';
     (list||[]).forEach(function(u){
-      h+='<div class="split-row"><span class="split-name">'+esc(u.ad)+' <span style="color:var(--gray-400);font-size:11px">'+esc(u.email)+' · '+(u.rol==='admin'?'Yönetici':'Personel')+(u.aktif?'':' · Pasif')+'</span></span>'
+      h+='<div class="split-row"><span class="split-name">'+esc(u.ad)+' <span style="color:var(--gray-400);font-size:11px">'+esc(u.email)+' · '+(ROL_ETIKET[u.rol]||u.rol)+(u.aktif?'':' · Pasif')+'</span></span>'
         +'<span style="display:flex;align-items:center;gap:8px">'
         +'<button class="icon-btn" title="Şifre sıfırla" onclick="adminSifreSifirla(\''+esc(u.email).replace(/'/g,"\\'")+'\')">🔑</button>'
         +'<button class="icon-btn" title="'+(u.aktif?'Pasif yap':'Aktif yap')+'" onclick="toggleKullaniciAktif(\''+esc(u.email).replace(/'/g,"\\'")+'\','+(!u.aktif)+')">'+(u.aktif?'⛔':'✅')+'</button>'
@@ -1060,7 +1136,7 @@ function loadKullanicilar(){
 }
 function openKullaniciModal(){
   document.getElementById('kAd').value=''; document.getElementById('kEmail').value='';
-  document.getElementById('kSifre').value=''; document.getElementById('kRol').value='personel';
+  document.getElementById('kSifre').value=''; document.getElementById('kRol').value='magaza';
   document.getElementById('kullaniciOverlay').classList.add('open');
 }
 function saveKullanici(){
@@ -1141,6 +1217,109 @@ function delHareket(id){
   DATA.hareketler=DATA.hareketler.filter(function(x){return x.id!==id;});
   renderAll();
   gcall('hareketSil',[TOKEN,id],function(){ toast('Silindi'); },function(){ toast('Sunucudan silinemedi',false); });
+}
+
+/* ═══ SİPARİŞ ═══ */
+function siparisTutar(s){ var t=0; (s.urunler||[]).forEach(function(p){t+=(p.fiyat||0)*(p.adet||1);}); return t; }
+function canEditSiparis(s){
+  if(!CURRENT_USER)return false;
+  if(CURRENT_USER.rol!=='magaza')return true;
+  return s.olusturanEmail===CURRENT_USER.email;
+}
+function renderSiparisler(){
+  var elSearch=document.getElementById('spSearch'); if(!elSearch)return;
+  var q=(elSearch.value||'').toLowerCase();
+  var lst=(DATA.siparis||[]).filter(function(s){
+    if(!q)return true;
+    return (s.musteri||'').toLowerCase().indexOf(q)>-1||(s.temsilci||'').toLowerCase().indexOf(q)>-1;
+  });
+  lst.sort(function(a,b){ return String(b.tarih).localeCompare(String(a.tarih)); });
+  var el=document.getElementById('siparisList');
+  if(!lst.length){ el.innerHTML='<div class="empty"><div class="ic">🧾</div><p>'+(q?'Sonuç bulunamadı.':'Henüz sipariş yok.')+'</p></div>'; return; }
+  var h='';
+  lst.forEach(function(x){
+    var tutar=siparisTutar(x), kalan=tutar-(x.kaporaTutar||0)-(x.bakiyeTutar||0), edit=canEditSiparis(x);
+    h+='<div class="rec"><div class="rec-info"><div class="rec-cat">'+esc(x.musteri)+'</div>'
+      +'<div class="rec-meta"><span>'+fDate(x.tarih)+'</span>'+(x.temsilci?'<span>👤 '+esc(x.temsilci)+'</span>':'')
+      +'<span>'+(x.urunler||[]).length+' ürün</span>'
+      +(kalan>0.5?'<span style="color:var(--red)">Kalan '+fTR(kalan)+'</span>':'')+'</div></div>'
+      +'<div class="rec-amt">'+fTR2(tutar)+'</div>'
+      +'<div class="rec-actions">'+(edit?'<button class="icon-btn" onclick="editSiparis(\''+x.id+'\')">✏️</button><button class="icon-btn" onclick="delSiparis(\''+x.id+'\')">🗑</button>':'')+'</div></div>';
+  });
+  el.innerHTML=h;
+}
+function spUrunEkle(){ spUrunler.push({urun:'',kategori:SP_KATEGORILER[0],fiyat:0,adet:1}); renderSpUrunler(); }
+function spUrunSil(i){ spUrunler.splice(i,1); renderSpUrunler(); }
+function spUrunToplamGuncelle(){
+  var t=0; spUrunler.forEach(function(p){t+=(p.fiyat||0)*(p.adet||1);});
+  document.getElementById('spToplamGoster').textContent=fTR(t);
+}
+function renderSpUrunler(){
+  var h='';
+  spUrunler.forEach(function(p,i){
+    h+='<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">'
+      +'<input type="text" placeholder="Ürün" value="'+esc(p.urun)+'" style="flex:2;min-width:0;padding:8px;border:1.5px solid var(--gray-200);border-radius:6px;font-family:var(--font);font-size:13px" oninput="spUrunler['+i+'].urun=this.value">'
+      +'<select style="flex:1.4;min-width:0;padding:8px;border:1.5px solid var(--gray-200);border-radius:6px;font-family:var(--font);font-size:13px" onchange="spUrunler['+i+'].kategori=this.value">'
+      +SP_KATEGORILER.map(function(k){return '<option value="'+esc(k)+'"'+(k===p.kategori?' selected':'')+'>'+esc(k)+'</option>';}).join('')
+      +'</select>'
+      +'<input type="text" placeholder="Fiyat" value="'+(p.fiyat?fTR2(p.fiyat):'')+'" style="width:80px;padding:8px;border:1.5px solid var(--gray-200);border-radius:6px;font-family:var(--mono);font-size:13px;text-align:right" oninput="fmtAmount(this);spUrunler['+i+'].fiyat=pTR(this.value);spUrunToplamGuncelle()">'
+      +'<input type="number" min="1" value="'+(p.adet||1)+'" style="width:50px;padding:8px;border:1.5px solid var(--gray-200);border-radius:6px;font-family:var(--font);font-size:13px" onchange="spUrunler['+i+'].adet=parseInt(this.value,10)||1;spUrunToplamGuncelle()">'
+      +'<button class="icon-btn" onclick="spUrunSil('+i+')">🗑</button></div>';
+  });
+  document.getElementById('spUrunList').innerHTML=h;
+  spUrunToplamGuncelle();
+}
+function openSiparisModal(){
+  editingSiparisId=null; spUrunler=[];
+  document.getElementById('spTitle').textContent='Sipariş ekle';
+  document.getElementById('spTarih').value=todayStr();
+  document.getElementById('spMusteri').value='';
+  document.getElementById('spTemsilci').value=CURRENT_USER?CURRENT_USER.ad:'';
+  document.getElementById('spKapora').value=''; document.getElementById('spKaporaYontem').value='nakit';
+  document.getElementById('spBakiye').value=''; document.getElementById('spBakiyeYontem').value='nakit';
+  document.getElementById('spBakiyeTarih').value=''; document.getElementById('spNot').value='';
+  renderSpUrunler();
+  document.getElementById('siparisOverlay').classList.add('open');
+}
+function editSiparis(id){
+  var s=null; (DATA.siparis||[]).forEach(function(x){ if(x.id===id)s=x; });
+  if(!s)return;
+  editingSiparisId=id;
+  document.getElementById('spTitle').textContent='Siparişi düzenle';
+  document.getElementById('spTarih').value=s.tarih;
+  document.getElementById('spMusteri').value=s.musteri||'';
+  document.getElementById('spTemsilci').value=s.temsilci||'';
+  document.getElementById('spKapora').value=s.kaporaTutar?fTR2(s.kaporaTutar):'';
+  document.getElementById('spKaporaYontem').value=s.kaporaYontem||'nakit';
+  document.getElementById('spBakiye').value=s.bakiyeTutar?fTR2(s.bakiyeTutar):'';
+  document.getElementById('spBakiyeYontem').value=s.bakiyeYontem||'nakit';
+  document.getElementById('spBakiyeTarih').value=s.bakiyeTarih||''; document.getElementById('spNot').value=s.notlar||'';
+  spUrunler=(s.urunler||[]).map(function(p){ return {urun:p.urun,kategori:p.kategori,fiyat:p.fiyat,adet:p.adet}; });
+  renderSpUrunler();
+  document.getElementById('siparisOverlay').classList.add('open');
+}
+function saveSiparis(){
+  var tarih=document.getElementById('spTarih').value;
+  var musteri=document.getElementById('spMusteri').value.trim();
+  if(!tarih){toast('Tarih girin',false);return;}
+  if(!musteri){toast('Müşteri adı girin',false);return;}
+  if(!spUrunler.length){toast('En az bir ürün ekleyin',false);return;}
+  var s={ tarih:tarih, musteri:musteri, temsilci:document.getElementById('spTemsilci').value.trim(),
+    urunler:spUrunler,
+    kaporaTutar:pTR(document.getElementById('spKapora').value), kaporaYontem:document.getElementById('spKaporaYontem').value,
+    bakiyeTutar:pTR(document.getElementById('spBakiye').value), bakiyeYontem:document.getElementById('spBakiyeYontem').value,
+    bakiyeTarih:document.getElementById('spBakiyeTarih').value, notlar:document.getElementById('spNot').value.trim() };
+  toast('Kaydediliyor...');
+  var fn=editingSiparisId?'siparisGuncelle':'siparisEkle';
+  var args=editingSiparisId?[TOKEN,editingSiparisId,s]:[TOKEN,s];
+  gcall(fn,args,function(){ closeModal(null,'siparisOverlay'); toast('Kaydedildi'); loadAll(); },
+    function(e){ toast('Kaydedilemedi: '+((e&&e.message)||''),false); });
+}
+function delSiparis(id){
+  if(!confirm('Bu sipariş silinsin mi?'))return;
+  gcall('siparisSil',[TOKEN,id],function(){
+    DATA.siparis=(DATA.siparis||[]).filter(function(x){return x.id!==id;}); renderSiparisler(); toast('Silindi');
+  },function(e){ toast('Silinemedi: '+((e&&e.message)||''),false); });
 }
 
 /* ═══ KATEGORİ / HESAP SEÇİCİ ═══ */

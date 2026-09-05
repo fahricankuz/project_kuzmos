@@ -21,5 +21,7 @@ function sheet_(name, headers) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { ss_: ss_, sheet_: sheet_ };
-  Object.keys(module.exports).forEach(function (k) { global[k] = module.exports[k]; });
+  Object.keys(module.exports).forEach(function (k) {
+    global[k] = module.exports[k];
+  });
 }

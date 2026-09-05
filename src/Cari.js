@@ -3,7 +3,7 @@
  */
 
 function cariGetir(token) {
-  guard_(token);
+  guardMuhasebe_(token);
   var s = sheet_(SHEET_NAMES.CARI);
   var d = s.getDataRange().getValues();
   var out = [];
@@ -15,7 +15,7 @@ function cariGetir(token) {
 }
 
 function cariKaydet(token, tedarikci, ay, planlanan, notu) {
-  guard_(token);
+  guardMuhasebe_(token);
   if (!cln_(tedarikci)) throw new Error('Tedarikçi gerekli.');
   if (!/^\d{4}-\d{2}$/.test(cln_(ay))) throw new Error('Ay YYYY-MM biçiminde olmalı.');
   var lock = LockService.getScriptLock();
@@ -39,5 +39,7 @@ function cariKaydet(token, tedarikci, ay, planlanan, notu) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { cariGetir: cariGetir, cariKaydet: cariKaydet };
-  Object.keys(module.exports).forEach(function (k) { global[k] = module.exports[k]; });
+  Object.keys(module.exports).forEach(function (k) {
+    global[k] = module.exports[k];
+  });
 }

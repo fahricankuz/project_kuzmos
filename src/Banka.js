@@ -3,7 +3,7 @@
  */
 
 function bankaGetir(token) {
-  guard_(token);
+  guardMuhasebe_(token);
   var s = sheet_(SHEET_NAMES.BANKA);
   var d = s.getDataRange().getValues();
   var out = [];
@@ -15,7 +15,7 @@ function bankaGetir(token) {
 }
 
 function bankaKaydet(token, tarih, satirlar) {
-  guard_(token);
+  guardMuhasebe_(token);
   var t = dstr_(tarih);
   if (!t) throw new Error('Tarih gerekli.');
   var lock = LockService.getScriptLock();
@@ -42,5 +42,7 @@ function bankaKaydet(token, tarih, satirlar) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { bankaGetir: bankaGetir, bankaKaydet: bankaKaydet };
-  Object.keys(module.exports).forEach(function (k) { global[k] = module.exports[k]; });
+  Object.keys(module.exports).forEach(function (k) {
+    global[k] = module.exports[k];
+  });
 }

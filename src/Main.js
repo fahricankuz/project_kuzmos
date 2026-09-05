@@ -9,17 +9,21 @@ function doGet() {
 }
 
 function tumVeriGetir(token) {
-  guard_(token);
+  var session = guard_(token);
+  var finansYetkili = session.rol === ROLLER.YONETICI || session.rol === ROLLER.MUHASEBE;
   return {
-    ayar: ayarOku_(),
-    hareketler: hareketleriGetir(token),
-    cari: cariGetir(token),
-    banka: bankaGetir(token),
-    tekrar: tekrarGetir(token)
+    ayar: finansYetkili ? ayarOku_() : {},
+    hareketler: finansYetkili ? hareketleriGetir(token) : [],
+    cari: finansYetkili ? cariGetir(token) : [],
+    banka: finansYetkili ? bankaGetir(token) : [],
+    tekrar: finansYetkili ? tekrarGetir(token) : [],
+    siparis: siparisListele(token)
   };
 }
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { doGet: doGet, tumVeriGetir: tumVeriGetir };
-  Object.keys(module.exports).forEach(function (k) { global[k] = module.exports[k]; });
+  Object.keys(module.exports).forEach(function (k) {
+    global[k] = module.exports[k];
+  });
 }
