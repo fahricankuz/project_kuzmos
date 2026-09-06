@@ -105,11 +105,18 @@ function magazaMasrafSil(token, id, personel) {
 }
 
 /**
- * Gün veya ay için kasa özeti.
+ * Gün veya ay için MAĞAZA kasa özeti.
+ *
+ * Bu ekran mağazanın gün sonu kontrol aracıdır, şirket kasası değildir:
+ *  - Satış: o dönemde TAHSİL EDİLEN tutarlar (nakit esaslı; ödemenin kendi
+ *    tarihiyle sayılır, sipariş tarihiyle değil).
+ *  - Masraf: yalnızca mağazanın bu ekrandan girdiği masraflar. Muhasebenin
+ *    girdiği maaş, kira, mal alımı, kredi ödemesi gibi kalemler buraya
+ *    KARIŞMAZ.
+ *  - Net nakit: nakit satış − nakit mağaza masrafı, yani gün sonunda kasada
+ *    sayılması gereken para.
  *
  * tip: 'gun' → tarih 'YYYY-MM-DD', 'ay' → 'YYYY-MM'.
- * Satış rakamları o dönemde TAHSİL EDİLEN tutarlardır (nakit esaslı);
- * sipariş tarihiyle değil, ödemenin kendi tarihiyle sayılır.
  */
 function kasaOzetGetir(token, tip, deger) {
   guard_(token);
@@ -140,27 +147,20 @@ function kasaOzetGetir(token, tip, deger) {
     });
   });
 
-  /* Masraflar ve devirli nakit bakiye için kasa hareketleri */
+  /* Yalnızca mağazanın girdiği masraflar */
   var d = hareketSheet_().getDataRange().getValues();
   var masraflar = [];
   var masrafToplam = 0;
   var masrafNakit = 0;
-  var nakitBakiye = ayar.acilisKasa;
-  var sonTarih = gunMu ? donem : donem + '-31';
 
   for (var i = 1; i < d.length; i++) {
     if (!cln_(d[i][0])) continue;
     if (String(d[i][10]).toLowerCase() === 'true') continue;
+    if (cln_(d[i][11]) !== KASA_KAYNAK_MASRAF) continue;
     var tarih = dstr_(d[i][1]);
-    var yon = cln_(d[i][2]);
+    if (cln_(d[i][2]) !== 'GIDER' || !donemeAitMi(tarih)) continue;
     var tutar = num_(d[i][5]);
     var hesap = cln_(d[i][6]);
-
-    if (hesap === ayar.nakitHesap && tarih && tarih <= sonTarih) {
-      nakitBakiye += yon === 'GELIR' ? tutar : -tutar;
-    }
-
-    if (yon !== 'GIDER' || !donemeAitMi(tarih)) continue;
     masrafToplam += tutar;
     if (hesap === ayar.nakitHesap) masrafNakit += tutar;
     masraflar.push({
@@ -171,8 +171,7 @@ function kasaOzetGetir(token, tip, deger) {
       tutar: tutar,
       hesap: hesap,
       aciklama: cln_(d[i][7]),
-      kaydeden: cln_(d[i][8]),
-      magazaMi: cln_(d[i][11]) === KASA_KAYNAK_MASRAF
+      kaydeden: cln_(d[i][8])
     });
   }
 
@@ -189,7 +188,6 @@ function kasaOzetGetir(token, tip, deger) {
     masrafToplam: masrafToplam,
     masrafNakit: masrafNakit,
     netNakit: satis.nakit - masrafNakit,
-    nakitKasaBakiye: nakitBakiye,
     nakitHesap: ayar.nakitHesap
   };
 }

@@ -201,8 +201,51 @@ function ilkKurulum(kasaSpreadsheetId, yoneticiEmail, yoneticiAd, yoneticiSifre)
   return 'Kurulum tamamlandı. ' + cln_(yoneticiEmail).toLowerCase() + ' ile giriş yapabilirsiniz.';
 }
 
+/**
+ * TEŞHİS: Sistemin hangi spreadsheet'e bağlı olduğunu ve içindeki sayfaları
+ * gösterir. Apps Script editöründe seçip çalıştırın; sonuç "Yürütme günlüğü"
+ * bölümünde görünür.
+ */
+function sistemDurumu() {
+  var kasaId = PropertiesService.getScriptProperties().getProperty('KASA_SPREADSHEET_ID');
+  if (!kasaId) return 'KASA_SPREADSHEET_ID tanımlı değil. Önce ilkKurulum() çalıştırın.';
+  var ss = SpreadsheetApp.openById(kasaId);
+  var sayfalar = ss.getSheets().map(function (s) {
+    return '  · ' + s.getName() + ' — ' + Math.max(0, s.getLastRow() - 1) + ' satır veri';
+  });
+  var mesaj =
+    'BAĞLI TABLO: ' +
+    ss.getName() +
+    '\nURL: ' +
+    ss.getUrl() +
+    '\nID: ' +
+    kasaId +
+    '\n\nSAYFALAR (' +
+    sayfalar.length +
+    '):\n' +
+    sayfalar.join('\n');
+  Logger.log(mesaj);
+  return mesaj;
+}
+
+/**
+ * Sistemi başka bir spreadsheet'e bağlar ve gerekli sayfaları orada oluşturur.
+ * Eski tabloya dokunmaz; sadece bağlantıyı değiştirir.
+ *
+ *   spreadsheetIdDegistir("YENI_SPREADSHEET_ID");
+ */
+function spreadsheetIdDegistir(yeniId) {
+  if (!yeniId) throw new Error('Yeni Spreadsheet ID gerekli.');
+  var ss = SpreadsheetApp.openById(yeniId); /* erişilemiyorsa burada hata verir */
+  setConfig_(yeniId);
+  guncellemeKurulum();
+  return 'Artık şu tabloya bağlı: ' + ss.getName() + '\n' + ss.getUrl();
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    sistemDurumu: sistemDurumu,
+    spreadsheetIdDegistir: spreadsheetIdDegistir,
     VARSAYILAN_KASA_KATEGORILERI: VARSAYILAN_KASA_KATEGORILERI,
     VARSAYILAN_URUN_KATEGORILERI: VARSAYILAN_URUN_KATEGORILERI,
     VARSAYILAN_MARKALAR: VARSAYILAN_MARKALAR,

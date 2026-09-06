@@ -303,11 +303,28 @@ describe('kasa özeti (gün / ay)', () => {
     expect(o.netNakit).toBe(3500);
   });
 
-  test('devirli nakit kasa bakiyesi açılış kasasını da içerir', () => {
+  test('muhasebenin girdiği kasa giderleri mağaza özetine karışmaz', () => {
+    /* Maaş, kira, mal alımı gibi kalemler mağazanın gün sonu kontrolüne ait değil */
+    hareketKaydet(muhasebeToken, {
+      tarih: '2026-09-01',
+      yon: 'GIDER',
+      ana: 'Personel & SGK',
+      alt: 'Maaş',
+      tutar: 136151,
+      hesap: 'Nakit Kasa',
+      aciklama: 'Excel aktarım'
+    });
+    const o = kasaOzetGetir(magazaToken, 'gun', '2026-09-01');
+    expect(o.masraflar).toHaveLength(1);
+    expect(o.masraflar[0].kalem).toBe('Kargo');
+    expect(o.masrafToplam).toBe(500);
+    expect(o.netNakit).toBe(3500);
+  });
+
+  test('şirket kasası bakiyesi mağaza özetinde yer almaz', () => {
     ayarYaz_('acilis_kasa', '1000');
     const o = kasaOzetGetir(magazaToken, 'gun', '2026-09-01');
-    /* 1000 açılış + 4000 nakit tahsilat - 500 nakit masraf */
-    expect(o.nakitKasaBakiye).toBe(4500);
+    expect(o.nakitKasaBakiye).toBeUndefined();
   });
 
   test('aylık özet günleri toplar', () => {

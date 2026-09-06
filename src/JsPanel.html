@@ -240,8 +240,8 @@ function kasaOzetCiz(o){
     });
   }
 
-  h+='<div class="kasa-section-title">Masraflar</div>';
-  if(!(o.masraflar||[]).length)h+='<div class="mini-note">Bu dönemde masraf girilmemiş.</div>';
+  h+='<div class="kasa-section-title">Mağaza masrafları</div>';
+  if(!(o.masraflar||[]).length)h+='<div class="mini-note">Bu dönemde mağaza masrafı girilmemiş.</div>';
   else{
     (o.masraflar||[]).slice(0,12).forEach(function(m){
       h+='<div class="split-row"><span class="split-name">'+esc(m.kalem||m.ana)+(m.aciklama?' <span style="color:var(--gray-400);font-size:11px">'+esc(m.aciklama)+'</span>':'')+'</span>'
@@ -252,10 +252,9 @@ function kasaOzetCiz(o){
       +'<div class="split-row" style="border:none"><span class="split-name" style="font-size:12px;color:var(--gray-600)">Bunun nakit çıkışı</span><span class="split-val" style="font-size:12px">-'+fTR(o.masrafNakit)+' ₺</span></div>';
   }
 
-  h+='<div class="kasa-net-box"><div class="kasa-net-label">Net nakit — bugün kasada kalması gereken</div>'
+  h+='<div class="kasa-net-box"><div class="kasa-net-label">Net nakit — '+(o.tip==='ay'?'bu ay kasada birikmesi':'bugün kasada kalması')+' gereken</div>'
     +'<div class="kasa-net-val">'+fTR(o.netNakit)+' ₺</div>'
-    +'<div class="kasa-net-sub">Nakit satış '+fTR(o.satis.nakit)+' − nakit masraf '+fTR(o.masrafNakit)+'</div>'
-    +'<div class="kasa-net-sub" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.15)">Devirli '+esc(o.nakitHesap)+' bakiyesi: <b style="color:var(--yellow)">'+fTR(o.nakitKasaBakiye)+' ₺</b></div></div>';
+    +'<div class="kasa-net-sub">Nakit satış '+fTR(o.satis.nakit)+' − nakit mağaza masrafı '+fTR(o.masrafNakit)+'</div></div>';
   document.getElementById('kasaOzetBody').innerHTML=h;
 }
 
