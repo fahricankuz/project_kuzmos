@@ -1,11 +1,11 @@
 /* ═══════════ ORTAK DURUM ═══════════ */
 var TOKEN=null, KULLANICI=null;
-var DATA={ayar:{},personel:[],urunKategorileri:[],markalar:{},siparis:[],musteriler:[],hedefler:{},masraflar:[],hareketler:[],cari:[],banka:[],tekrar:[],kasaKategorileri:[]};
+var DATA={isletme:{},magazalar:[],ayar:{},personel:[],urunKategorileri:[],markalar:{},siparis:[],musteriler:[],hedefler:{},masraflar:[],hareketler:[],cari:[],banka:[],tekrar:[],kasaKategorileri:[]};
 var donemOfset=0, gunleriGoster=false, kayitLimit=100;
 /* Her veri değişiminde artar; ağır hesapların önbelleğini geçersiz kılar. */
 var DATA_SURUM=0;
 var AYLAR=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-var ROL_ETIKET={yonetici:'Yönetici',muhasebe:'Muhasebe',magaza:'Mağaza'};
+var ROL_ETIKET={sahip:'İşletme Sahibi',yonetici:'Yönetici',muhasebe:'Muhasebe',magaza:'Mağaza'};
 var DURUMLAR=['Satış Yapıldı','Cam Siparişi Verildi','Montaj Yapıldı','Teslim Edildi'];
 var DURUM_KISA=['Satış','Cam Sip.','Montaj','Teslim'];
 var DURUM_RENK=['#378ADD','#BA7517','#639922','#639922'];
@@ -13,23 +13,24 @@ var GECIKME_LIMIT={'Satış Yapıldı':1,'Cam Siparişi Verildi':7,'Montaj Yapı
 
 /* Rol bazlı sekmeler: [viewId, etiket, roller] */
 var NAVS=[
-  ['viewSiparis','Sipariş',['magaza','muhasebe','yonetici']],
-  ['viewRecords','Kayıtlar',['magaza','muhasebe','yonetici']],
-  ['viewCustomers','Müşteriler',['magaza','muhasebe','yonetici']],
-  ['viewPipeline','Pipeline',['magaza','muhasebe','yonetici']],
-  ['viewPanel','Panel',['magaza','muhasebe','yonetici']],
-  ['viewMasraf','Masraf',['magaza','muhasebe','yonetici']],
-  ['viewOzet','Kasa',['muhasebe','yonetici']],
-  ['viewRapor','Rapor',['muhasebe','yonetici']],
-  ['viewHareket','Hareketler',['muhasebe','yonetici']],
-  ['viewCari','Planlanan',['muhasebe','yonetici']],
-  ['viewBanka','Banka',['muhasebe','yonetici']],
-  ['viewYillik','Yıllık',['muhasebe','yonetici']],
-  ['viewAyar','Ayarlar',['magaza','muhasebe','yonetici']]
+  ['viewSiparis','Sipariş',['magaza','muhasebe','yonetici','sahip']],
+  ['viewRecords','Kayıtlar',['magaza','muhasebe','yonetici','sahip']],
+  ['viewCustomers','Müşteriler',['magaza','muhasebe','yonetici','sahip']],
+  ['viewPipeline','Pipeline',['magaza','muhasebe','yonetici','sahip']],
+  ['viewPanel','Panel',['magaza','muhasebe','yonetici','sahip']],
+  ['viewMasraf','Masraf',['magaza','muhasebe','yonetici','sahip']],
+  ['viewOzet','Kasa',['muhasebe','yonetici','sahip']],
+  ['viewRapor','Rapor',['muhasebe','yonetici','sahip']],
+  ['viewHareket','Hareketler',['muhasebe','yonetici','sahip']],
+  ['viewCari','Planlanan',['muhasebe','yonetici','sahip']],
+  ['viewBanka','Banka',['muhasebe','yonetici','sahip']],
+  ['viewYillik','Yıllık',['muhasebe','yonetici','sahip']],
+  ['viewAyar','Ayarlar',['magaza','muhasebe','yonetici','sahip']]
 ];
 
 function rol(){ return KULLANICI?KULLANICI.rol:'magaza'; }
-function finansMi(){ return rol()==='muhasebe'||rol()==='yonetici'; }
+function finansMi(){ var r=rol(); return r==='muhasebe'||r==='yonetici'||r==='sahip'; }
+function yoneticiMi(){ var r=rol(); return r==='yonetici'||r==='sahip'; }
 
 /* ═══════════ PARA / TARİH ═══════════ */
 function pTR(s){ if(s==null||s==='')return 0; if(typeof s==='number')return s;
@@ -73,6 +74,43 @@ function donemEtiketleriGuncelle(){
 
 /* Sunucu çağrısı (gcall) js/api.js içinde tanımlıdır. */
 
+/* ═══════════ KAYIT / KURULUM ═══════════ */
+function kayitOl(){
+  var e=document.getElementById('kayitErr');
+  var bilgi={
+    isletmeAd:document.getElementById('kayitIsletme').value.trim(),
+    adSoyad:document.getElementById('kayitAd').value.trim(),
+    eposta:document.getElementById('kayitEposta').value.trim(),
+    telefon:document.getElementById('kayitTelefon').value.trim(),
+    sifre:document.getElementById('kayitSifre').value
+  };
+  if(!bilgi.isletmeAd){ e.textContent='İşletme adını girin'; return; }
+  if(!bilgi.eposta||!bilgi.sifre){ e.textContent='E-posta ve şifre girin'; return; }
+  if(bilgi.sifre.length<8){ e.textContent='Şifre en az 8 karakter olmalı'; return; }
+  e.textContent='İşletmeniz kuruluyor...';
+  gcall('kayitOl',[bilgi],function(r){
+    if(r&&r.onayBekliyor){
+      e.textContent='E-posta adresinize onay bağlantısı gönderildi. Onayladıktan sonra giriş yapın.';
+      return;
+    }
+    e.textContent='';
+    TOKEN='sb';
+    verileriYukle();
+  },function(err){ e.textContent=(err&&err.message)||'Kayıt başarısız'; });
+}
+
+/* Hesabı olup işletmesi olmayan kullanıcı (davet/kayıt yarım kalmış) */
+function isletmeKur(){
+  var e=document.getElementById('kurulumErr');
+  var ad=document.getElementById('kurulumIsletme').value.trim();
+  if(!ad){ e.textContent='İşletme adını girin'; return; }
+  e.textContent='Kuruluyor...';
+  gcall('isletmeOlustur',[TOKEN,ad,document.getElementById('kurulumAd').value.trim(),
+    document.getElementById('kurulumKod').value.trim(),''],
+    function(){ e.textContent=''; verileriYukle(); },
+    function(err){ e.textContent=(err&&err.message)||'Kurulamadı'; });
+}
+
 /* ═══════════ GİRİŞ ═══════════ */
 function doLogin(){
   var email=document.getElementById('loginEmail').value.trim();
@@ -81,7 +119,7 @@ function doLogin(){
   document.getElementById('loginErr').textContent='Kontrol ediliyor...';
   gcall('girisYap',[email,p],function(r){
     if(!r||!r.ok){document.getElementById('loginErr').textContent=(r&&r.hata)||'Giriş başarısız';return;}
-    TOKEN=r.token; KULLANICI={email:r.email,ad:r.ad,rol:r.rol};
+    TOKEN=r.token; KULLANICI={email:r.email,ad:'',rol:''};
     try{sessionStorage.setItem('kz_tok',TOKEN);}catch(e){}
     document.getElementById('loginErr').textContent='';
     document.getElementById('loginPass').value='';
@@ -90,8 +128,10 @@ function doLogin(){
 }
 function cikisYap(){
   TOKEN=null; KULLANICI=null;
+  DATA.isletme={};
   try{sessionStorage.removeItem('kz_tok');}catch(e){}
   gcall('cikis',[],null,null);
+  abonelikBandiGuncelle();
   goster('viewLogin',true);
 }
 
@@ -101,20 +141,60 @@ function verileriYukle(ilk){
     if(!d)return;
     DATA=d; KULLANICI=d.kullanici||KULLANICI;
     DATA_SURUM++;
-    basliklariKur(); hepsiniCiz(); kuyrukRozetiGuncelle();
-    if(ilk!==false) goster(rol()==='magaza'?'viewSiparis':'viewOzet',true);
+    basliklariKur(); hepsiniCiz(); kuyrukRozetiGuncelle(); abonelikBandiGuncelle();
+    /* İlk açılış: yeni kurulan işletmede (hiç sipariş yok) kasa özeti yerine
+       sipariş ekranı açılır — ilk iş sipariş girmektir. */
+    if(ilk!==false){
+      var ilkKurulum=!(DATA.siparis||[]).length;
+      goster((rol()==='magaza'||ilkKurulum)?'viewSiparis':'viewOzet',true);
+    }
     /* Form sadece hiç kurulmamışsa hazırlanır; doldurulmuş form asla silinmez. */
     if(!formKirli&&!formUrunler.length) siparisFormTemizle(false);
     else { personelSecenekleriniCiz(document.getElementById('spPersonel').value); urunleriCiz(); }
   },function(e){
-    if(String(e&&e.message||'').indexOf('Oturum')>-1){ cikisYap(); return; }
+    var m=String(e&&e.message||'');
+    /* Hesap var ama işletme yok: kurulum ekranına götür */
+    if(m==='ISLETME_YOK'){ goster('viewKurulum',true); return; }
+    if(m.indexOf('Oturum')>-1){ cikisYap(); return; }
     toast('Yüklenemedi, tekrar deneyin',false);
   });
 }
 
+/* ═══════════ ABONELİK BANDI ═══════════ */
+/**
+ * Deneme süresi ve abonelik durumu her ekranın altında görünür.
+ * Süresi dolduğunda uygulama salt okunur olur; bunu kullanıcıdan
+ * saklamıyoruz, kasa kaydı giremeyeceğini önceden bilmesi gerekir.
+ */
+function abonelikBandiGuncelle(){
+  var b=document.getElementById('abonelikBant'); if(!b)return;
+  var i=DATA.isletme||{};
+  if(!i.durum){ b.className='abonelik-bant'; return; }
+  var kalan=parseInt(i.kalanGun,10)||0;
+  var metin='', uyari=false;
+  if(!i.yazabilir){
+    metin='⚠️ Aboneliğiniz sona erdi — uygulama salt okunur. Veriniz duruyor; planı yenileyince kayıt girişi açılır.';
+    uyari=true;
+  } else if(i.durum==='deneme'){
+    metin='Deneme sürümü · '+kalan+' gün kaldı'+(kalan<=3?' — planı seçmek için dokunun':'');
+    uyari=kalan<=3;
+  } else if(i.durum==='odeme_bekliyor'){
+    metin='Ödemeniz bekleniyor — kesinti olmadan devam etmek için planınızı yenileyin.';
+    uyari=true;
+  }
+  b.textContent=metin;
+  b.className='abonelik-bant'+(metin?' show':'')+(uyari?' uyari':'');
+}
+
+function yazmaIzni(){ return !DATA.isletme||DATA.isletme.yazabilir!==false; }
+
 /* ═══════════ NAVİGASYON ═══════════ */
 function basliklariKur(){
   var r=rol();
+  /* Yazdırma başlığı ve ERP alanı işletmeye göre ayarlanır */
+  var pf=document.getElementById('printFirma');
+  if(pf)pf.textContent=(DATA.isletme&&DATA.isletme.ad)||'';
+  if(typeof erpAlaniKur==='function')erpAlaniKur();
   var gorunur=NAVS.filter(function(n){ return n[2].indexOf(r)>-1; });
   document.querySelectorAll('.header[data-baslik]').forEach(function(h){
     var view=h.parentElement.id;
@@ -172,6 +252,7 @@ function ekranlariKirlet(){
   Object.keys(EKRAN_CIZ).forEach(function(k){ ekranKirli[k]=true; });
   donemEtiketleriGuncelle();
   kasaRozetleriGuncelle();
+  abonelikBandiGuncelle();
   aktifEkraniCiz();
 }
 
@@ -306,15 +387,29 @@ var personelSecCtx=null;
 function personelSor(varsayilan,devam){
   if(rol()!=='magaza'){ devam(varsayilan||''); return; }
   var liste=(DATA.personel||[]).filter(function(p){return p.aktif!==false;});
-  if(!liste.length){ devam(''); return; }
   personelSecCtx=devam;
   document.getElementById('personelSecGrid').innerHTML=liste.map(function(p){
     var v=(varsayilan&&p.ad===varsayilan)?' active':'';
     return '<div class="pick-opt'+v+'" onclick="personelSecildi(\''+q(p.ad)+'\')">'+esc(p.ad)+'</div>';
   }).join('');
+  /* Liste boşsa (yeni işletme) ya da kişi listede yoksa adı elle yazılır;
+     sunucu bu adı satış personeli listesine kendiliğinden ekler. */
+  var not=document.getElementById('personelSecNot');
+  if(not){
+    not.textContent=liste.length?'' : 'Henüz satış personeli eklenmemiş. Adınızı yazın; listeye eklenecek.';
+    not.style.display=liste.length?'none':'';
+  }
+  var serbest=document.getElementById('personelSerbest');
+  if(serbest)serbest.value=liste.length?'':(varsayilan||'');
   modalAc('personelOverlay');
 }
 function personelSecildi(ad){ var f=personelSecCtx; personelSecCtx=null; modalKapat(null,'personelOverlay'); if(f)f(ad); }
+function personelSerbestDevam(){
+  var e=document.getElementById('personelSerbest');
+  var ad=e?e.value.trim():'';
+  if(!ad){ toast('Listeden seçin veya adınızı yazın',false); return; }
+  personelSecildi(ad);
+}
 function personelSecimIptal(){ personelSecCtx=null; modalKapat(null,'personelOverlay'); }
 
 /* ═══════════ HESAPLAMA MOTORU ═══════════ */
@@ -444,6 +539,10 @@ document.addEventListener('DOMContentLoaded',function(){
   ['loginEmail','loginPass'].forEach(function(id){
     var e=document.getElementById(id);
     if(e)e.addEventListener('keydown',function(ev){ if(ev.key==='Enter')doLogin(); });
+  });
+  ['kayitIsletme','kayitAd','kayitEposta','kayitTelefon','kayitSifre'].forEach(function(id){
+    var e=document.getElementById(id);
+    if(e)e.addEventListener('keydown',function(ev){ if(ev.key==='Enter')kayitOl(); });
   });
   document.addEventListener('click',function(e){
     var l=document.getElementById('spOneriler');

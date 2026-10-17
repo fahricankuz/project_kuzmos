@@ -326,6 +326,111 @@ function masrafSilTikla(id){
   });
 }
 
+/* ═══════════ İŞLETME · ABONELİK · ŞUBE ═══════════ */
+function isletmeKartiCiz(){
+  var k=document.getElementById('abonelikKart'); if(!k)return;
+  var i=DATA.isletme||{};
+  var durumEtiket={deneme:'Deneme',aktif:'Aktif',odeme_bekliyor:'Ödeme bekliyor',
+    askida:'Askıda',iptal:'İptal'};
+  var renk=i.yazabilir===false?'var(--red)':(i.durum==='aktif'?'var(--green)':'var(--black)');
+  k.innerHTML=
+    '<div><div class="ak-etiket">Plan</div><div class="ak-deger">'+esc(i.planAd||i.plan||'—')+'</div></div>'
+    +'<div><div class="ak-etiket">Durum</div><div class="ak-deger" style="color:'+renk+'">'+esc(durumEtiket[i.durum]||i.durum||'—')+'</div></div>'
+    +'<div><div class="ak-etiket">'+(i.durum==='deneme'?'Deneme bitişi':'Abonelik bitişi')+'</div>'
+      +'<div class="ak-deger">'
+      +(tarihGoster(i.durum==='deneme'?i.denemeBitis:i.abonelikBitis)||'—')+'</div></div>'
+    +'<div><div class="ak-etiket">Kalan</div><div class="ak-deger">'+(parseInt(i.kalanGun,10)||0)+' gün</div></div>'
+    +'<div><div class="ak-etiket">Kullanıcı</div><div class="ak-deger">'+(i.kullaniciSayisi||0)+' / '+(i.maxKullanici||0)+'</div></div>'
+    +'<div><div class="ak-etiket">Şube</div><div class="ak-deger">'+(i.magazaSayisi||0)+' / '+(i.maxMagaza||0)+'</div></div>';
+
+  var pe=document.getElementById('isletmePlanEtiket');
+  if(pe)pe.textContent=(i.planAd||'')+(i.slug?' · '+i.slug:'');
+  var alanlar={isletmeAd:'ad',isletmeTelefon:'telefon',isletmeEposta:'eposta'};
+  Object.keys(alanlar).forEach(function(id){
+    var e=document.getElementById(id); if(e&&!e.dataset.kirli)e.value=i[alanlar[id]]||'';
+  });
+}
+
+function isletmeKaydetTikla(){
+  var bilgi={
+    ad:document.getElementById('isletmeAd').value.trim(),
+    telefon:document.getElementById('isletmeTelefon').value.trim(),
+    eposta:document.getElementById('isletmeEposta').value.trim(),
+    vergiDairesi:document.getElementById('isletmeVergiDairesi').value.trim(),
+    vergiNo:document.getElementById('isletmeVergiNo').value.trim(),
+    adres:document.getElementById('isletmeAdres').value.trim()
+  };
+  if(!bilgi.ad){ toast('İşletme adı gerekli',false); return; }
+  gcall('isletmeGuncelle',[TOKEN,bilgi],function(o){
+    DATA.isletme=o||DATA.isletme; toast('Kaydedildi'); veriDegisti();
+  },function(e){ toast('Kaydedilemedi: '+((e&&e.message)||''),false); });
+}
+
+function subeListesiCiz(){
+  var el=document.getElementById('subeListe'); if(!el)return;
+  var i=DATA.isletme||{};
+  var le=document.getElementById('subeLimitEtiket');
+  if(le)le.textContent=(i.magazaSayisi||0)+' / '+(i.maxMagaza||0)+' şube';
+  el.innerHTML=(DATA.magazalar||[]).map(function(m){
+    return '<div class="split-row"><span class="split-name">'+esc(m.ad)
+      +' <span style="color:var(--gray-400);font-size:11px">'+esc(m.kod)+'</span></span>'
+      +'<span class="split-val">'+(m.aktif?'Aktif':'Pasif')+'</span></div>';
+  }).join('')||'<div class="mini-note">Şube yok.</div>';
+}
+
+function subeEkleTikla(){
+  var ad=document.getElementById('yeniSubeAd').value.trim();
+  var kod=document.getElementById('yeniSubeKod').value.trim();
+  if(!ad||!kod){ toast('Şube adı ve kodu girin',false); return; }
+  gcall('magazaEkle',[TOKEN,ad,kod],function(){
+    document.getElementById('yeniSubeAd').value='';
+    document.getElementById('yeniSubeKod').value='';
+    toast('Şube eklendi'); verileriYukle(false);
+  },function(e){ toast((e&&e.message)||'Eklenemedi',false); });
+}
+
+/** KVKK veri taşınabilirliği: tüm veriyi JSON olarak indirir. */
+function verileriIndir(){
+  toast('Veriler hazırlanıyor...');
+  gcall('isletmeVerisiAktar',[],function(d){
+    var ad=((DATA.isletme&&DATA.isletme.slug)||'kuzmos')+'-veri-'+bugunStr()+'.json';
+    var b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(b); a.download=ad; a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },2000);
+    toast('İndirildi');
+  },function(e){ toast('Alınamadı: '+((e&&e.message)||''),false); });
+}
+
+/* ═══════════ MÜŞTERİ MESAJI VE ERP ═══════════ */
+function mesajAyarlariCiz(){
+  var w=document.getElementById('ayarWaSablon'); if(!w)return;
+  var a=DATA.ayar||{};
+  if(!w.dataset.kirli)w.value=a.waSablon||'';
+  var ea=document.getElementById('ayarErpAktif');
+  if(ea)ea.value=a.erpAktif?'evet':'hayir';
+  var ee=document.getElementById('ayarErpEtiket');
+  if(ee&&!ee.dataset.kirli)ee.value=a.erpEtiket||'';
+}
+
+function mesajAyarKaydetTikla(){
+  var islemler=[
+    ['wa_sablon',document.getElementById('ayarWaSablon').value.trim()],
+    ['erp_aktif',document.getElementById('ayarErpAktif').value],
+    ['erp_etiket',document.getElementById('ayarErpEtiket').value.trim()]
+  ];
+  var kalan=islemler.length, hata=0;
+  islemler.forEach(function(x){
+    gcall('ayarGuncelle',[TOKEN,x[0],x[1]],function(){
+      if(--kalan===0)bitti();
+    },function(){ hata++; if(--kalan===0)bitti(); });
+  });
+  function bitti(){
+    if(hata)toast('Bazı ayarlar kaydedilemedi',false);
+    else { toast('Kaydedildi'); verileriYukle(false); }
+  }
+}
+
 /* ═══════════ HEDEF ═══════════ */
 function hedefModaliAc(ay){
   if(!finansMi()){ toast('Hedefi yönetici/muhasebe belirler',false); return; }
@@ -355,11 +460,15 @@ function ayarlarCiz(){
     document.getElementById('hesabimEmail').textContent=KULLANICI.email||'—';
     document.getElementById('hesabimRol').textContent=ROL_ETIKET[r]||r;
   }
-  ['cardPersonel','cardMarka','cardHedefAyar','cardTekrar','cardOranlar'].forEach(function(id){
+  ['cardPersonel','cardMarka','cardHedefAyar','cardTekrar','cardOranlar','cardMesaj'].forEach(function(id){
     var e=document.getElementById(id); if(e)e.style.display=finansMi()?'':'none';
   });
-  var ku=document.getElementById('cardKullanicilar');
-  if(ku)ku.style.display=(r==='yonetici')?'':'none';
+  /* İşletme, şube ve kullanıcı yönetimi: sahip + yönetici */
+  ['cardKullanicilar','cardIsletme','cardSubeler'].forEach(function(id){
+    var e=document.getElementById(id); if(e)e.style.display=yoneticiMi()?'':'none';
+  });
+  if(yoneticiMi()){ isletmeKartiCiz(); subeListesiCiz(); kullanicilariYukle(); }
+  if(finansMi())mesajAyarlariCiz();
   if(!finansMi())return;
 
   /* Personel */
@@ -409,7 +518,6 @@ function ayarlarCiz(){
     +'<div class="mini-note">'+esc((a.masrafKalemleri||[]).join(', ')||'—')+'</div></div>'
     +'<div class="mini-note" style="margin-top:10px">Bu değerler Sheets\'teki <b>Ayarlar</b> sayfasından düzenlenir.</div>';
 
-  if(r==='yonetici')kullanicilariYukle();
 }
 function personelListesiKaydet(liste){
   gcall('personelKaydet',[TOKEN,liste],function(){ toast('Personel listesi güncellendi'); verileriYukle(false); },

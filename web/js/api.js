@@ -35,6 +35,7 @@ function sbGecici() {
 function hataCevir(e) {
   var m = (e && (e.message || e.msg)) || 'Bilinmeyen hata';
   if (/row-level security|permission denied/i.test(m)) return 'Bu işlem için yetkiniz yok.';
+  if (/işletmeye bağlı değil/i.test(m)) return 'ISLETME_YOK';
   if (/JWT|session|Auth session missing/i.test(m)) return 'Oturum süresi doldu, tekrar giriş yapın.';
   if (/Invalid login credentials/i.test(m)) return 'E-posta veya şifre hatalı.';
   if (/Failed to fetch|NetworkError|network/i.test(m)) return 'Sunucuya ulaşılamadı.';
@@ -50,12 +51,64 @@ async function rpc(ad, parametreler) {
 
 /* ═══════════ API ═══════════ */
 var API = {
-  /* ── Oturum ── */
+  /* ── Oturum ve kayıt ── */
   girisYap: async function (email, sifre) {
     var r = await sbIstemci().auth.signInWithPassword({ email: email, password: sifre });
     if (r.error) return { ok: false, hata: hataCevir(r.error) };
-    var v = await rpc('tum_veri');
-    return { ok: true, token: 'sb', email: v.kullanici.email, ad: v.kullanici.ad, rol: v.kullanici.rol };
+    return { ok: true, token: 'sb', email: (r.data && r.data.user && r.data.user.email) || email };
+  },
+
+  /**
+   * Yeni işletme kaydı: hesap açılır, ardından işletme kurulur.
+   * E-posta onayı açıksa signUp oturum döndürmez; kullanıcıya posta
+   * kutusunu kontrol etmesi söylenir.
+   */
+  kayitOl: async function (bilgi) {
+    if (!bilgi || !bilgi.eposta || !bilgi.sifre) throw new Error('E-posta ve şifre gerekli.');
+    if (String(bilgi.sifre).length < 8) throw new Error('Şifre en az 8 karakter olmalı.');
+    var sb = sbIstemci();
+    var r = await sb.auth.signUp({ email: bilgi.eposta, password: bilgi.sifre });
+    if (r.error) {
+      if (/already registered/i.test(r.error.message || '')) {
+        throw new Error('Bu e-posta ile bir hesap var. Giriş yapmayı deneyin.');
+      }
+      throw new Error(hataCevir(r.error));
+    }
+    if (!r.data || !r.data.session) {
+      return { ok: true, onayBekliyor: true };
+    }
+    var ozet = await rpc('isletme_olustur', {
+      p_isletme_ad: bilgi.isletmeAd,
+      p_ad_soyad: bilgi.adSoyad || '',
+      p_telefon: bilgi.telefon || '',
+      p_sube_ad: '',
+      p_sube_kod: bilgi.subeKod || ''
+    });
+    return { ok: true, onayBekliyor: false, isletme: ozet };
+  },
+
+  /** Hesabı olup işletmesi olmayan kullanıcı için kurulum. */
+  isletmeOlustur: function (token, ad, adSoyad, subeKod, telefon) {
+    return rpc('isletme_olustur', {
+      p_isletme_ad: ad,
+      p_ad_soyad: adSoyad || '',
+      p_telefon: telefon || '',
+      p_sube_ad: '',
+      p_sube_kod: subeKod || ''
+    });
+  },
+
+  isletmeGuncelle: function (token, bilgi) {
+    return rpc('isletme_guncelle', { p: bilgi });
+  },
+  abonelikOzeti: function () {
+    return rpc('abonelik_ozeti');
+  },
+  magazaEkle: function (token, ad, kod) {
+    return rpc('magaza_ekle', { p_ad: ad, p_kod: kod });
+  },
+  isletmeVerisiAktar: function () {
+    return rpc('isletme_verisi_aktar');
   },
 
   mevcutKullaniciGetir: async function () {
@@ -81,8 +134,12 @@ var API = {
   hareketleriGetir: function () {
     return rpc('hareketler_listesi');
   },
-  kasaOzetGetir: function (token, tip, deger) {
-    return rpc('kasa_ozeti', { p_tip: tip || 'gun', p_deger: deger || '' });
+  kasaOzetGetir: function (token, tip, deger, magazaId) {
+    return rpc('kasa_ozeti', {
+      p_tip: tip || 'gun',
+      p_deger: deger || '',
+      p_magaza: magazaId || null
+    });
   },
   logListele: function (token, limit) {
     return rpc('log_listele', { p_limit: limit || 200 });

@@ -14,11 +14,42 @@
 <div class="view active" id="viewLogin">
   <div class="login-box">
     <div class="login-brand">Kuz<span>mos</span></div>
-    <div class="login-sub">Kuz Management Operating System</div>
+    <div class="login-sub">Optik için sipariş ve kasa yönetimi</div>
     <input class="login-input" type="email" id="loginEmail" placeholder="E-posta" autocomplete="username">
     <input class="login-input" type="password" id="loginPass" placeholder="Şifre" autocomplete="current-password">
     <button class="login-btn" onclick="doLogin()">Giriş yap</button>
     <div class="login-err" id="loginErr"></div>
+    <div class="login-alt">Hesabın yok mu? <a onclick="goster('viewKayit',true)">14 gun ucretsiz deneyin</a></div>
+  </div>
+</div>
+
+<!-- ══ KAYIT ══ -->
+<div class="view" id="viewKayit">
+  <div class="login-box">
+    <div class="login-brand">Kuz<span>mos</span></div>
+    <div class="login-sub">14 gun ucretsiz · kredi karti gerekmez</div>
+    <input class="login-input" type="text" id="kayitIsletme" placeholder="İşletme adı (örn. Şahin Optik)">
+    <input class="login-input" type="text" id="kayitAd" placeholder="Ad Soyad">
+    <input class="login-input" type="email" id="kayitEposta" placeholder="E-posta" autocomplete="username">
+    <input class="login-input" type="tel" id="kayitTelefon" placeholder="Telefon (isteğe bağlı)">
+    <input class="login-input" type="password" id="kayitSifre" placeholder="Şifre (en az 8 karakter)" autocomplete="new-password">
+    <button class="login-btn" onclick="kayitOl()">İşletmemi kur</button>
+    <div class="login-err" id="kayitErr"></div>
+    <div class="login-alt">Hesabın var mı? <a onclick="goster('viewLogin',true)">Giriş yap</a></div>
+  </div>
+</div>
+
+<!-- ══ İŞLETME KURULUMU (hesabı olup işletmesi olmayan kullanıcı) ══ -->
+<div class="view" id="viewKurulum">
+  <div class="login-box">
+    <div class="login-brand">Kuz<span>mos</span></div>
+    <div class="login-sub">Son adım: işletmenizi tanımlayın</div>
+    <input class="login-input" type="text" id="kurulumIsletme" placeholder="İşletme adı">
+    <input class="login-input" type="text" id="kurulumAd" placeholder="Ad Soyad">
+    <input class="login-input" type="text" id="kurulumKod" placeholder="Sipariş no ön eki (örn. SO)" maxlength="6">
+    <button class="login-btn" onclick="isletmeKur()">Kurulumu tamamla</button>
+    <div class="login-err" id="kurulumErr"></div>
+    <div class="login-alt"><a onclick="cikisYap()">Çıkış yap</a></div>
   </div>
 </div>
 
@@ -26,6 +57,7 @@
 <div class="view" id="viewSiparis">
   <div class="header" data-baslik="Sipariş Föyü"></div>
   <div class="scroll" id="siparisScroll">
+    <div class="print-firma" id="printFirma"></div>
     <div class="card print-order-1">
       <div class="card-header"><h3>Sipariş Bilgileri</h3><span class="badge" id="spNoLabel">—</span></div>
       <div class="card-body">
@@ -111,7 +143,7 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button type="button" class="rec-chip rec-chip-action" onclick="tahsilatModaliAc('form','tahsilat')">＋ Tahsilat Ekle</button>
             <button type="button" class="rec-chip" onclick="tahsilatModaliAc('form','iade')">↩ İade</button>
-            <label class="rec-chip" id="chipNebim"><input type="checkbox" onchange="nebimDegistir(this)"> 🏢 Nebim'e İşlendi</label>
+            <label class="rec-chip" id="chipErp" style="display:none"><input type="checkbox" onchange="erpDegistir(this)"> 🏢 <span id="chipErpEtiket">ERP'ye İşlendi</span></label>
           </div>
         </div>
       </div>
@@ -314,6 +346,49 @@
 <div class="view" id="viewAyar">
   <div class="header" data-baslik="Ayarlar"></div>
   <div class="scroll">
+    <div class="card" id="cardIsletme"><div class="card-header"><h3>İşletme ve Abonelik</h3><span class="sub" id="isletmePlanEtiket">—</span></div><div class="card-body">
+      <div class="abonelik-kart" id="abonelikKart"></div>
+      <div class="form-row cols-2" style="margin-top:14px">
+        <div class="field"><label>İşletme adı</label><input type="text" id="isletmeAd"></div>
+        <div class="field"><label>Telefon</label><input type="tel" id="isletmeTelefon"></div>
+      </div>
+      <div class="form-row cols-3">
+        <div class="field"><label>E-posta</label><input type="email" id="isletmeEposta"></div>
+        <div class="field"><label>Vergi dairesi</label><input type="text" id="isletmeVergiDairesi"></div>
+        <div class="field"><label>Vergi / TC no</label><input type="text" id="isletmeVergiNo"></div>
+      </div>
+      <div class="field"><label>Adres</label><input type="text" id="isletmeAdres"></div>
+      <div class="form-row cols-2" style="margin-top:10px">
+        <button class="btn btn-yellow" style="justify-content:center" onclick="isletmeKaydetTikla()">Bilgileri kaydet</button>
+        <button class="btn btn-outline" style="justify-content:center" onclick="verileriIndir()">⬇ Tüm verimi indir</button>
+      </div>
+      <div class="mini-note">Verileriniz size aittir: tek dosya olarak indirip saklayabilirsiniz (KVKK veri taşınabilirliği).</div>
+    </div></div>
+
+    <div class="card" id="cardSubeler"><div class="card-header"><h3>Şubeler</h3><span class="sub" id="subeLimitEtiket">—</span></div><div class="card-body">
+      <div id="subeListe"></div>
+      <div class="form-row cols-3" style="margin-top:10px">
+        <div class="field"><input type="text" id="yeniSubeAd" placeholder="Şube adı"></div>
+        <div class="field"><input type="text" id="yeniSubeKod" placeholder="Kod (örn. KD)" maxlength="6"></div>
+        <button class="btn btn-yellow" style="justify-content:center" onclick="subeEkleTikla()">＋ Şube ekle</button>
+      </div>
+      <div class="mini-note">Şube kodu sipariş numarasının ön ekidir: KD-10-26-0001</div>
+    </div></div>
+
+    <div class="card" id="cardMesaj"><div class="card-header"><h3>Müşteri mesajı ve ERP</h3></div><div class="card-body">
+      <div class="field"><label>WhatsApp teslim mesajı</label>
+        <input type="text" id="ayarWaSablon" placeholder="Sayın {ad}, {no} numaralı siparişiniz hazır. {isletme}">
+      </div>
+      <div class="mini-note">Yer tutucular: {ad} müşteri adı · {no} sipariş no · {isletme} işletme adı</div>
+      <div class="form-row cols-2" style="margin-top:10px">
+        <div class="field"><label>ERP işareti</label>
+          <select id="ayarErpAktif"><option value="hayir">Kapalı</option><option value="evet">Açık</option></select>
+        </div>
+        <div class="field"><label>ERP işaretinin adı</label><input type="text" id="ayarErpEtiket" placeholder="ERP'ye İşlendi"></div>
+      </div>
+      <button class="btn btn-yellow" style="width:100%;justify-content:center;margin-top:10px" onclick="mesajAyarKaydetTikla()">Kaydet</button>
+    </div></div>
+
     <div class="card" id="cardHesabim"><div class="card-header"><h3>Hesabım</h3></div><div class="card-body">
       <div class="split-row"><span class="split-name">Ad</span><span class="split-val" id="hesabimAd">—</span></div>
       <div class="split-row"><span class="split-name">E-posta</span><span class="split-val" id="hesabimEmail">—</span></div>
@@ -352,7 +427,7 @@
       </div>
     </div>
 
-    <div class="card" id="cardOranlar"><div class="card-header"><h3>Oranlar ve Listeler</h3><span class="sub">Sheets · Ayarlar sayfası</span></div><div class="card-body" id="oranBody"></div></div>
+    <div class="card" id="cardOranlar"><div class="card-header"><h3>Oranlar ve Listeler</h3><span class="sub">işletmenize özel</span></div><div class="card-body" id="oranBody"></div></div>
 
     <div class="card" id="cardKullanicilar"><div class="card-header"><h3>Kullanıcılar</h3><span class="sub">sadece yönetici</span></div><div class="card-body">
       <div id="kullaniciListe"></div>
@@ -382,8 +457,17 @@
     <div class="modal-handle"></div>
     <div class="modal-title">Bu işlemi kim yapıyor?</div>
     <div class="modal-sub">Kayıt bu personel adına loglanacak.</div>
-    <div class="modal-body"><div class="pick-grid" id="personelSecGrid"></div></div>
-    <div class="modal-footer"><button class="btn btn-ghost" style="width:100%" onclick="personelSecimIptal()">Vazgeç</button></div>
+    <div class="modal-body">
+      <div class="pick-grid" id="personelSecGrid"></div>
+      <div class="mini-note" id="personelSecNot" style="display:none"></div>
+      <div class="field" style="margin-top:10px">
+        <input type="text" id="personelSerbest" placeholder="Listede yoksa adınızı yazın">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="personelSecimIptal()">Vazgeç</button>
+      <button class="btn btn-yellow" style="flex:1" onclick="personelSerbestDevam()">Devam</button>
+    </div>
   </div>
 </div>
 
@@ -600,6 +684,8 @@
     <div class="success-rep" id="successRep"></div>
   </div>
 </div>
+
+<div class="abonelik-bant" id="abonelikBant" onclick="goster('viewAyar')"></div>
 
 <div class="toast" id="toast"></div>
 

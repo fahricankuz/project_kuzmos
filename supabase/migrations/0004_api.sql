@@ -2,14 +2,9 @@
 -- Kuzmos · 0004 — Uygulama API'si (RPC)
 --
 -- Arayüz tek çağrıda iş yapar: tum_veri(), siparis_kaydet(...) gibi.
--- Dönen JSON, Apps Script sürümünün döndürdüğü şeklin AYNISI (camelCase);
--- böylece arayüz kodu değişmeden çalışır.
---
--- Bu fonksiyonlar security INVOKER'dır: RLS politikaları geçerlidir, yani
--- mağaza rolü bu uçlardan da yalnızca kendi şubesinin verisini görür/yazar.
+-- Fonksiyonlar security INVOKER'dır; RLS politikaları (kiracı izolasyonu +
+-- rol + abonelik kapısı) her çağrıda geçerlidir.
 -- ═══════════════════════════════════════════════════════════════════════
-
--- ── Küçük yardımcılar ────────────────────────────────────────────────
 
 /* "a, b, c" → {a,b,c} */
 create or replace function liste_ayristir(p text)
@@ -29,7 +24,7 @@ declare
   v_or  text;
 begin
   foreach v_par in array liste_ayristir(p) loop
-    v_i := length(v_par) - strpos(reverse(v_par), ':') + 1;   -- son ':'
+    v_i := length(v_par) - strpos(reverse(v_par), ':') + 1;
     if v_i < 2 then continue; end if;
     v_ad := btrim(left(v_par, v_i - 1));
     v_or := btrim(substr(v_par, v_i + 1));
@@ -47,29 +42,9 @@ create or replace function log_ekle(
   p_islem text, p_tablo text default '', p_kayit text default '',
   p_personel text default '', p_detay jsonb default '{}'
 ) returns void language sql security definer set search_path = public as $$
-  insert into log (kullanici_id, personel, islem, tablo, kayit_id, detay)
-  values (auth.uid(), coalesce(p_personel, ''), p_islem,
+  insert into log (isletme_id, kullanici_id, personel, islem, tablo, kayit_id, detay)
+  values (aktif_isletme(), auth.uid(), coalesce(p_personel, ''), p_islem,
           coalesce(p_tablo, ''), coalesce(p_kayit, ''), coalesce(p_detay, '{}'::jsonb))
-$$;
-
-/* Serbest girilen satış personelini listeye ekler (mağaza rolü de yapabilir). */
-create or replace function personel_sagla(p_ad text)
-returns void language plpgsql security definer set search_path = public as $$
-declare v_magaza uuid;
-begin
-  if btrim(coalesce(p_ad, '')) = '' or aktif_rol() is null then return; end if;
-  v_magaza := coalesce(aktif_magaza(),
-                       (select id from magazalar where aktif order by olusturma limit 1));
-  if v_magaza is null then return; end if;
-  insert into personel (magaza_id, ad) values (v_magaza, btrim(p_ad))
-  on conflict (magaza_id, ad) do nothing;
-end $$;
-
-/* Kullanıcının şubesi; finans rollerinde ilk aktif şube. */
-create or replace function varsayilan_magaza()
-returns uuid language sql stable security definer set search_path = public as $$
-  select coalesce(aktif_magaza(),
-                  (select id from magazalar where aktif order by olusturma limit 1))
 $$;
 
 /* Telefonu eşleştirme biçimine indirger (telefon_norm ile aynı kural). */
@@ -79,10 +54,6 @@ returns text language sql immutable as $$
 $$;
 
 -- ── Müşteri ──────────────────────────────────────────────────────────
-/*
- * Müşteriyi oluşturur veya günceller, id döner. Boş gelen alanlar mevcut
- * değerin üzerine YAZILMAZ. Eşleştirme: id → telefon → (telefonsuz) ad.
- */
 create or replace function musteri_upsert(p jsonb)
 returns uuid language plpgsql as $$
 declare
@@ -163,6 +134,7 @@ returns jsonb language sql stable as $$
   select jsonb_build_object(
     'id', s.id,
     'no', s.no,
+    'magazaId', s.magaza_id,
     'siparisTarihi', to_char(s.siparis_tarihi, 'YYYY-MM-DD'),
     'teslimTarihi', coalesce(to_char(s.teslim_tarihi, 'YYYY-MM-DD'), ''),
     'personel', s.personel_adi,
@@ -191,8 +163,7 @@ returns jsonb language sql stable as $$
     'kalan', v.kalan,
     'durum', s.durum,
     'durumTarihi', to_char(s.durum_tarihi, 'YYYY-MM-DD'),
-    'nebim', s.nebim,
-    'olusturanHesap', '',
+    'erp', s.erp_islendi,
     'olusturanPersonel', s.olusturan_personel,
     'silindi', s.silindi,
     'silinmeTarihi', coalesce(to_char(s.silinme_tarihi, 'YYYY-MM-DD'), '')
@@ -203,16 +174,11 @@ returns jsonb language sql stable as $$
 $$;
 
 -- ── Sipariş kaydet (ekle / güncelle) ─────────────────────────────────
-/*
- * Tek çağrıda: müşteri kartı, sipariş, ürün satırları, ödemeler ve marka
- * listesi. Ödemeler payload ile eşitlenir; kaldırılan ödemenin kasa
- * hareketi FK cascade ile silinir.
- */
 create or replace function siparis_kaydet(p jsonb, p_personel text default '')
 returns jsonb language plpgsql as $$
 declare
   v_id       uuid;
-  v_magaza   uuid := varsayilan_magaza();
+  v_magaza   uuid;
   v_ad       text := btrim(coalesce(p->>'adSoyad', ''));
   v_tarih    date;
   v_musteri  uuid;
@@ -233,10 +199,20 @@ begin
   v_yeni := v_id is null;
 
   if aktif_rol() is null then raise exception 'Yetkisiz.'; end if;
+  if not yazma_izni() then
+    raise exception 'Aboneliğiniz yazma işlemine kapalı. Lütfen planınızı yenileyin.';
+  end if;
   if v_ad = '' then raise exception 'Müşteri adı zorunludur.'; end if;
   if aktif_rol() = 'magaza' and btrim(coalesce(p_personel, '')) = '' then
     raise exception 'İşlemi yapan satış personelini seçin.';
   end if;
+
+  begin
+    v_magaza := nullif(btrim(coalesce(p->>'magazaId', '')), '')::uuid;
+  exception when others then v_magaza := null;
+  end;
+  if v_magaza is null or not magaza_erisimi(v_magaza) then v_magaza := varsayilan_magaza(); end if;
+  if v_magaza is null then raise exception 'Şube bulunamadı.'; end if;
 
   begin
     v_tarih := coalesce(nullif(p->>'siparisTarihi', '')::date, current_date);
@@ -245,7 +221,6 @@ begin
 
   v_durum := coalesce(nullif(p->>'durum', '')::siparis_durumu, 'Satış Yapıldı');
 
-  /* Ürünlerden ara toplam; indirim = elle girilmiş farklı genel toplam */
   for v_satir in select * from jsonb_array_elements(coalesce(p->'urunler', '[]'::jsonb)) loop
     v_ara := v_ara + greatest(coalesce((v_satir->>'adet')::integer, 1), 1)
                      * coalesce((v_satir->>'fiyat')::numeric, 0);
@@ -265,12 +240,12 @@ begin
   if v_yeni then
     insert into siparisler (
       magaza_id, siparis_tarihi, personel_adi, musteri_id, ad_soyad, telefon,
-      eposta, tc_vergi, recete, tutar, tutar_elle, durum, nebim, olusturan_personel
+      eposta, tc_vergi, recete, tutar, tutar_elle, durum, erp_islendi, olusturan_personel
     ) values (
       v_magaza, v_tarih, coalesce(p->>'personel', ''), v_musteri, v_ad,
       coalesce(p->>'telefon', ''), coalesce(p->>'eposta', ''), coalesce(p->>'tcVergi', ''),
       coalesce(p->'recete', '{}'::jsonb), v_tutar, v_elle, v_durum,
-      coalesce((p->>'nebim')::boolean, false),
+      coalesce((p->>'erp')::boolean, false),
       coalesce(nullif(btrim(p_personel), ''), coalesce(p->>'personel', ''))
     ) returning id into v_id;
   else
@@ -286,7 +261,7 @@ begin
       tutar = v_tutar,
       tutar_elle = v_elle,
       durum = v_durum,
-      nebim = coalesce((p->>'nebim')::boolean, false)
+      erp_islendi = coalesce((p->>'erp')::boolean, false)
      where id = v_id;
     if not found then raise exception 'Sipariş bulunamadı.'; end if;
   end if;
@@ -315,7 +290,10 @@ begin
        or coalesce(v_satir->>'tarih', '') = '' then
       continue;
     end if;
-    v_odeme_id := nullif(btrim(coalesce(v_satir->>'id', '')), '')::uuid;
+    begin
+      v_odeme_id := nullif(btrim(coalesce(v_satir->>'id', '')), '')::uuid;
+    exception when others then v_odeme_id := null;
+    end;
     if v_odeme_id is not null then
       update odemeler set
         tarih = (v_satir->>'tarih')::date,
@@ -341,14 +319,11 @@ begin
   end loop;
   delete from odemeler where siparis_id = v_id and not (id = any (v_tutulan));
 
-  /* Personel listesinde yoksa ekle (mağaza serbest metin girebilir) */
-  perform personel_sagla(p_personel);
-
+  perform personel_sagla(p_personel, v_magaza);
   perform log_ekle(
     case when v_yeni then 'SIPARIS_EKLE' else 'SIPARIS_GUNCELLE' end,
     'siparisler', v_id::text, p_personel,
-    jsonb_build_object('adSoyad', v_ad, 'tutar', v_tutar)
-  );
+    jsonb_build_object('adSoyad', v_ad, 'tutar', v_tutar));
 
   return siparis_json(v_id);
 end $$;
@@ -359,6 +334,9 @@ returns jsonb language plpgsql as $$
 declare v_odeme uuid;
 begin
   if aktif_rol() is null then raise exception 'Yetkisiz.'; end if;
+  if not yazma_izni() then
+    raise exception 'Aboneliğiniz yazma işlemine kapalı. Lütfen planınızı yenileyin.';
+  end if;
   if aktif_rol() = 'magaza' and btrim(coalesce(p_personel, '')) = '' then
     raise exception 'İşlemi yapan satış personelini seçin.';
   end if;
@@ -378,8 +356,7 @@ begin
 
   perform log_ekle(
     case when coalesce(p->>'tip', '') = 'iade' then 'SIPARIS_IADE' else 'SIPARIS_TAHSILAT' end,
-    'odemeler', v_odeme::text, p_personel, p
-  );
+    'odemeler', v_odeme::text, p_personel, p);
   return siparis_json(p_id);
 end $$;
 
@@ -413,7 +390,6 @@ begin
   return siparis_json(p_id);
 end $$;
 
-/* Kalıcı silme: RLS gereği yalnızca muhasebe/yönetici. */
 create or replace function siparis_kalici_sil(p_id uuid)
 returns boolean language plpgsql as $$
 begin
@@ -423,14 +399,12 @@ begin
   return true;
 end $$;
 
-/* Çöpte 3 günden uzun bekleyenleri kalıcı siler. */
 create or replace function cop_temizle()
 returns integer language plpgsql as $$
 declare v_sayi integer;
 begin
   delete from siparisler
-   where silindi and silinme_tarihi is not null
-     and silinme_tarihi < current_date - 3;
+   where silindi and silinme_tarihi is not null and silinme_tarihi < current_date - 3;
   get diagnostics v_sayi = row_count;
   if v_sayi > 0 then
     perform log_ekle('COP_TEMIZLE', 'siparisler', '', '',
@@ -443,15 +417,17 @@ end $$;
 create or replace function ayar_paketi()
 returns jsonb language plpgsql stable as $$
 declare
-  v_ham    jsonb;
-  v_finans boolean := finans_mi();
-  v_paket  jsonb;
+  v_isletme uuid := aktif_isletme();
+  v_ham     jsonb;
+  v_finans  boolean := finans_mi();
+  v_paket   jsonb;
 begin
-  select coalesce(jsonb_object_agg(anahtar, deger), '{}'::jsonb) into v_ham from ayarlar;
+  select coalesce(jsonb_object_agg(anahtar, deger), '{}'::jsonb) into v_ham
+  from ayarlar where isletme_id = v_isletme;
 
   v_paket := jsonb_build_object(
     'hesaplar', (select coalesce(jsonb_agg(ad order by sira, ad), '[]'::jsonb)
-                   from hesaplar where aktif),
+                   from hesaplar where isletme_id = v_isletme and aktif),
     'bankalar', to_jsonb(liste_ayristir(v_ham->>'bankalar')),
     'taksitler', to_jsonb(liste_ayristir(v_ham->>'taksitler')),
     'kkKomisyon', oran_ayristir(v_ham->>'kk_komisyon'),
@@ -459,63 +435,96 @@ begin
     'masrafKalemleri', to_jsonb(liste_ayristir(v_ham->>'magaza_masraf_kalemleri')),
     'masrafAnaKategori', coalesce(nullif(v_ham->>'magaza_masraf_ana_kategori', ''), 'Masraflar'),
     'nakitHesap', coalesce(nullif(v_ham->>'nakit_hesap', ''), 'Nakit Kasa'),
-    'siparisNoOnEk', coalesce((select kod from magazalar where id = varsayilan_magaza()), 'DK'),
+    'siparisNoOnEk', coalesce((select kod from magazalar where id = varsayilan_magaza()), ''),
+    /* Markalaşma: her işletme kendi adını ve mesajını kullanır */
+    'waSablon', coalesce(nullif(v_ham->>'wa_sablon', ''),
+      'Sayın {ad}, {no} numaralı siparişiniz teslimata hazırdır. {isletme} iyi günler diler.'),
+    'erpAktif', coalesce(nullif(v_ham->>'erp_aktif', ''), 'hayir') in ('evet', 'true', '1'),
+    'erpEtiket', coalesce(nullif(v_ham->>'erp_etiket', ''), 'ERP''ye İşlendi'),
     'kasaEntegrasyon', true
   );
 
   if v_finans then
     v_paket := v_paket || jsonb_build_object(
       'borcHesaplari', (select coalesce(jsonb_agg(ad order by ad), '[]'::jsonb)
-                          from hesaplar where aktif and tip = 'kredi'),
+                          from hesaplar where isletme_id = v_isletme and aktif and tip = 'kredi'),
       'acilisKasa', coalesce(replace(coalesce(v_ham->>'acilis_kasa', '0'), ',', '.')::numeric, 0),
       'acilisTarih', coalesce(v_ham->>'acilis_tarih', ''),
       'acilisBorc', coalesce(replace(coalesce(v_ham->>'acilis_borc', '0'), ',', '.')::numeric, 0),
-      'ham', v_ham
-    );
+      'ham', v_ham);
   else
     v_paket := v_paket || jsonb_build_object('ham', '{}'::jsonb);
   end if;
   return v_paket;
 end $$;
 
+-- ── Abonelik özeti (arayüzdeki deneme/uyarı bandı) ───────────────────
+create or replace function abonelik_ozeti()
+returns jsonb language sql stable as $$
+  select jsonb_build_object(
+    'id', i.id,
+    'ad', i.ad,
+    'slug', i.slug,
+    'eposta', i.eposta,
+    'telefon', i.telefon,
+    'plan', i.plan_kod,
+    'planAd', pl.ad,
+    'durum', i.durum,
+    'denemeBitis', to_char(i.deneme_bitis, 'YYYY-MM-DD'),
+    'abonelikBitis', coalesce(to_char(i.abonelik_bitis, 'YYYY-MM-DD'), ''),
+    'kalanGun', greatest(0, (coalesce(
+      case when i.durum = 'deneme' then i.deneme_bitis else i.abonelik_bitis end,
+      current_date) - current_date)),
+    'yazabilir', abonelik_yazabilir(i.id),
+    'maxKullanici', pl.max_kullanici,
+    'maxMagaza', pl.max_magaza,
+    'kullaniciSayisi', (select count(*) from profiller p where p.isletme_id = i.id and p.aktif),
+    'magazaSayisi', (select count(*) from magazalar m where m.isletme_id = i.id and m.aktif)
+  )
+  from isletmeler i join planlar pl on pl.kod = i.plan_kod
+  where i.id = aktif_isletme()
+$$;
+
 -- ── Tüm veri (tek çağrı) ─────────────────────────────────────────────
-/*
- * Arayüzün açılışta ihtiyaç duyduğu her şey. Finansal veri (kasa
- * hareketleri, cari, banka, tekrarlayan, kasa kategorileri) yalnızca
- * yönetici/muhasebe rolüne gider; RLS de ayrıca kapıyı tutar.
- */
 create or replace function tum_veri()
 returns jsonb language plpgsql stable as $$
 declare
-  v_finans boolean := finans_mi();
-  v_rol    rol_tipi := aktif_rol();
-  v_out    jsonb;
+  v_isletme uuid := aktif_isletme();
+  v_finans  boolean := finans_mi();
+  v_rol     rol_tipi := aktif_rol();
+  v_out     jsonb;
 begin
   if v_rol is null then raise exception 'Oturum geçersiz veya hesap pasif.'; end if;
+  if v_isletme is null then raise exception 'Hesabınız bir işletmeye bağlı değil.'; end if;
 
   v_out := jsonb_build_object(
     'kullanici', jsonb_build_object(
       'email', coalesce(auth.jwt() ->> 'email', ''),
       'ad', aktif_ad(),
-      'rol', v_rol
-    ),
+      'rol', v_rol,
+      'magazaId', coalesce(aktif_magaza()::text, '')),
+    'isletme', abonelik_ozeti(),
+    'magazalar', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'id', id, 'ad', ad, 'kod', kod, 'aktif', aktif
+      ) order by olusturma), '[]'::jsonb)
+      from magazalar where isletme_id = v_isletme),
     'ayar', ayar_paketi(),
     'personel', (
       select coalesce(jsonb_agg(jsonb_build_object(
         'ad', ad, 'aktif', aktif, 'primMuaf', prim_muaf, 'notu', ''
       ) order by sira, ad), '[]'::jsonb)
-      from personel where (v_finans or aktif)),
+      from personel where isletme_id = v_isletme and (v_finans or aktif)),
     'urunKategorileri', (
       select coalesce(jsonb_agg(jsonb_build_object(
         'ad', ad, 'kdv', kdv, 'ikon', ikon, 'sira', sira
       ) order by sira, ad), '[]'::jsonb)
-      from urun_kategorileri where aktif),
+      from urun_kategorileri where isletme_id = v_isletme and aktif),
     'markalar', (
       select coalesce(jsonb_object_agg(kategori, markalar), '{}'::jsonb) from (
-        select k.ad as kategori,
-               jsonb_agg(m.ad order by m.ad) as markalar
+        select k.ad as kategori, jsonb_agg(m.ad order by m.ad) as markalar
         from markalar m join urun_kategorileri k on k.id = m.kategori_id
-        where m.aktif group by k.ad
+        where m.aktif and m.isletme_id = v_isletme group by k.ad
       ) x),
     'siparis', (
       select coalesce(jsonb_agg(siparis_json(s.id) order by s.siparis_tarihi desc, s.no desc),
@@ -537,12 +546,8 @@ begin
         'hesap', hesap, 'aciklama', aciklama, 'kaydeden', kaydeden
       ) order by tarih desc), '[]'::jsonb)
       from v_magaza_masraflari),
-    'hareketler', '[]'::jsonb,
-    'cari', '[]'::jsonb,
-    'banka', '[]'::jsonb,
-    'tekrar', '[]'::jsonb,
-    'kasaKategorileri', '[]'::jsonb
-  );
+    'hareketler', '[]'::jsonb, 'cari', '[]'::jsonb, 'banka', '[]'::jsonb,
+    'tekrar', '[]'::jsonb, 'kasaKategorileri', '[]'::jsonb);
 
   if not v_finans then return v_out; end if;
 
@@ -578,23 +583,34 @@ begin
         'ad', ana, 'yon', yon, 'bolum', bolum, 'alt', altlar
       ) order by sira, ana), '[]'::jsonb)
       from (
-        select ana, min(sira) as sira,
-               (array_agg(yon))[1] as yon, (array_agg(bolum))[1] as bolum,
+        select ana, min(sira) as sira, (array_agg(yon))[1] as yon,
+               (array_agg(bolum))[1] as bolum,
                coalesce(jsonb_agg(alt order by alt) filter (where alt <> ''), '[]'::jsonb) as altlar
-        from kasa_kategorileri group by ana
+        from kasa_kategorileri where isletme_id = v_isletme group by ana
       ) k)
   );
 end $$;
 
 -- ── Kasa yazma uçları (finans) ───────────────────────────────────────
+create or replace function hareket_json(p_id uuid)
+returns jsonb language sql stable as $$
+  select jsonb_build_object(
+    'id', h.id, 'tarih', to_char(h.tarih, 'YYYY-MM-DD'), 'yon', h.yon,
+    'ana', h.ana_kategori, 'alt', h.alt_kategori, 'tutar', h.tutar,
+    'hesap', hs.ad, 'aciklama', h.aciklama, 'kaydeden', h.kaydeden,
+    'kaynak', h.kaynak, 'kaynakId', coalesce(h.odeme_id::text, '')
+  )
+  from hareketler h join hesaplar hs on hs.id = h.hesap_id where h.id = p_id
+$$;
+
 create or replace function hareket_kaydet(p jsonb)
 returns jsonb language plpgsql as $$
 declare
-  v_id    uuid;
-  v_hesap uuid;
-  v_yon   hareket_yonu := (p->>'yon')::hareket_yonu;
+  v_isletme uuid := aktif_isletme();
+  v_id      uuid;
+  v_hesap   uuid;
+  v_yon     hareket_yonu := (p->>'yon')::hareket_yonu;
 begin
-  /* İstemci yeni kayıt için uuid olmayan geçici id üretebilir */
   begin
     v_id := nullif(btrim(coalesce(p->>'id', '')), '')::uuid;
   exception when others then v_id := null;
@@ -605,15 +621,14 @@ begin
   end if;
   if btrim(coalesce(p->>'ana', '')) = '' then raise exception 'Ana kategori gerekli.'; end if;
 
-  select id into v_hesap from hesaplar where lower(ad) = lower(btrim(coalesce(p->>'hesap', '')));
+  select id into v_hesap from hesaplar
+   where isletme_id = v_isletme and lower(ad) = lower(btrim(coalesce(p->>'hesap', '')));
   if v_hesap is null then raise exception 'Hesap bulunamadı: %', p->>'hesap'; end if;
 
-  /* Kategori çifti yoksa eklenir. Doğrudan insert: bu fonksiyon security
-     INVOKER olduğu için kasa_kategorileri RLS politikası geçerli kalır
-     (yalnızca finans rolü kategori açabilir). */
-  insert into kasa_kategorileri (ana, alt, yon, bolum, sira)
-  values (btrim(p->>'ana'), coalesce(btrim(p->>'alt'), ''), v_yon, 'OP', 999)
-  on conflict (ana, alt) do nothing;
+  /* Kategori çifti yoksa eklenir; RLS geçerli (yalnızca finans açabilir). */
+  insert into kasa_kategorileri (isletme_id, ana, alt, yon, bolum, sira)
+  values (v_isletme, btrim(p->>'ana'), coalesce(btrim(p->>'alt'), ''), v_yon, 'OP', 999)
+  on conflict (isletme_id, ana, alt) do nothing;
 
   if v_id is not null then
     update hareketler set
@@ -640,17 +655,6 @@ begin
   return hareket_json(v_id);
 end $$;
 
-create or replace function hareket_json(p_id uuid)
-returns jsonb language sql stable as $$
-  select jsonb_build_object(
-    'id', h.id, 'tarih', to_char(h.tarih, 'YYYY-MM-DD'), 'yon', h.yon,
-    'ana', h.ana_kategori, 'alt', h.alt_kategori, 'tutar', h.tutar,
-    'hesap', hs.ad, 'aciklama', h.aciklama, 'kaydeden', h.kaydeden,
-    'kaynak', h.kaynak, 'kaynakId', coalesce(h.odeme_id::text, '')
-  )
-  from hareketler h join hesaplar hs on hs.id = h.hesap_id where h.id = p_id
-$$;
-
 create or replace function hareket_sil(p_id uuid)
 returns boolean language plpgsql as $$
 begin
@@ -666,21 +670,21 @@ begin
   if p_ay !~ '^\d{4}-\d{2}$' then raise exception 'Ay YYYY-MM biçiminde olmalı.'; end if;
   insert into hedefler (magaza_id, ay, hedef, notu)
   values (varsayilan_magaza(), p_ay, coalesce(p_hedef, 0), coalesce(p_notu, ''))
-  on conflict (magaza_id, ay) do update
-    set hedef = excluded.hedef, notu = excluded.notu;
-  perform log_ekle('HEDEF_KAYDET', 'hedefler', p_ay, '',
-                   jsonb_build_object('hedef', p_hedef));
+  on conflict (magaza_id, ay) do update set hedef = excluded.hedef, notu = excluded.notu;
+  perform log_ekle('HEDEF_KAYDET', 'hedefler', p_ay, '', jsonb_build_object('hedef', p_hedef));
   return true;
 end $$;
 
-create or replace function cari_kaydet(p_tedarikci text, p_ay text, p_planlanan numeric, p_notu text default '')
+create or replace function cari_kaydet(p_tedarikci text, p_ay text, p_planlanan numeric,
+                                       p_notu text default '')
 returns boolean language plpgsql as $$
 begin
   if btrim(coalesce(p_tedarikci, '')) = '' then raise exception 'Tedarikçi gerekli.'; end if;
   if p_ay !~ '^\d{4}-\d{2}$' then raise exception 'Ay YYYY-MM biçiminde olmalı.'; end if;
-  insert into cari_plan (tedarikci, ay, planlanan, notu)
-  values (btrim(p_tedarikci), p_ay, coalesce(p_planlanan, 0), coalesce(p_notu, ''))
-  on conflict (tedarikci, ay) do update
+  insert into cari_plan (isletme_id, tedarikci, ay, planlanan, notu)
+  values (aktif_isletme(), btrim(p_tedarikci), p_ay, coalesce(p_planlanan, 0),
+          coalesce(p_notu, ''))
+  on conflict (isletme_id, tedarikci, ay) do update
     set planlanan = excluded.planlanan, notu = excluded.notu;
   return true;
 end $$;
@@ -690,7 +694,8 @@ returns boolean language plpgsql as $$
 declare v_s jsonb; v_hesap uuid;
 begin
   for v_s in select * from jsonb_array_elements(coalesce(p_satirlar, '[]'::jsonb)) loop
-    select id into v_hesap from hesaplar where lower(ad) = lower(btrim(coalesce(v_s->>'hesap', '')));
+    select id into v_hesap from hesaplar
+     where isletme_id = aktif_isletme() and lower(ad) = lower(btrim(coalesce(v_s->>'hesap', '')));
     if v_hesap is null then continue; end if;
     insert into banka_dogrulama (tarih, hesap_id, bakiye, notu)
     values (coalesce(p_tarih, current_date), v_hesap,
@@ -703,21 +708,21 @@ end $$;
 
 create or replace function tekrar_kaydet(p_liste jsonb)
 returns boolean language plpgsql as $$
-declare v_s jsonb; v_hesap uuid;
+declare v_s jsonb; v_hesap uuid; v_isletme uuid := aktif_isletme();
 begin
   if not finans_mi() then raise exception 'Bu işlem için yetkiniz yok.'; end if;
-  delete from tekrarlayan;
+  delete from tekrarlayan where isletme_id = v_isletme;
   for v_s in select * from jsonb_array_elements(coalesce(p_liste, '[]'::jsonb)) loop
     if btrim(coalesce(v_s->>'ad', '')) = '' then continue; end if;
-    select id into v_hesap from hesaplar where lower(ad) = lower(btrim(coalesce(v_s->>'hesap', '')));
-    insert into tekrarlayan (ad, ana, alt, tutar, gun, hesap_id, yon, aktif)
+    select id into v_hesap from hesaplar
+     where isletme_id = v_isletme and lower(ad) = lower(btrim(coalesce(v_s->>'hesap', '')));
+    insert into tekrarlayan (isletme_id, ad, ana, alt, tutar, gun, hesap_id, yon, aktif)
     values (
-      btrim(v_s->>'ad'), coalesce(v_s->>'ana', ''), coalesce(v_s->>'alt', ''),
+      v_isletme, btrim(v_s->>'ad'), coalesce(v_s->>'ana', ''), coalesce(v_s->>'alt', ''),
       coalesce((v_s->>'tutar')::numeric, 0),
       least(greatest(coalesce((v_s->>'gun')::integer, 1), 1), 31),
       v_hesap, coalesce(nullif(v_s->>'yon', '')::hareket_yonu, 'GIDER'),
-      coalesce((v_s->>'aktif')::boolean, true)
-    );
+      coalesce((v_s->>'aktif')::boolean, true));
   end loop;
   return true;
 end $$;
@@ -744,8 +749,9 @@ end $$;
 create or replace function ayar_guncelle(p_anahtar text, p_deger text)
 returns boolean language plpgsql as $$
 begin
-  insert into ayarlar (anahtar, deger) values (btrim(p_anahtar), coalesce(p_deger, ''))
-  on conflict (anahtar) do update set deger = excluded.deger;
+  insert into ayarlar (isletme_id, anahtar, deger)
+  values (aktif_isletme(), btrim(p_anahtar), coalesce(p_deger, ''))
+  on conflict (isletme_id, anahtar) do update set deger = excluded.deger;
   perform log_ekle('AYAR_GUNCELLE', 'ayarlar', btrim(p_anahtar), '',
                    jsonb_build_object('deger', p_deger));
   return true;
@@ -762,60 +768,26 @@ returns jsonb language sql stable as $$
 $$;
 
 -- ── Yetkiler ─────────────────────────────────────────────────────────
-revoke execute on function liste_ayristir(text) from public;
-revoke execute on function oran_ayristir(text) from public;
-revoke execute on function log_ekle(text, text, text, text, jsonb) from public;
-revoke execute on function varsayilan_magaza() from public;
-revoke execute on function personel_sagla(text) from public;
-revoke execute on function telefon_sadelestir(text) from public;
-revoke execute on function musteri_upsert(jsonb) from public;
-revoke execute on function siparis_json(uuid) from public;
-revoke execute on function hareket_json(uuid) from public;
-revoke execute on function siparis_kaydet(jsonb, text) from public;
-revoke execute on function siparis_odeme_ekle(uuid, jsonb, text) from public;
-revoke execute on function siparis_durum_guncelle(uuid, text, text) from public;
-revoke execute on function siparis_sil(uuid, text) from public;
-revoke execute on function siparis_geri_al(uuid, text) from public;
-revoke execute on function siparis_kalici_sil(uuid) from public;
-revoke execute on function cop_temizle() from public;
-revoke execute on function ayar_paketi() from public;
-revoke execute on function tum_veri() from public;
-revoke execute on function musteri_guncelle(jsonb, text) from public;
-revoke execute on function hareket_kaydet(jsonb) from public;
-revoke execute on function hareket_sil(uuid) from public;
-revoke execute on function hedef_kaydet(text, numeric, text) from public;
-revoke execute on function cari_kaydet(text, text, numeric, text) from public;
-revoke execute on function banka_kaydet(date, jsonb) from public;
-revoke execute on function tekrar_kaydet(jsonb) from public;
-revoke execute on function personel_kaydet(jsonb) from public;
-revoke execute on function ayar_guncelle(text, text) from public;
-revoke execute on function log_listele(integer) from public;
+revoke execute on function liste_ayristir(text), oran_ayristir(text),
+  log_ekle(text, text, text, text, jsonb), telefon_sadelestir(text),
+  musteri_upsert(jsonb), musteri_guncelle(jsonb, text), siparis_json(uuid),
+  hareket_json(uuid), siparis_kaydet(jsonb, text), siparis_odeme_ekle(uuid, jsonb, text),
+  siparis_durum_guncelle(uuid, text, text), siparis_sil(uuid, text),
+  siparis_geri_al(uuid, text), siparis_kalici_sil(uuid), cop_temizle(),
+  ayar_paketi(), abonelik_ozeti(), tum_veri(), hareket_kaydet(jsonb), hareket_sil(uuid),
+  hedef_kaydet(text, numeric, text), cari_kaydet(text, text, numeric, text),
+  banka_kaydet(date, jsonb), tekrar_kaydet(jsonb), personel_kaydet(jsonb),
+  ayar_guncelle(text, text), log_listele(integer)
+  from public, anon;
 
-grant execute on function log_ekle(text, text, text, text, jsonb) to authenticated;
-grant execute on function varsayilan_magaza() to authenticated;
-grant execute on function personel_sagla(text) to authenticated;
-grant execute on function liste_ayristir(text) to authenticated;
-grant execute on function oran_ayristir(text) to authenticated;
-grant execute on function telefon_sadelestir(text) to authenticated;
-grant execute on function musteri_upsert(jsonb) to authenticated;
-grant execute on function musteri_guncelle(jsonb, text) to authenticated;
-grant execute on function siparis_json(uuid) to authenticated;
-grant execute on function hareket_json(uuid) to authenticated;
-grant execute on function siparis_kaydet(jsonb, text) to authenticated;
-grant execute on function siparis_odeme_ekle(uuid, jsonb, text) to authenticated;
-grant execute on function siparis_durum_guncelle(uuid, text, text) to authenticated;
-grant execute on function siparis_sil(uuid, text) to authenticated;
-grant execute on function siparis_geri_al(uuid, text) to authenticated;
-grant execute on function siparis_kalici_sil(uuid) to authenticated;
-grant execute on function cop_temizle() to authenticated;
-grant execute on function ayar_paketi() to authenticated;
-grant execute on function tum_veri() to authenticated;
-grant execute on function hareket_kaydet(jsonb) to authenticated;
-grant execute on function hareket_sil(uuid) to authenticated;
-grant execute on function hedef_kaydet(text, numeric, text) to authenticated;
-grant execute on function cari_kaydet(text, text, numeric, text) to authenticated;
-grant execute on function banka_kaydet(date, jsonb) to authenticated;
-grant execute on function tekrar_kaydet(jsonb) to authenticated;
-grant execute on function personel_kaydet(jsonb) to authenticated;
-grant execute on function ayar_guncelle(text, text) to authenticated;
-grant execute on function log_listele(integer) to authenticated;
+grant execute on function liste_ayristir(text), oran_ayristir(text),
+  log_ekle(text, text, text, text, jsonb), telefon_sadelestir(text),
+  musteri_upsert(jsonb), musteri_guncelle(jsonb, text), siparis_json(uuid),
+  hareket_json(uuid), siparis_kaydet(jsonb, text), siparis_odeme_ekle(uuid, jsonb, text),
+  siparis_durum_guncelle(uuid, text, text), siparis_sil(uuid, text),
+  siparis_geri_al(uuid, text), siparis_kalici_sil(uuid), cop_temizle(),
+  ayar_paketi(), abonelik_ozeti(), tum_veri(), hareket_kaydet(jsonb), hareket_sil(uuid),
+  hedef_kaydet(text, numeric, text), cari_kaydet(text, text, numeric, text),
+  banka_kaydet(date, jsonb), tekrar_kaydet(jsonb), personel_kaydet(jsonb),
+  ayar_guncelle(text, text), log_listele(integer)
+  to authenticated;

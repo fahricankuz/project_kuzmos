@@ -1,15 +1,25 @@
 -- ═══════════════════════════════════════════════════════════════════════
--- Kuzmos · 0001 — Şema
+-- Kuzmos · 0001 — Şema (çok kiracılı SaaS)
 --
--- Sheets'ten Postgres'e geçişin temel farkları:
---   · Ödemeler ve ürün satırları JSON değil, kendi tabloları (sorgulanabilir)
---   · Sipariş ↔ kasa bağı FK ile kurulur; senkron kodu yerine veritabanı
---     garantisi (bkz. 0002_mantik.sql)
---   · Çok şubeli: her kayıt bir mağazaya ait, tek şube bugün bir satır
---   · Tutarlar numeric(12,2) — kayan nokta hatası yok
+-- Kuzmos tek bir işletmenin iç aracı değil, optik işletmelerine satılan bir
+-- üründür. Bu yüzden veri modelinin en üstünde İŞLETME (kiracı) durur:
+--
+--   isletmeler (kiracı / abone)
+--     └── magazalar (şubeler)
+--           └── siparisler → siparis_urunleri, odemeler
+--     └── musteriler, personel, hesaplar, kategoriler, ayarlar, hareketler...
+--
+-- Kurallar:
+--   · Kiracıya ait HER tabloda isletme_id vardır ve RLS politikaları ilk
+--     olarak bunu kontrol eder. Bir işletme başka işletmenin tek satırını
+--     bile göremez (bkz. 0003_guvenlik.sql ve test/db/izolasyon.test.js).
+--   · Varsayılan listeler (kategori, marka, ayar) global değil, işletme
+--     başınadır: her abone kendi listesini düzenler.
+--   · Tutarlar numeric(12,2) — kayan nokta hatası yok.
 -- ═══════════════════════════════════════════════════════════════════════
 
-create type rol_tipi as enum ('yonetici', 'muhasebe', 'magaza');
+create type rol_tipi as enum ('sahip', 'yonetici', 'muhasebe', 'magaza');
+create type abonelik_durumu as enum ('deneme', 'aktif', 'odeme_bekliyor', 'askida', 'iptal');
 create type siparis_durumu as enum (
   'Satış Yapıldı', 'Cam Siparişi Verildi', 'Montaj Yapıldı', 'Teslim Edildi'
 );
@@ -20,30 +30,108 @@ create type hareket_kaynagi as enum ('ELLE', 'SIPARIS', 'MAGAZA_MASRAF');
 create type kategori_bolumu as enum ('OP', 'FD');
 create type hesap_tipi as enum ('kasa', 'banka', 'pos', 'kredi');
 
--- ── Şubeler ──────────────────────────────────────────────────────────
-create table magazalar (
-  id          uuid primary key default gen_random_uuid(),
-  ad          text not null,
-  kod         text not null unique,          -- sipariş no ön eki, örn. 'DK'
-  aktif       boolean not null default true,
-  olusturma   timestamptz not null default now()
+-- ══ PLATFORM KATMANI ══════════════════════════════════════════════════
+
+/* Satış paketleri. Fiyat ve limitler koda gömülmez. */
+create table planlar (
+  kod            text primary key,                 -- 'deneme', 'temel', 'pro'
+  ad             text not null,
+  aylik_fiyat    numeric(10, 2) not null default 0,
+  yillik_fiyat   numeric(10, 2),
+  para_birimi    text not null default 'TRY',
+  max_kullanici  integer not null default 3,
+  max_magaza     integer not null default 1,
+  ozellikler     jsonb not null default '{}',      -- {"kasa":true,"rapor":true}
+  aktif          boolean not null default true,
+  sira           integer not null default 0
 );
 
--- ── Kullanıcı profilleri (auth.users ile 1-1) ────────────────────────
--- magaza_id null => tüm şubeleri görür (yönetici / muhasebe)
+/* Kiracı = abone olan optik işletmesi. */
+create table isletmeler (
+  id              uuid primary key default gen_random_uuid(),
+  ad              text not null,
+  slug            text not null unique,            -- url/kimlik: 'damlakuz-optik'
+  eposta          text not null default '',
+  telefon         text not null default '',
+  vergi_dairesi   text not null default '',
+  vergi_no        text not null default '',
+  adres           text not null default '',
+  plan_kod        text not null default 'deneme' references planlar on update cascade,
+  durum           abonelik_durumu not null default 'deneme',
+  deneme_bitis    date not null default current_date + 14,
+  abonelik_bitis  date,
+  olusturma       timestamptz not null default now(),
+  guncelleme      timestamptz not null default now(),
+  constraint isletmeler_ad_dolu check (length(btrim(ad)) > 0),
+  constraint isletmeler_slug_bicim check (slug ~ '^[a-z0-9][a-z0-9-]{1,48}$')
+);
+
+/* Abonelik geçmişi: plan değişimi, tahsilat, iptal. Faturalama sağlayıcısı
+   buraya yazar (saglayici + saglayici_ref), uygulama buradan okur. */
+create table abonelik_hareketleri (
+  id             bigserial primary key,
+  isletme_id     uuid not null references isletmeler on delete cascade,
+  tip            text not null,                    -- 'deneme_basladi','odeme','plan_degisti','iptal'
+  plan_kod       text references planlar on update cascade,
+  tutar          numeric(10, 2),
+  para_birimi    text not null default 'TRY',
+  saglayici      text not null default '',         -- 'iyzico','paddle','elle'
+  saglayici_ref  text not null default '',
+  donem_bas      date,
+  donem_bitis    date,
+  detay          jsonb not null default '{}',
+  olusturma      timestamptz not null default now()
+);
+create index abonelik_hareketleri_isletme_idx on abonelik_hareketleri (isletme_id, olusturma desc);
+
+/* Platform (Kuzmos ekibi) yöneticileri. Abonelik ve kullanım verisini
+   görür; kiracıların İŞ VERİSİNE erişimi yoktur (bkz. 0003). */
+create table platform_yoneticileri (
+  id         uuid primary key references auth.users on delete cascade,
+  ad         text not null default '',
+  olusturma  timestamptz not null default now()
+);
+
+-- ══ KİRACI KATMANI ════════════════════════════════════════════════════
+
+create table magazalar (
+  id          uuid primary key default gen_random_uuid(),
+  isletme_id  uuid not null references isletmeler on delete cascade,
+  ad          text not null,
+  kod         text not null,                       -- sipariş no ön eki, örn. 'DK'
+  telefon     text not null default '',
+  adres       text not null default '',
+  aktif       boolean not null default true,
+  olusturma   timestamptz not null default now(),
+  unique (isletme_id, kod)
+);
+create index magazalar_isletme_idx on magazalar (isletme_id);
+
+/*
+ * Kullanıcı profili. Roller:
+ *   sahip    — abonelik ve faturalama dahil her şey (işletme kurucusu)
+ *   yonetici — kullanıcı ve ayar yönetimi, tüm veri
+ *   muhasebe — kasa/rapor/sipariş verisi; kullanıcı yönetemez
+ *   magaza   — yalnızca kendi şubesi; kasanın tamamını göremez
+ * magaza_id null => işletmenin tüm şubeleri (sahip/yonetici/muhasebe).
+ */
 create table profiller (
   id          uuid primary key references auth.users on delete cascade,
+  isletme_id  uuid references isletmeler on delete cascade,
   magaza_id   uuid references magazalar on delete set null,
   ad          text not null default '',
+  eposta      text not null default '',
   rol         rol_tipi not null default 'magaza',
   aktif       boolean not null default true,
   olusturma   timestamptz not null default now()
 );
+create index profiller_isletme_idx on profiller (isletme_id);
 
--- ── Satış personeli (giriş hesabı DEĞİL) ─────────────────────────────
--- Mağaza tek ortak tabletle çalışır; işlemi yapan kişi burada seçilir.
+/* Satış personeli (giriş hesabı DEĞİL): mağaza ortak tabletle çalışır,
+   işlemi yapan kişi bu listeden seçilir. */
 create table personel (
   id          uuid primary key default gen_random_uuid(),
+  isletme_id  uuid not null references isletmeler on delete cascade,
   magaza_id   uuid not null references magazalar on delete cascade,
   ad          text not null,
   aktif       boolean not null default true,
@@ -51,59 +139,66 @@ create table personel (
   sira        integer not null default 0,
   unique (magaza_id, ad)
 );
+create index personel_isletme_idx on personel (isletme_id);
 
--- ── Ürün kategorileri ve markalar ────────────────────────────────────
 create table urun_kategorileri (
   id          uuid primary key default gen_random_uuid(),
-  ad          text not null unique,
+  isletme_id  uuid not null references isletmeler on delete cascade,
+  ad          text not null,
   kdv         numeric(5, 2) not null default 0,
   ikon        text not null default '',
   sira        integer not null default 0,
-  aktif       boolean not null default true
+  aktif       boolean not null default true,
+  unique (isletme_id, ad)
 );
 
 create table markalar (
-  id            uuid primary key default gen_random_uuid(),
-  kategori_id   uuid not null references urun_kategorileri on delete cascade,
-  ad            text not null,
-  aktif         boolean not null default true
+  id           uuid primary key default gen_random_uuid(),
+  isletme_id   uuid not null references isletmeler on delete cascade,
+  kategori_id  uuid not null references urun_kategorileri on delete cascade,
+  ad           text not null,
+  aktif        boolean not null default true
 );
 create unique index markalar_kategori_ad_uniq on markalar (kategori_id, lower(ad));
+create index markalar_isletme_idx on markalar (isletme_id);
 
--- ── Hesaplar (Nakit Kasa, <Banka> POS, kredi hesapları...) ───────────
 create table hesaplar (
   id          uuid primary key default gen_random_uuid(),
-  ad          text not null unique,
+  isletme_id  uuid not null references isletmeler on delete cascade,
+  ad          text not null,
   tip         hesap_tipi not null default 'kasa',
   aktif       boolean not null default true,
-  sira        integer not null default 0
+  sira        integer not null default 0,
+  unique (isletme_id, ad)
 );
 
--- ── Kasa kategori ağacı ──────────────────────────────────────────────
 create table kasa_kategorileri (
   id          uuid primary key default gen_random_uuid(),
+  isletme_id  uuid not null references isletmeler on delete cascade,
   ana         text not null,
   alt         text not null default '',
   yon         hareket_yonu not null,
   bolum       kategori_bolumu not null default 'OP',
   sira        integer not null default 0,
-  unique (ana, alt)
+  unique (isletme_id, ana, alt)
 );
 
--- ── Anahtar/değer ayarlar (oranlar, listeler, varsayılanlar) ─────────
+/* Anahtar/değer ayarlar: oranlar, listeler, markalaşma (işletme başına). */
 create table ayarlar (
-  anahtar     text primary key,
+  isletme_id  uuid not null references isletmeler on delete cascade,
+  anahtar     text not null,
   deger       text not null default '',
-  aciklama    text not null default ''
+  aciklama    text not null default '',
+  primary key (isletme_id, anahtar)
 );
 
--- ── Müşteriler ───────────────────────────────────────────────────────
 create table musteriler (
   id            uuid primary key default gen_random_uuid(),
+  isletme_id    uuid not null references isletmeler on delete cascade,
   magaza_id     uuid not null references magazalar on delete cascade,
   ad_soyad      text not null,
   telefon       text not null default '',
-  -- Eşleştirme için sadeleştirilmiş telefon: 0532.../+90532... -> 532...
+  /* Eşleştirme için sadeleştirilmiş telefon: 0532.../+90532... -> 532... */
   telefon_norm  text generated always as (
                   regexp_replace(regexp_replace(telefon, '\D', '', 'g'), '^(90|0)', '')
                 ) stored,
@@ -116,28 +211,29 @@ create table musteriler (
 );
 create index musteriler_telefon_norm_idx on musteriler (magaza_id, telefon_norm);
 create index musteriler_ad_idx on musteriler (magaza_id, lower(ad_soyad));
+create index musteriler_isletme_idx on musteriler (isletme_id);
 
--- ── Siparişler ───────────────────────────────────────────────────────
 create table siparisler (
   id                  uuid primary key default gen_random_uuid(),
+  isletme_id          uuid not null references isletmeler on delete cascade,
   magaza_id           uuid not null references magazalar on delete restrict,
-  no                  text not null,                    -- DK-10-26-0001
+  no                  text not null,
   siparis_tarihi      date not null default current_date,
   teslim_tarihi       date,
   personel_adi        text not null default '',
   musteri_id          uuid references musteriler on delete set null,
-  -- Sipariş anındaki müşteri bilgisi (kart sonradan düzeltilse de fiş değişmez)
+  /* Sipariş anındaki müşteri bilgisi: kart sonradan düzeltilse de fiş değişmez */
   ad_soyad            text not null,
   telefon             text not null default '',
   eposta              text not null default '',
   tc_vergi            text not null default '',
   recete              jsonb not null default '{}',
-  ara_toplam          numeric(12, 2) not null default 0,  -- ürün satırlarından
-  tutar               numeric(12, 2) not null default 0,  -- genel toplam
-  tutar_elle          boolean not null default false,     -- indirim: elle girildi
+  ara_toplam          numeric(12, 2) not null default 0,
+  tutar               numeric(12, 2) not null default 0,
+  tutar_elle          boolean not null default false,
   durum               siparis_durumu not null default 'Satış Yapıldı',
   durum_tarihi        date not null default current_date,
-  nebim               boolean not null default false,
+  erp_islendi         boolean not null default false,  -- harici ERP'ye aktarıldı mı
   olusturan           uuid references auth.users on delete set null,
   olusturan_personel  text not null default '',
   silindi             boolean not null default false,
@@ -150,16 +246,16 @@ create table siparisler (
 create index siparisler_tarih_idx on siparisler (magaza_id, siparis_tarihi desc);
 create index siparisler_durum_idx on siparisler (magaza_id, durum) where not silindi;
 create index siparisler_musteri_idx on siparisler (musteri_id);
+create index siparisler_isletme_idx on siparisler (isletme_id);
 
--- Sipariş numarası sayacı: ay başına atomik artış (yarış durumu yok)
+/* Sipariş numarası sayacı: ay başına atomik artış (yarış durumu yok) */
 create table siparis_sayaclari (
   magaza_id   uuid not null references magazalar on delete cascade,
-  yil_ay      char(7) not null,            -- 'YYYY-MM'
+  yil_ay      char(7) not null,
   son_no      integer not null default 0,
   primary key (magaza_id, yil_ay)
 );
 
--- ── Sipariş ürün satırları ───────────────────────────────────────────
 create table siparis_urunleri (
   id            uuid primary key default gen_random_uuid(),
   siparis_id    uuid not null references siparisler on delete cascade,
@@ -176,8 +272,7 @@ create table siparis_urunleri (
 );
 create index siparis_urunleri_siparis_idx on siparis_urunleri (siparis_id);
 
--- ── Tahsilat / iade ──────────────────────────────────────────────────
--- Nakit esaslı: her ödeme KENDİ tarihiyle sayılır, sipariş tarihiyle değil.
+/* Nakit esaslı: her ödeme KENDİ tarihiyle sayılır, sipariş tarihiyle değil. */
 create table odemeler (
   id                  uuid primary key default gen_random_uuid(),
   siparis_id          uuid not null references siparisler on delete cascade,
@@ -193,12 +288,15 @@ create table odemeler (
 create index odemeler_siparis_idx on odemeler (siparis_id);
 create index odemeler_tarih_idx on odemeler (tarih);
 
--- ── Kasa hareketleri ─────────────────────────────────────────────────
--- kaynak = 'SIPARIS'  -> odeme_id dolu, trigger üretir, elle düzenlenmez
--- kaynak = 'MAGAZA_MASRAF' -> mağazanın kendi girdiği masraf
--- kaynak = 'ELLE'     -> muhasebenin girdiği kalem
+/*
+ * Kasa hareketleri.
+ *   kaynak = 'SIPARIS'        → odeme_id dolu, trigger üretir, elle düzenlenmez
+ *   kaynak = 'MAGAZA_MASRAF'  → mağazanın kendi girdiği masraf
+ *   kaynak = 'ELLE'           → muhasebenin girdiği kalem
+ */
 create table hareketler (
   id            uuid primary key default gen_random_uuid(),
+  isletme_id    uuid not null references isletmeler on delete cascade,
   magaza_id     uuid references magazalar on delete set null,
   tarih         date not null default current_date,
   yon           hareket_yonu not null,
@@ -210,8 +308,6 @@ create table hareketler (
   kaydeden      text not null default '',
   kaydeden_id   uuid references auth.users on delete set null,
   kaynak        hareket_kaynagi not null default 'ELLE',
-  -- Sipariş tahsilatından üretilmiş hareketin kaynağı. Ödeme silinirse
-  -- hareket de silinir: kasa ile sipariş arasında kopukluk olamaz.
   odeme_id      uuid references odemeler on delete cascade,
   silindi       boolean not null default false,
   olusturma     timestamptz not null default now(),
@@ -222,11 +318,11 @@ create table hareketler (
   )
 );
 create unique index hareketler_odeme_uniq on hareketler (odeme_id) where odeme_id is not null;
-create index hareketler_tarih_idx on hareketler (tarih) where not silindi;
-create index hareketler_kaynak_idx on hareketler (kaynak, tarih) where not silindi;
+create index hareketler_tarih_idx on hareketler (isletme_id, tarih) where not silindi;
+create index hareketler_kaynak_idx on hareketler (isletme_id, kaynak, tarih) where not silindi;
 
--- ── Aylık mağaza hedefi ──────────────────────────────────────────────
 create table hedefler (
+  isletme_id  uuid not null references isletmeler on delete cascade,
   magaza_id   uuid not null references magazalar on delete cascade,
   ay          char(7) not null check (ay ~ '^\d{4}-\d{2}$'),
   hedef       numeric(12, 2) not null default 0,
@@ -234,17 +330,18 @@ create table hedefler (
   primary key (magaza_id, ay)
 );
 
--- ── Planlanan ödemeler / banka doğrulama / tekrarlayan kalemler ──────
 create table cari_plan (
   id          uuid primary key default gen_random_uuid(),
+  isletme_id  uuid not null references isletmeler on delete cascade,
   tedarikci   text not null,
   ay          char(7) not null check (ay ~ '^\d{4}-\d{2}$'),
   planlanan   numeric(12, 2) not null default 0,
   notu        text not null default '',
-  unique (tedarikci, ay)
+  unique (isletme_id, tedarikci, ay)
 );
 
 create table banka_dogrulama (
+  isletme_id  uuid not null references isletmeler on delete cascade,
   tarih       date not null,
   hesap_id    uuid not null references hesaplar on delete cascade,
   bakiye      numeric(12, 2) not null default 0,
@@ -254,6 +351,7 @@ create table banka_dogrulama (
 
 create table tekrarlayan (
   id          uuid primary key default gen_random_uuid(),
+  isletme_id  uuid not null references isletmeler on delete cascade,
   ad          text not null,
   ana         text not null,
   alt         text not null default '',
@@ -264,9 +362,9 @@ create table tekrarlayan (
   aktif       boolean not null default true
 );
 
--- ── Değişiklik günlüğü ───────────────────────────────────────────────
 create table log (
   id                bigserial primary key,
+  isletme_id        uuid references isletmeler on delete cascade,
   zaman             timestamptz not null default now(),
   kullanici_id      uuid references auth.users on delete set null,
   kullanici_eposta  text not null default '',
@@ -276,4 +374,4 @@ create table log (
   kayit_id          text not null default '',
   detay             jsonb not null default '{}'
 );
-create index log_zaman_idx on log (zaman desc);
+create index log_zaman_idx on log (isletme_id, zaman desc);

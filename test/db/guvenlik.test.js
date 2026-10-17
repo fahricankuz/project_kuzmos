@@ -9,17 +9,11 @@ const { veritabaniKur, hataBekle } = require('./harness');
 
 jest.setTimeout(30000);
 
-let db, magazaA, magazaB;
+let db, isletme, magazaA, magazaB;
 let magazaUid, magazaBUid, muhasebeUid, yoneticiUid, profilsizUid, pasifUid;
 
 beforeAll(async () => {
   db = await veritabaniKur();
-  magazaUid = await db.kullaniciOlustur('magaza@ornek.com');
-  magazaBUid = await db.kullaniciOlustur('sube2@ornek.com');
-  muhasebeUid = await db.kullaniciOlustur('muhasebe@ornek.com');
-  yoneticiUid = await db.kullaniciOlustur('yonetici@ornek.com');
-  profilsizUid = await db.kullaniciOlustur('profilsiz@ornek.com');
-  pasifUid = await db.kullaniciOlustur('pasif@ornek.com');
 });
 
 afterAll(async () => {
@@ -28,23 +22,42 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await db.sifirla();
-  await db.sistem();
-  magazaA = await db.magazaId('DK');
-  magazaB = (await db.tek("insert into magazalar (ad, kod) values ('İkinci Şube', 'IK') returning id")).id;
 
-  await db.profilAta(magazaUid, 'Atrium Mağaza', 'magaza', magazaA);
-  await db.profilAta(magazaBUid, 'İkinci Şube', 'magaza', magazaB);
-  await db.profilAta(muhasebeUid, 'Muhasebe', 'muhasebe', null);
-  await db.profilAta(yoneticiUid, 'Yönetici', 'yonetici', null);
-  await db.profilAta(pasifUid, 'Pasif Kullanıcı', 'muhasebe', null);
+  /* Tek işletme, iki şube: şube içi yetki sınırlarını sınıyoruz.
+     Farklı işletmeler arası izolasyon izolasyon.test.js'de. */
+  const k = await db.kiraciKur({ onEk: 'g', ad: 'Örnek Optik', subeKod: 'DK' });
+  isletme = k.isletme;
+  magazaA = k.magaza;
+  muhasebeUid = k.uid.muhasebe;
+  magazaUid = k.uid.magaza;
+  yoneticiUid = k.uid.sahip;
+
+  await db.abonelikAyarla(isletme, { plan: 'pro' }); /* çok şube + çok kullanıcı */
   await db.sistem();
+  magazaB = (
+    await db.tek(
+      "insert into magazalar (isletme_id, ad, kod) values ($1, 'İkinci Şube', 'IK') returning id",
+      [isletme]
+    )
+  ).id;
+
+  magazaBUid = await db.kullaniciOlustur('g-sube2@ornek.com');
+  profilsizUid = await db.kullaniciOlustur('g-profilsiz@ornek.com');
+  pasifUid = await db.kullaniciOlustur('g-pasif@ornek.com');
+  await db.sistem();
+  await db.calistir(
+    `insert into profiller (id, isletme_id, magaza_id, ad, rol, eposta)
+     values ($1, $2, $3, 'İkinci Şube', 'magaza', 'g-sube2@ornek.com'),
+            ($4, $2, null, 'Pasif Kullanıcı', 'muhasebe', 'g-pasif@ornek.com')`,
+    [magazaBUid, isletme, magazaB, pasifUid]
+  );
   await db.calistir('update profiller set aktif = false where id = $1', [pasifUid]);
 
   /* A şubesinde tahsilatlı bir sipariş + bir mağaza masrafı */
   await db.oturumAc(magazaUid);
   const s = await db.tek(
     `insert into siparisler (magaza_id, siparis_tarihi, personel_adi, ad_soyad, olusturan_personel)
-     values ($1, '2026-10-01', 'Sema İpek', 'Ayşe Yılmaz', 'Sema İpek') returning id`,
+     values ($1, '2026-10-01', 'Ali Veli', 'Ayşe Yılmaz', 'Ali Veli') returning id`,
     [magazaA]
   );
   await db.calistir(
@@ -125,6 +138,10 @@ describe('mağaza rolü', () => {
   });
 
   test('personel listesini okur ama değiştiremez', async () => {
+    /* Satış personeli listesi işletme kurulumunda boştur; muhasebe ekler */
+    await db.oturumAc(muhasebeUid);
+    await db.calistir(`select personel_kaydet('[{"ad":"Ali Veli","aktif":true}]'::jsonb)`);
+    await db.oturumAc(magazaUid);
     expect((await db.sor('select ad from personel')).length).toBeGreaterThan(0);
     const hata = await hataBekle(() =>
       db.calistir(`insert into personel (magaza_id, ad) values ($1, 'Sahte Personel')`, [magazaA])
@@ -239,9 +256,14 @@ describe('yönetici rolü', () => {
     expect(r.affectedRows).toBe(1);
   });
 
-  test('yeni şube açabilir', async () => {
-    await db.calistir(`insert into magazalar (ad, kod) values ('Üçüncü Şube', 'UC')`);
+  test('yeni şube açabilir (plan limitine kadar)', async () => {
+    const r = (await db.tek(`select magaza_ekle('Üçüncü Şube', 'UC') as m`)).m;
+    expect(r.kod).toBe('UC');
     expect(await db.sor('select * from magazalar')).toHaveLength(3);
+    /* Pro planı 3 şube: dördüncü reddedilir */
+    expect(await hataBekle(() => db.calistir(`select magaza_ekle('Dördüncü', 'DO')`))).toMatch(
+      /en fazla 3 şube/
+    );
   });
 });
 
@@ -272,10 +294,16 @@ describe('yetkisiz oturumlar', () => {
   });
 
   test('oturumsuz (anon) istek veri göremez', async () => {
-    await db.sistem();
-    await db.db.exec("set app.uid = ''; set role anon;");
+    await db.anonimOl();
     const hata = await hataBekle(() => db.calistir('select * from siparisler'));
     await db.sistem();
     expect(hata).toMatch(/permission denied|izin/i);
+  });
+
+  test('anon yalnızca satış paketlerini görebilir (fiyatlandırma sayfası)', async () => {
+    await db.anonimOl();
+    const planlar = await db.sor('select kod from planlar order by sira');
+    expect(planlar.map((p) => p.kod)).toContain('temel');
+    await db.sistem();
   });
 });

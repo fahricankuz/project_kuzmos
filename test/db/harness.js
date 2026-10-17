@@ -107,12 +107,85 @@ class TestDb {
   async sifirla() {
     await this.sistem();
     await this.db.exec(`
-      truncate magazalar cascade;
-      truncate hesaplar cascade;
-      truncate urun_kategorileri cascade;
-      truncate kasa_kategorileri, ayarlar, log, cari_plan, tekrarlayan restart identity cascade;
+      truncate auth.users cascade;
+      truncate planlar cascade;
+      truncate log restart identity cascade;
     `);
     await this.db.exec(SEED_SQL);
+  }
+
+  /**
+   * Kayıt akışıyla yeni bir kiracı kurar: hesap açar, isletme_olustur()
+   * çağırır (sahip olur), sonra muhasebe ve mağaza kullanıcılarını ekler.
+   * Gerçek ürün akışının aynısı — testler kurulumu elle taklit etmez.
+   */
+  async kiraciKur(opts) {
+    opts = opts || {};
+    const onEk = opts.onEk || 'k1';
+    const ad = opts.ad || 'Örnek Optik';
+    const subeKod = opts.subeKod || 'DK';
+
+    const sahip = await this.kullaniciOlustur(onEk + '-sahip@ornek.com');
+    await this.oturumAc(sahip);
+    const ozet = (
+      await this.tek('select isletme_olustur($1, $2, $3, $4, $5) as o', [
+        ad,
+        opts.sahipAd || 'İşletme Sahibi',
+        opts.telefon || '',
+        opts.subeAd || '',
+        subeKod
+      ])
+    ).o;
+
+    const isletme = ozet.id;
+    const magaza = (
+      await this.tek('select id from magazalar where isletme_id = $1 order by olusturma limit 1', [isletme])
+    ).id;
+
+    const etiket = { muhasebe: 'Muhasebe', magaza: 'Mağaza', yonetici: 'Yönetici' };
+    const kullanicilar = { sahip: sahip };
+    for (const r of opts.roller || ['muhasebe', 'magaza']) {
+      const uid = await this.kullaniciOlustur(onEk + '-' + r + '@ornek.com');
+      await this.sistem();
+      await this.calistir(
+        `insert into profiller (id, isletme_id, magaza_id, ad, rol, eposta)
+         values ($1, $2, $3, $4, $5, $6)`,
+        [uid, isletme, r === 'magaza' ? magaza : null, etiket[r] || r, r, onEk + '-' + r + '@ornek.com']
+      );
+      kullanicilar[r] = uid;
+    }
+    await this.oturumAc(sahip);
+    return { isletme: isletme, magaza: magaza, ozet: ozet, uid: kullanicilar };
+  }
+
+  /** Kuzmos ekibi (platform yöneticisi) hesabı. */
+  async platformYoneticisiEkle(eposta) {
+    const uid = await this.kullaniciOlustur(eposta || 'platform@kuzmos.app');
+    await this.sistem();
+    await this.calistir('insert into platform_yoneticileri (id, ad) values ($1, $2)', [uid, 'Platform']);
+    return uid;
+  }
+
+  /** Aboneliği doğrudan değiştirir (ödeme sağlayıcısının yaptığı iş). */
+  async abonelikAyarla(isletme, alanlar) {
+    const onceki = this.uid;
+    await this.sistem();
+    await this.calistir(
+      `update isletmeler set
+         plan_kod = coalesce($2, plan_kod),
+         durum = coalesce($3, durum::text)::abonelik_durumu,
+         deneme_bitis = coalesce($4, deneme_bitis),
+         abonelik_bitis = coalesce($5, abonelik_bitis)
+       where id = $1`,
+      [
+        isletme,
+        alanlar.plan || null,
+        alanlar.durum || null,
+        alanlar.denemeBitis || null,
+        alanlar.abonelikBitis || null
+      ]
+    );
+    if (onceki) await this.oturumAc(onceki);
   }
 
   /** auth.users kaydı (Supabase'de kayıt olmanın karşılığı). */
@@ -147,6 +220,12 @@ class TestDb {
   async magazaId(kod) {
     const m = await this.tek('select id from magazalar where kod = $1', [kod || 'DK']);
     return m && m.id;
+  }
+
+  /** Oturumsuz (anon) istek. */
+  async anonimOl() {
+    await this.db.exec("reset role; set app.uid = ''; set app.jwt = ''; set role anon;");
+    this.uid = null;
   }
 
   async kapat() {

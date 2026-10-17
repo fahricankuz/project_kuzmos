@@ -1,5 +1,5 @@
 /* ═══════════ SİPARİŞ FORMU DURUMU ═══════════ */
-var formId=null, formUrunler=[], formOdemeler=[], formNebim=false, formNo='', formTeslim='', formDurum='Satış Yapıldı', formKirli=false;
+var formId=null, formUrunler=[], formOdemeler=[], formErp=false, formNo='', formTeslim='', formDurum='Satış Yapıldı', formKirli=false;
 var formMusteriId='';
 var tahsilatCtx={hedef:'form',siparisId:null,tip:'tahsilat'};
 var kkCtx={banka:'',taksit:''};
@@ -206,7 +206,7 @@ function odemeListesiCiz(){
   }).join('');
 }
 function formOdemeSil(i){ formOdemeler.splice(i,1); tahsilatKutulariGuncelle(); formKirliYap(); }
-function nebimDegistir(cb){ formNebim=cb.checked; document.getElementById('chipNebim').className='rec-chip'+(cb.checked?' sel-chk':''); formKirliYap(); }
+function erpDegistir(cb){ formErp=cb.checked; document.getElementById('chipErp').className='rec-chip'+(cb.checked?' sel-chk':''); formKirliYap(); }
 
 /* ═══════════ TAHSİLAT MODALI ═══════════ */
 function tahsilatModaliAc(hedef,tip,siparisId){
@@ -291,7 +291,7 @@ function formTerkEt(){
 function yeniSiparis(){ if(!formTerkEt())return; siparisFormTemizle(false); goster('viewSiparis',true); }
 function siparisFormTemizle(sor){
   if(sor&&formKirli&&!confirm('Form temizlensin mi?'))return;
-  formId=null; formUrunler=[]; formOdemeler=[]; formNebim=false; formNo=''; formTeslim=''; formDurum='Satış Yapıldı'; formMusteriId='';
+  formId=null; formUrunler=[]; formOdemeler=[]; formErp=false; formNo=''; formTeslim=''; formDurum='Satış Yapıldı'; formMusteriId='';
   document.getElementById('spNo').value='';
   document.getElementById('spNoLabel').textContent='Yeni';
   document.getElementById('spTarih').value=bugunStr();
@@ -301,8 +301,9 @@ function siparisFormTemizle(sor){
   personelSecenekleriniCiz();
   receteYukle({});
   urunSatiriEkle(); urunSatiriEkle(); urunSatiriEkle();
-  document.getElementById('chipNebim').className='rec-chip';
-  var cb=document.querySelector('#chipNebim input'); if(cb)cb.checked=false;
+  erpAlaniKur();
+  document.getElementById('chipErp').className='rec-chip';
+  var cb=document.querySelector('#chipErp input'); if(cb)cb.checked=false;
   tahsilatKutulariGuncelle();
   document.getElementById('siparisScroll').scrollTop=0;
   formKirli=false;
@@ -321,7 +322,7 @@ function personelSecenekleriniCiz(secili){
 function siparisiFormaYukle(id){
   var s=(DATA.siparis||[]).filter(function(x){return x.id===id;})[0];
   if(!s)return;
-  formId=s.id; formNo=s.no; formTeslim=s.teslimTarihi; formDurum=s.durum; formNebim=!!s.nebim; formMusteriId=s.musteriId;
+  formId=s.id; formNo=s.no; formTeslim=s.teslimTarihi; formDurum=s.durum; formErp=!!s.erp; formMusteriId=s.musteriId;
   formUrunler=(s.urunler||[]).map(function(p){return {marka:p.marka,kategori:p.kategori,urun:p.urun,adet:p.adet,ekartman:p.ekartman,kopru:p.kopru,kol:p.kol,fiyat:p.fiyat};});
   formOdemeler=(s.odemeler||[]).map(function(o){return {id:o.id,tutar:o.tutar,tarih:o.tarih,yontem:o.yontem,banka:o.banka,taksit:o.taksit,tip:o.tip};});
   document.getElementById('spNo').value=s.no;
@@ -337,8 +338,8 @@ function siparisiFormaYukle(id){
   personelSecenekleriniCiz(s.personel);
   receteYukle(s.recete);
   urunleriCiz();
-  var cb=document.querySelector('#chipNebim input'); if(cb)cb.checked=formNebim;
-  document.getElementById('chipNebim').className='rec-chip'+(formNebim?' sel-chk':'');
+  var cb=document.querySelector('#chipErp input'); if(cb)cb.checked=formErp;
+  document.getElementById('chipErp').className='rec-chip'+(formErp?' sel-chk':'');
   tahsilatKutulariGuncelle();
   goster('viewSiparis',true);
   document.getElementById('siparisScroll').scrollTop=0;
@@ -363,7 +364,7 @@ function siparisKaydetTikla(){
     eposta:document.getElementById('spEposta').value.trim(),
     tcVergi:document.getElementById('spTcVergi').value.trim(),
     urunler:urunler, recete:receteTopla(), tutar:tutar,
-    odemeler:formOdemeler, durum:formDurum, nebim:formNebim
+    odemeler:formOdemeler, durum:formDurum, erp:formErp
   };
   personelSor(siparis.personel,function(personel){
     var guncelleme=!!formId;
@@ -543,7 +544,7 @@ function siparisDetayAc(id){
     ['Kalan',siparisOdendiMi(s)?'<span style="color:var(--green);font-weight:700">✅ Ödendi</span>':'<span style="font-family:var(--mono);font-weight:600;color:var(--red)">'+fTR2(kalan)+' ₺</span>'],
     ['Ürünler',urunler],
     ['Reçete',receteOzet(s.recete)||'—'],
-    ['Nebim',s.nebim?'✅ İşlendi':'❌ Yok']
+    [erpEtiket(),s.erp?'✅ İşlendi':'❌ Yok']
   ];
   document.getElementById('detayDL').innerHTML=satirlar.map(function(p){return '<dt>'+p[0]+'</dt><dd>'+p[1]+'</dd>';}).join('');
 
@@ -565,13 +566,36 @@ function siparisCopeAt(id){
     },function(e){ toast('Silinemedi: '+((e&&e.message)||''),false); });
   });
 }
+/** ERP işareti yalnızca işletme bunu açtıysa görünür. */
+function erpAlaniKur(){
+  var c=document.getElementById('chipErp'); if(!c)return;
+  c.style.display=erpAktifMi()?'':'none';
+  var e=document.getElementById('chipErpEtiket');
+  if(e)e.textContent=erpEtiket();
+}
+
+/** Harici ERP işaretinin ekrandaki adı (işletme ayarı). */
+function erpEtiket(){ return (DATA.ayar&&DATA.ayar.erpEtiket)||'ERP\'ye İşlendi'; }
+function erpAktifMi(){ return !!(DATA.ayar&&DATA.ayar.erpAktif); }
+
+/**
+ * Teslim mesajı. Şablon işletme ayarından gelir; {ad}, {no} ve {isletme}
+ * yer tutucuları doldurulur. Hiçbir işletme adı koda gömülü değildir.
+ */
+function whatsappMesaji(ad,no){
+  var sablon=(DATA.ayar&&DATA.ayar.waSablon)
+    ||'Sayın {ad}, {no} numaralı siparişiniz teslimata hazırdır. {isletme} iyi günler diler.';
+  return sablon
+    .replace(/\{ad\}/g,ad||'')
+    .replace(/\{no\}/g,no||'')
+    .replace(/\{isletme\}/g,(DATA.isletme&&DATA.isletme.ad)||'');
+}
 function whatsappGonder(tel,ad,no){
   if(!tel){ toast('Telefon kayıtlı değil',false); return; }
   var c=String(tel).replace(/\D/g,'');
   if(c.indexOf('0')===0)c=c.substring(1);
   if(c.length===10)c='90'+c;
-  var mesaj='Sayın '+ad+', '+no+' numaralı siparişiniz teslimata hazırdır. Damla Kuz Optik güzel görüşler, iyi günler diler.';
-  window.open('https://wa.me/'+c+'?text='+encodeURIComponent(mesaj),'_blank');
+  window.open('https://wa.me/'+c+'?text='+encodeURIComponent(whatsappMesaji(ad,no)),'_blank');
 }
 
 /* ═══════════ ÇÖP ═══════════ */
@@ -726,7 +750,7 @@ function pipelineOlaylariBagla(){
 
 /* ═══════════ CSV ═══════════ */
 function siparisCsvIndir(){
-  var basliklar=['Sipariş No','Tarih','Teslim','Personel','Müşteri','Telefon','E-Posta','TC/Vergi','Ara Toplam','Genel Toplam','Tahsil Edilen','Kalan','Durum','Ürünler','Nebim'];
+  var basliklar=['Sipariş No','Tarih','Teslim','Personel','Müşteri','Telefon','E-Posta','TC/Vergi','Ara Toplam','Genel Toplam','Tahsil Edilen','Kalan','Durum','Ürünler',erpEtiket()];
   var satirlar=aktifSiparisler().map(function(s){
     var urun=(s.urunler||[]).map(function(p){
       return (p.adet>1?p.adet+'× ':'')+[p.marka,p.urun].filter(Boolean).join(' ')+(p.kategori?' ('+p.kategori+')':'')+(p.fiyat?' - '+p.fiyat+' ₺':'');
@@ -734,7 +758,7 @@ function siparisCsvIndir(){
     return [s.no,s.siparisTarihi,s.teslimTarihi,s.personel,s.adSoyad,s.telefon,s.eposta,s.tcVergi,
       String(siparisAraToplam(s)).replace('.',','),String(s.tutar).replace('.',','),
       String(siparisTahsilat(s)).replace('.',','),String(siparisKalan(s)).replace('.',','),
-      s.durum,urun,s.nebim?'Evet':'Hayır'];
+      s.durum,urun,s.erp?'Evet':'Hayır'];
   });
   csvIndir([basliklar].concat(satirlar),'kuzmos_siparisler_'+bugunStr()+'.csv');
 }

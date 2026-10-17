@@ -10,8 +10,6 @@ let db, magaza, magazaUid, muhasebeUid;
 
 beforeAll(async () => {
   db = await veritabaniKur();
-  magazaUid = await db.kullaniciOlustur('magaza@ornek.com');
-  muhasebeUid = await db.kullaniciOlustur('muhasebe@ornek.com');
 });
 
 afterAll(async () => {
@@ -20,9 +18,11 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await db.sifirla();
-  magaza = await db.magazaId('DK');
-  await db.profilAta(magazaUid, 'Atrium Mağaza', 'magaza', magaza);
-  await db.profilAta(muhasebeUid, 'Muhasebe', 'muhasebe', null);
+  /* Gerçek kayıt akışı: işletme kurulur, roller eklenir */
+  const k = await db.kiraciKur({ onEk: 'm', ad: 'Örnek Optik', subeKod: 'DK' });
+  magaza = k.magaza;
+  magazaUid = k.uid.magaza;
+  muhasebeUid = k.uid.muhasebe;
   await db.oturumAc(magazaUid);
 });
 
@@ -326,8 +326,9 @@ describe('sipariş → kasa senkronu', () => {
     const hesap = await db.tek(`select id from hesaplar where ad = 'Nakit Kasa'`);
     const hata = await hataBekle(() =>
       db.calistir(
-        `insert into hareketler (tarih, yon, ana_kategori, tutar, hesap_id, kaynak)
-         values ('2026-10-01', 'GELIR', 'Nakit Satış', 100, $1, 'SIPARIS')`,
+        `insert into hareketler (isletme_id, tarih, yon, ana_kategori, tutar, hesap_id, kaynak)
+         values ((select isletme_id from hesaplar where id = $1),
+                 '2026-10-01', 'GELIR', 'Nakit Satış', 100, $1, 'SIPARIS')`,
         [hesap.id]
       )
     );

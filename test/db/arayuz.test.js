@@ -16,7 +16,8 @@ jest.setTimeout(45000);
 
 const WEB = path.join(__dirname, '..', '..', 'web');
 
-let db, magaza, magazaUid, yoneticiUid, kullanicilar;
+let db, kiraci, kullanicilar;
+
 let dom, w, d;
 
 /** web/index.html + js dosyalarını gerçek bir DOM'a yükler. */
@@ -37,7 +38,7 @@ async function arayuzuKur() {
   w.Chart = undefined; /* grafik testte gerekmiyor */
   w.KUZMOS_CONFIG = { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_ANON_KEY: 'test' };
   const taklit = sbTaklitOlustur(db, kullanicilar);
-  w.supabase = { createClient: () => taklit };
+  w.supabase = taklit; /* createClient(url, key, opts) */
 
   ['js/api.js', 'js/core.js', 'js/siparis.js', 'js/panel.js', 'js/kasa.js'].forEach(function (f) {
     w.eval(fs.readFileSync(path.join(WEB, f), 'utf8'));
@@ -88,15 +89,11 @@ async function girisYap(email, sifre, basarisizBekle) {
 
 beforeEach(async () => {
   db = await veritabaniKur();
-  magaza = await db.magazaId('DK');
-  magazaUid = await db.kullaniciEkle('magaza@ornek.com', 'Atrium Mağaza', 'magaza', magaza);
-  yoneticiUid = await db.kullaniciEkle('yonetici@ornek.com', 'Fahri Can Kuz', 'yonetici', null);
-  await db.sistem();
-  await db.calistir(`update profiller set eposta = 'magaza@ornek.com' where id = $1`, [magazaUid]);
-  await db.calistir(`update profiller set eposta = 'yonetici@ornek.com' where id = $1`, [yoneticiUid]);
+  kiraci = await db.kiraciKur({ onEk: 'w', ad: 'Örnek Optik', subeKod: 'DK' });
   kullanicilar = {
-    'magaza@ornek.com': { uid: magazaUid, sifre: 'dogruSifre1' },
-    'yonetici@ornek.com': { uid: yoneticiUid, sifre: 'dogruSifre1' }
+    'w-magaza@ornek.com': { uid: kiraci.uid.magaza, sifre: 'dogruSifre1' },
+    'w-sahip@ornek.com': { uid: kiraci.uid.sahip, sifre: 'dogruSifre1' },
+    'w-muhasebe@ornek.com': { uid: kiraci.uid.muhasebe, sifre: 'dogruSifre1' }
   };
   await arayuzuKur();
 });
@@ -116,13 +113,13 @@ async function veritabanindan(sql, params) {
 
 describe('giriş', () => {
   test('hatalı şifre reddedilir, ekran açılmaz', async () => {
-    await girisYap('magaza@ornek.com', 'yanlis', true);
+    await girisYap('w-magaza@ornek.com', 'yanlis', true);
     expect(d.getElementById('loginErr').textContent).toMatch(/hatalı|başarısız/i);
     expect(d.getElementById('viewLogin').classList.contains('active')).toBe(true);
   });
 
   test('mağaza girişi sipariş ekranını açar ve rol sekmelerini kurar', async () => {
-    await girisYap('magaza@ornek.com', 'dogruSifre1');
+    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
     expect(w.KULLANICI.rol).toBe('magaza');
     expect(d.getElementById('viewSiparis').classList.contains('active')).toBe(true);
     const nav = d.querySelector('.header[data-baslik]').innerHTML;
@@ -131,24 +128,28 @@ describe('giriş', () => {
     expect(nav).not.toContain('>Kasa<'); /* mağaza kasa sekmesini görmez */
   });
 
-  test('yönetici girişinde kasa sekmeleri görünür', async () => {
-    await girisYap('yonetici@ornek.com', 'dogruSifre1');
-    expect(w.KULLANICI.rol).toBe('yonetici');
+  test('işletme sahibi girişinde kasa sekmeleri görünür', async () => {
+    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
+    expect(w.KULLANICI.rol).toBe('sahip');
     const nav = d.querySelector('.header[data-baslik]').innerHTML;
     expect(nav).toContain('Kasa');
     expect(nav).toContain('Hareketler');
   });
 
   test('ayarlar ekranı personel ve marka listesini doldurur', async () => {
-    await girisYap('magaza@ornek.com', 'dogruSifre1');
-    expect(w.DATA.personel.length).toBe(5);
+    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
+    /* Yeni işletme kimsenin personel listesini devralmaz */
+    expect(w.DATA.personel).toHaveLength(0);
+    expect(w.DATA.isletme.ad).toBe('Örnek Optik');
+    expect(w.DATA.isletme.durum).toBe('deneme');
     expect(w.DATA.markalar['Optik Cam']).toContain('Seiko');
     expect(w.DATA.ayar.kkKomisyon['Tek çekim']).toBe(3.5);
+    expect(w.DATA.magazalar).toHaveLength(1);
   });
 });
 
 describe('sipariş formu', () => {
-  beforeEach(() => girisYap('magaza@ornek.com', 'dogruSifre1'));
+  beforeEach(() => girisYap('w-magaza@ornek.com', 'dogruSifre1'));
 
   function formuDoldur(opts) {
     opts = opts || {};
@@ -259,7 +260,7 @@ describe('sipariş formu', () => {
 });
 
 describe('kasa özeti ve masraf (mağaza)', () => {
-  beforeEach(() => girisYap('magaza@ornek.com', 'dogruSifre1'));
+  beforeEach(() => girisYap('w-magaza@ornek.com', 'dogruSifre1'));
 
   test('masraf girilir, kasa özeti net nakdi doğru hesaplar', async () => {
     /* Önce tahsilatlı bir sipariş */
@@ -303,14 +304,14 @@ describe('kasa özeti ve masraf (mağaza)', () => {
 
 describe('yetki (arayüz + veritabanı)', () => {
   test('mağaza rolü kasa ekranına geçemez', async () => {
-    await girisYap('magaza@ornek.com', 'dogruSifre1');
+    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
     w.goster('viewOzet');
     expect(d.getElementById('viewOzet').classList.contains('active')).toBe(false);
     expect(w.DATA.hareketler).toEqual([]);
   });
 
-  test('yönetici kasa hareketi girer ve hareket listesinde görür', async () => {
-    await girisYap('yonetici@ornek.com', 'dogruSifre1');
+  test('işletme sahibi kasa hareketi girer ve hareket listesinde görür', async () => {
+    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
     w.hareketModaliAc('GIDER');
     d.getElementById('hTarih').value = '2026-10-01';
     d.getElementById('hTutar').value = '15.000';
@@ -323,14 +324,163 @@ describe('yetki (arayüz + veritabanı)', () => {
     expect(w.DATA.hareketler).toHaveLength(1);
     expect(w.DATA.hareketler[0]).toMatchObject({ yon: 'GIDER', tutar: 15000, hesap: 'Nakit Kasa' });
     const h = await veritabanindan(`select tutar::float8 as tutar, kaydeden from hareketler`);
-    expect(h[0]).toMatchObject({ tutar: 15000, kaydeden: 'Fahri Can Kuz' });
+    expect(h[0]).toMatchObject({ tutar: 15000, kaydeden: 'İşletme Sahibi' });
   });
 
   test('çıkış yapınca oturum kapanır', async () => {
-    await girisYap('magaza@ornek.com', 'dogruSifre1');
+    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
     w.cikisYap();
     await bekle();
     expect(w.TOKEN).toBeNull();
     expect(d.getElementById('viewLogin').classList.contains('active')).toBe(true);
+  });
+});
+
+describe('kayıt ve abonelik (SaaS akışı)', () => {
+  test('yeni işletme kendi kendine kaydolur ve çalışmaya başlar', async () => {
+    w.goster('viewKayit', true);
+    d.getElementById('kayitIsletme').value = 'Şahin Optik';
+    d.getElementById('kayitAd').value = 'Mehmet Şahin';
+    d.getElementById('kayitEposta').value = 'sahin@ornek.com';
+    d.getElementById('kayitTelefon').value = '0212 000 00 00';
+    d.getElementById('kayitSifre').value = 'guclüSifre1';
+    w.kayitOl();
+    await kosulBekle(() => w.DATA && w.DATA.isletme && w.DATA.isletme.ad === 'Şahin Optik', 8000);
+
+    expect(w.KULLANICI.rol).toBe('sahip');
+    expect(w.DATA.isletme.durum).toBe('deneme');
+    expect(Number(w.DATA.isletme.kalanGun)).toBe(14);
+    expect(w.DATA.magazalar).toHaveLength(1);
+    expect(w.DATA.magazalar[0].kod).toBe('SA');
+    /* Kendi kategori/marka listesiyle başlar, kimsenin personelini almaz */
+    expect(w.DATA.urunKategorileri.length).toBeGreaterThan(0);
+    expect(w.DATA.personel).toHaveLength(0);
+    expect(w.DATA.siparis).toHaveLength(0);
+
+    /* Veritabanında iki ayrı işletme var ve veriler karışmıyor */
+    const isletmeler = await veritabanindan('select ad from isletmeler order by ad');
+    expect(isletmeler.map((x) => x.ad)).toEqual(['Örnek Optik', 'Şahin Optik']);
+    expect(d.getElementById('viewSiparis').classList.contains('active')).toBe(true);
+  });
+
+  test('aynı e-posta ile ikinci kez kaydolunamaz', async () => {
+    w.goster('viewKayit', true);
+    d.getElementById('kayitIsletme').value = 'Deneme';
+    d.getElementById('kayitEposta').value = 'w-magaza@ornek.com';
+    d.getElementById('kayitSifre').value = 'guclüSifre1';
+    w.kayitOl();
+    await kosulBekle(() => /hesap var/i.test(d.getElementById('kayitErr').textContent), 6000);
+    expect(d.getElementById('kayitErr').textContent).toMatch(/hesap var/i);
+  });
+
+  test('kısa şifre ve eksik işletme adı sunucuya gitmez', async () => {
+    w.goster('viewKayit', true);
+    d.getElementById('kayitIsletme').value = '';
+    d.getElementById('kayitEposta').value = 'x@ornek.com';
+    d.getElementById('kayitSifre').value = 'kisa';
+    w.kayitOl();
+    await bekle(5);
+    expect(d.getElementById('kayitErr').textContent).toMatch(/İşletme adını girin/);
+    d.getElementById('kayitIsletme').value = 'Yeni Optik';
+    w.kayitOl();
+    await bekle(5);
+    expect(d.getElementById('kayitErr').textContent).toMatch(/en az 8 karakter/);
+    expect(await veritabanindan("select id from isletmeler where ad = 'Yeni Optik'")).toHaveLength(0);
+  });
+
+  test('deneme bandı kalan günü gösterir', async () => {
+    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
+    const b = d.getElementById('abonelikBant');
+    expect(b.className).toContain('show');
+    expect(b.textContent).toMatch(/Deneme sürümü · 14 gün kaldı/);
+    expect(b.className).not.toContain('uyari');
+  });
+
+  test('deneme bitince uyarı bandı çıkar ve kayıt engellenir', async () => {
+    await db.abonelikAyarla(kiraci.isletme, { denemeBitis: '2020-01-01' });
+    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
+
+    const b = d.getElementById('abonelikBant');
+    expect(b.className).toContain('uyari');
+    expect(b.textContent).toMatch(/salt okunur/i);
+    expect(w.yazmaIzni()).toBe(false);
+
+    d.getElementById('spAdSoyad').value = 'Engellenecek Müşteri';
+    d.getElementById('spTarih').value = '2026-10-01';
+    w.formUrunler = [{ marka: 'Seiko', kategori: 'Optik Cam', urun: 'A', adet: 1, fiyat: 1000 }];
+    w.formOdemeler = [];
+    w.urunleriCiz();
+    w.toplamlariGuncelle();
+    w.siparisKaydetTikla();
+    await kosulBekle(() => d.getElementById('personelOverlay').classList.contains('open'), 1000);
+    w.personelSecildi('Ali Veli');
+    await kosulBekle(() => /Aboneliğiniz|kuyrukta/i.test(d.getElementById('toast').textContent), 6000);
+
+    expect(await veritabanindan('select id from siparisler')).toHaveLength(0);
+  });
+
+  test('ayarlar ekranı abonelik kartını ve şube limitini gösterir', async () => {
+    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
+    w.goster('viewAyar');
+    await bekle(10);
+
+    const kart = d.getElementById('abonelikKart').textContent;
+    expect(kart).toMatch(/Deneme/);
+    expect(kart).toMatch(/1 \/ 1/); /* şube: 1/1 */
+    expect(d.getElementById('subeListe').textContent).toMatch(/Örnek Optik/);
+    expect(d.getElementById('isletmeAd').value).toBe('Örnek Optik');
+  });
+
+  test('plan limiti aşan şube ekleme ekranda hata verir', async () => {
+    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
+    w.goster('viewAyar');
+    await bekle(10);
+    d.getElementById('yeniSubeAd').value = 'İkinci Şube';
+    d.getElementById('yeniSubeKod').value = 'IK';
+    w.subeEkleTikla();
+    await kosulBekle(() => /şube/i.test(d.getElementById('toast').textContent), 6000);
+    expect(d.getElementById('toast').textContent).toMatch(/en fazla 1 şube/);
+    expect(await veritabanindan('select id from magazalar')).toHaveLength(1);
+  });
+
+  test('işletme bilgileri güncellenir, ticari alanlar korunur', async () => {
+    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
+    w.goster('viewAyar');
+    await bekle(10);
+    d.getElementById('isletmeAd').value = 'Örnek Optik A.Ş.';
+    d.getElementById('isletmeVergiNo').value = '1234567890';
+    w.isletmeKaydetTikla();
+    await kosulBekle(() => w.DATA.isletme.ad === 'Örnek Optik A.Ş.', 6000);
+
+    const i = await veritabanindan('select ad, vergi_no, plan_kod from isletmeler');
+    expect(i[0]).toMatchObject({ ad: 'Örnek Optik A.Ş.', vergi_no: '1234567890', plan_kod: 'deneme' });
+  });
+
+  test('WhatsApp mesajı işletmenin kendi şablonunu kullanır', async () => {
+    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
+    const m = w.whatsappMesaji('Ayşe Yılmaz', 'DK-10-26-0001');
+    expect(m).toMatch(/Ayşe Yılmaz/);
+    expect(m).toMatch(/DK-10-26-0001/);
+    expect(m).toMatch(/Örnek Optik/);
+    expect(m).not.toMatch(/Damla/);
+  });
+
+  test('ERP işareti varsayılan olarak kapalıdır, ayarla açılır', async () => {
+    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
+    expect(w.erpAktifMi()).toBe(false);
+    expect(d.getElementById('chipErp').style.display).toBe('none');
+
+    w.goster('viewAyar');
+    await bekle(10);
+    d.getElementById('ayarErpAktif').value = 'evet';
+    d.getElementById('ayarErpEtiket').value = 'Nebim’e İşlendi';
+    w.mesajAyarKaydetTikla();
+    await kosulBekle(() => w.DATA.ayar.erpAktif === true, 8000);
+    expect(w.erpEtiket()).toBe('Nebim’e İşlendi');
+  });
+
+  test('yazdırma başlığında işletme adı görünür', async () => {
+    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
+    expect(d.getElementById('printFirma').textContent).toBe('Örnek Optik');
   });
 });

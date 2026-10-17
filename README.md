@@ -1,24 +1,29 @@
 # Kuzmos
 
-Sipariş + Kasa yönetimi tek uygulamada: Google Apps Script backend, rol bazlı
-web arayüzü, veritabanı olarak Google Sheets.
+**Optik işletmeleri için sipariş ve kasa yönetimi.** Mağaza siparişi girer ve
+tahsilatı işler; tahsilat aynı anda kasaya gelir olarak düşer; muhasebe ve
+yönetici aynı veriden rapor alır. Mağaza kasanın tamamını göremez.
 
-Mağaza siparişi girer, tahsilatı işler; tahsilat aynı anda kasaya gelir olarak
-düşer; muhasebe ve yönetici aynı veriden rapor alır. Mağaza kasanın tamamını
-göremez, muhasebe kullanıcı yönetemez.
+Ürün çok kiracılı bir SaaS olarak çalışır: her optik işletmesi kaydolur,
+14 gün dener, kendi yalıtılmış verisiyle devam eder (bkz. *Ürün: çok
+kiracılı SaaS*).
 
 ## Roller
 
-| Yetki | magaza | muhasebe | yonetici |
-| --- | --- | --- | --- |
-| Sipariş oluştur / düzenle / tahsilat / iade | ✅ | ✅ | ✅ |
-| Müşteriler, pipeline, mağaza paneli | ✅ | ✅ | ✅ |
-| Mağaza masrafı girme | ✅ | ✅ | ✅ |
-| Günün/ayın kasası özeti | ✅ | ✅ | ✅ |
-| Kasa hareketleri, rapor, cari, banka, yıllık | ❌ | ✅ | ✅ |
-| Personel / marka / hedef / oran ayarları | ❌ | ✅ | ✅ |
-| Kullanıcı hesabı yönetimi | ❌ | ❌ | ✅ |
-| Siparişi kalıcı silme | ❌ | ✅ | ✅ |
+| Yetki | magaza | muhasebe | yonetici | sahip |
+| --- | --- | --- | --- | --- |
+| Sipariş oluştur / düzenle / tahsilat / iade | ✅ | ✅ | ✅ | ✅ |
+| Müşteriler, pipeline, mağaza paneli | ✅ | ✅ | ✅ | ✅ |
+| Mağaza masrafı girme | ✅ | ✅ | ✅ | ✅ |
+| Günün/ayın kasası özeti | ✅ | ✅ | ✅ | ✅ |
+| Kasa hareketleri, rapor, cari, banka, yıllık | ❌ | ✅ | ✅ | ✅ |
+| Personel / marka / hedef / oran ayarları | ❌ | ✅ | ✅ | ✅ |
+| Kullanıcı ve şube yönetimi, işletme bilgileri | ❌ | ❌ | ✅ | ✅ |
+| Siparişi kalıcı silme | ❌ | ✅ | ✅ | ✅ |
+| Abonelik (plan görüntüleme, veri indirme) | ❌ | ❌ | ✅ | ✅ |
+
+`sahip` işletmeyi kuran kullanıcıdır; elle atanamaz, pasife alınamaz.
+Apps Script sürümünde `sahip` yoktur (`admin`/`personel` → `yonetici`/`muhasebe`).
 
 Eski sürümdeki `admin` / `personel` rolleri girişte otomatik olarak `yonetici`
 ve `muhasebe`ye eşlenir (`rolNormallestir_`).
@@ -107,9 +112,9 @@ src/
   JsPanel.html       — Mağaza paneli, kasa özeti, masraf, hedef, ayarlar
   JsKasa.html        — Kasa özeti, rapor, hareketler, cari, banka, yıllık
 
-supabase/            — YENİ veri katmanı (Postgres); bkz. supabase/README.md
-  migrations/        — Şema, mantık, RLS, uygulama uçları
-  seed.sql           — Başlangıç verisi
+supabase/            — Ürün veri katmanı (Postgres); bkz. supabase/README.md
+  migrations/        — Şema, mantık, RLS, API, kullanıcılar, kayıt (onboarding)
+  seed.sql           — Satış paketleri (planlar)
 
 web/                 — YENİ arayüz (statik, Supabase'e bağlanır)
   index.html         — Tüm ekranlar
@@ -124,28 +129,36 @@ test/
   *.test.js          — Apps Script testleri (86 test)
   db/harness.js      — PGlite (WASM Postgres) + Supabase auth taklidi
   db/sbTaklit.js     — supabase-js istemcisinin test taklidi
-  db/*.test.js       — Şema, mantık, RLS ve uçtan uca arayüz testleri (114)
+  db/*.test.js       — Mantık, güvenlik, API, kiracı izolasyonu, abonelik
+                       ve uçtan uca arayüz testleri (180)
 ```
 
 Arayüz `HtmlService.createTemplateFromFile` ile birleştirilir; `Index.html`
 içindeki `<?!= include('Css') ?>` çağrıları diğer HTML dosyalarını gömer.
 
-## İki sürüm bir arada
+## Ürün: çok kiracılı SaaS
 
-Proje Sheets'ten Postgres'e taşınıyor. Geçiş bitene kadar iki yığın yan yana
-durur ve **birbirine dokunmaz**:
+Kuzmos tek bir işletmenin iç aracı değil, **optik işletmelerine satılan bir
+ürün**. Tek kurulum (bir Supabase projesi + bir statik site) birçok aboneye
+hizmet eder:
 
-| | Çalışan sürüm (Apps Script) | Yeni sürüm (Supabase) |
+| | Çalışan sürüm (Apps Script) | Ürün sürümü (Supabase) |
 |---|---|---|
 | Kod | `src/` | `web/` + `supabase/` |
 | Veri | Google Sheets | Postgres |
-| Yetki | `guard_*` fonksiyonları | RLS politikaları |
+| Kapsam | Tek işletme | Çok kiracı (`isletmeler`) |
+| Yetki | `guard_*` fonksiyonları | RLS: kiracı + rol + abonelik |
+| Roller | yonetici / muhasebe / magaza | sahip / yonetici / muhasebe / magaza |
+| Kayıt | Elle kurulum | Kendi kendine kayıt + 14 gün deneme |
 | Sipariş→kasa | `KasaSenkron.js` (elle) | Veritabanı trigger'ı |
-| Test | `npm run test:gas` (86) | `npm run test:db` (114) |
+| Test | `npm run test:gas` (86) | `npm run test:db` (180) |
 
-Neden taşınıyor: Sheets'te sorgu yok (her ekran tüm sayfayı okur), eşzamanlı
-yazma kilit sırasına girer, taban gecikme 1-1,5 sn'nin altına inmez ve tablo
-elle bozulabilir. Ayrıntı ve kurulum: `supabase/README.md`, `web/README.md`.
+Kiracı izolasyonu, rol yetkileri ve abonelik kapısı veritabanındadır;
+arayüz atlanarak doğrudan sorgu atıldığında da geçerlidir. Ayrıntı:
+`supabase/README.md`. Abone akışı ve yayına alma: `web/README.md`.
+
+`src/` (Apps Script) ilk müşterinin çalışan kurulumudur; ürün sürümüne
+geçene kadar dokunulmadan durur.
 
 ## Sheets sayfaları
 

@@ -1,7 +1,11 @@
 # Kuzmos · Web arayüzü
 
-Apps Script'ten çıkarılmış, doğrudan Supabase'e bağlanan statik arayüz.
-Sunucu kodu yok: tarayıcı Postgres'e RPC çağırır, yetkiyi RLS tutar.
+Optik işletmelerine satılan çok kiracılı uygulamanın arayüzü. Statik
+dosyalar: sunucu kodu yok, tarayıcı doğrudan Postgres'e RPC çağırır,
+yetkiyi ve kiracı izolasyonunu RLS tutar.
+
+**Tek kurulum, çok abone.** Aynı adrese kaydolan her optik işletmesi kendi
+yalıtılmış verisiyle çalışır; ayrı kurulum/deploy gerekmez.
 
 | Dosya | Ne |
 |---|---|
@@ -16,6 +20,22 @@ Sunucu kodu yok: tarayıcı Postgres'e RPC çağırır, yetkiyi RLS tutar.
 
 Ekran kodları Apps Script sürümüyle neredeyse aynıdır: sunucu çağrısı köprüsü
 (`gcall`) aynı imzayı koruduğu için ekranlar değişmeden taşındı.
+
+## Abone akışı
+
+1. **Kayıt** (`viewKayit`) — işletme adı, ad soyad, e-posta, şifre.
+   `auth.signUp` + `isletme_olustur()`: işletme, ilk şube, sahip profili ve
+   o işletmeye ait varsayılan listeler (kategori, marka, kasa ağacı, ayarlar)
+   tek adımda kurulur, 14 günlük deneme başlar.
+2. **Kullanım** — sahip Ayarlar'dan kullanıcı ve şube ekler (plan
+   limitlerine kadar), satış personelini tanımlar; mağaza hesabı tabletten
+   sipariş girer.
+3. **Abonelik bandı** — ekranın altında deneme süresi ve kalan gün görünür.
+   Süre dolunca uygulama **salt okunur** olur: veri durur, yeni kayıt
+   girilemez, "Tüm verimi indir" çalışmaya devam eder.
+
+Hiçbir işletme adı, personel adı veya mesaj şablonu koda gömülü değildir;
+hepsi işletme ayarıdır (Ayarlar → İşletme / Müşteri mesajı ve ERP).
 
 ## 1. Bağlantı bilgilerini yaz
 

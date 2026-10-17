@@ -7,13 +7,10 @@ const { veritabaniKur, hataBekle } = require('./harness');
 
 jest.setTimeout(30000);
 
-let db, magaza, magazaUid, muhasebeUid, yoneticiUid;
+let db, isletme, magaza, magazaUid, muhasebeUid, yoneticiUid;
 
 beforeAll(async () => {
   db = await veritabaniKur();
-  magazaUid = await db.kullaniciOlustur('magaza@ornek.com');
-  muhasebeUid = await db.kullaniciOlustur('muhasebe@ornek.com');
-  yoneticiUid = await db.kullaniciOlustur('yonetici@ornek.com');
 });
 
 afterAll(async () => {
@@ -22,10 +19,12 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await db.sifirla();
-  magaza = await db.magazaId('DK');
-  await db.profilAta(magazaUid, 'Atrium Mağaza', 'magaza', magaza);
-  await db.profilAta(muhasebeUid, 'Muhasebe', 'muhasebe', null);
-  await db.profilAta(yoneticiUid, 'Yönetici', 'yonetici', null);
+  const k = await db.kiraciKur({ onEk: 'a', ad: 'Örnek Optik', subeKod: 'DK' });
+  isletme = k.isletme;
+  magaza = k.magaza;
+  magazaUid = k.uid.magaza;
+  muhasebeUid = k.uid.muhasebe;
+  yoneticiUid = k.uid.sahip; /* sahip, yönetici yetkilerini de taşır */
   await db.oturumAc(magazaUid);
 });
 
@@ -267,7 +266,8 @@ describe('tum_veri rol filtresi', () => {
 
   test('ayar paketi oranları ayrıştırır', async () => {
     const v = await tumVeri();
-    expect(v.ayar.personelPrim).toBe(4.5);
+    /* Yeni işletme kimsenin prim oranını devralmaz: varsayılan 0 */
+    expect(v.ayar.personelPrim).toBe(0);
     expect(v.ayar.kkKomisyon['Tek çekim']).toBe(3.5);
     expect(v.ayar.kkKomisyon['3 Taksit']).toBe(9);
     expect(v.ayar.bankalar).toContain('Garanti');
@@ -371,18 +371,16 @@ describe('kasa yazma uçları', () => {
 
 describe('kullanıcı yönetimi', () => {
   beforeEach(async () => {
-    await db.sistem();
-    await db.calistir(`update profiller set eposta = 'magaza@ornek.com' where id = $1`, [magazaUid]);
-    await db.calistir(`update profiller set eposta = 'muhasebe@ornek.com' where id = $1`, [muhasebeUid]);
-    await db.calistir(`update profiller set eposta = 'yonetici@ornek.com' where id = $1`, [yoneticiUid]);
+    /* Deneme planı 3 kullanıcıyla sınırlı; bu testler için Pro'ya geç */
+    await db.abonelikAyarla(isletme, { plan: 'pro' });
     await db.oturumAc(yoneticiUid);
   });
 
   test('yönetici kullanıcıları listeler', async () => {
     const l = (await db.tek('select kullanici_listesi() as l')).l;
     expect(l).toHaveLength(3);
-    expect(l.map((x) => x.rol).sort()).toEqual(['magaza', 'muhasebe', 'yonetici']);
-    expect(l.filter((x) => x.rol === 'magaza')[0].magaza).toBe('Damlakuz Optik');
+    expect(l.map((x) => x.rol).sort()).toEqual(['magaza', 'muhasebe', 'sahip']);
+    expect(l.filter((x) => x.rol === 'magaza')[0].magaza).toBe('Örnek Optik');
   });
 
   test('mağaza rolü kullanıcı listesini göremez', async () => {
@@ -393,19 +391,21 @@ describe('kullanıcı yönetimi', () => {
   });
 
   test('yönetici kullanıcıyı pasife alır, kendini alamaz', async () => {
-    expect((await db.tek(`select kullanici_durum_degistir('magaza@ornek.com', false) as ok`)).ok).toBe(true);
+    expect((await db.tek(`select kullanici_durum_degistir('a-magaza@ornek.com', false) as ok`)).ok).toBe(
+      true
+    );
     await db.oturumAc(magazaUid);
     expect(await hataBekle(() => db.calistir('select tum_veri()'))).toMatch(/pasif|geçersiz/i);
     await db.oturumAc(yoneticiUid);
     expect(
-      await hataBekle(() => db.calistir(`select kullanici_durum_degistir('yonetici@ornek.com', false)`))
-    ).toMatch(/Kendi hesabınızı/);
+      await hataBekle(() => db.calistir(`select kullanici_durum_degistir('a-sahip@ornek.com', false)`))
+    ).toMatch(/Kendi hesabınızı|sahibinin/);
   });
 
   test('muhasebe kullanıcı durumu değiştiremez', async () => {
     await db.oturumAc(muhasebeUid);
     expect(
-      await hataBekle(() => db.calistir(`select kullanici_durum_degistir('magaza@ornek.com', false)`))
+      await hataBekle(() => db.calistir(`select kullanici_durum_degistir('a-magaza@ornek.com', false)`))
     ).toMatch(/yetkiniz yok/i);
   });
 
