@@ -40,6 +40,8 @@ function getConfig_() {
 function setConfig_(kasaId) {
   var p = PropertiesService.getScriptProperties();
   if (kasaId) p.setProperty('KASA_SPREADSHEET_ID', kasaId);
+  /* Bağlı tablo değişti: açık spreadsheet/sayfa önbelleği geçersiz. */
+  if (typeof onbellekSifirla_ === 'function') onbellekSifirla_();
 }
 
 if (typeof module !== 'undefined' && module.exports) {

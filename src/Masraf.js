@@ -34,6 +34,7 @@ function magazaMasrafEkle(token, masraf, personel) {
   hesapSagla_(hesap);
 
   var id = Utilities.getUuid();
+  var kaydeden = p || session.ad;
   hareketYaz_(
     {
       id: id,
@@ -45,12 +46,22 @@ function magazaMasrafEkle(token, masraf, personel) {
       hesap: hesap,
       aciklama: cln_(masraf && masraf.aciklama)
     },
-    p || session.ad,
+    kaydeden,
     KASA_KAYNAK_MASRAF,
     id
   );
   logYaz_(token, 'MASRAF_EKLE', 'Hareketler', id, kalem + ' · ' + tutar + ' · ' + tarih, p);
-  return id;
+  /* Kaydın kendisi döner: istemci tüm veriyi yeniden çekmek zorunda kalmaz. */
+  return {
+    id: id,
+    tarih: tarih,
+    ana: ayar.masrafAnaKategori,
+    kalem: kalem,
+    tutar: tutar,
+    hesap: hesap,
+    aciklama: cln_(masraf && masraf.aciklama),
+    kaydeden: kaydeden
+  };
 }
 
 /** Mağaza tarafından girilmiş masrafları listeler (mağaza rolü için). */

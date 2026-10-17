@@ -10,12 +10,25 @@ function ayarSheet_() {
   return sheet_(SHEET_NAMES.AYAR, ['Anahtar', 'Değer', 'Açıklama']);
 }
 
+/**
+ * Ayarlar tek bir kayıt sırasında birçok kez okunur (sipariş no, kasa
+ * senkronu, hesap doğrulama...). Çağrı ömürlü önbellek bunu tek okumaya
+ * indirir; her yazma önbelleği boşaltır.
+ */
+var AYAR_ONBELLEK_ = { veri: null };
+
+function ayarOnbellekBosalt_() {
+  AYAR_ONBELLEK_.veri = null;
+}
+
 function ayarOku_() {
+  if (AYAR_ONBELLEK_.veri) return AYAR_ONBELLEK_.veri;
   var d = ayarSheet_().getDataRange().getDisplayValues();
   var o = {};
   for (var i = 1; i < d.length; i++) {
     if (cln_(d[i][0])) o[cln_(d[i][0])] = cln_(d[i][1]);
   }
+  AYAR_ONBELLEK_.veri = o;
   return o;
 }
 
@@ -25,19 +38,19 @@ function ayarYaz_(k, v, aciklama) {
   for (var i = 1; i < d.length; i++) {
     if (cln_(d[i][0]) === k) {
       s.getRange(i + 1, 2).setValue(v);
+      ayarOnbellekBosalt_();
       return;
     }
   }
   s.appendRow([k, v, aciklama || '']);
+  ayarOnbellekBosalt_();
 }
 
 /** Ayar yoksa oluşturur; varsa dokunmaz (kurulum/güncelleme için). */
 function ayarVarsayilan_(k, v, aciklama) {
-  var d = ayarSheet_().getDataRange().getDisplayValues();
-  for (var i = 1; i < d.length; i++) {
-    if (cln_(d[i][0]) === k) return false;
-  }
+  if (Object.prototype.hasOwnProperty.call(ayarOku_(), cln_(k))) return false;
   ayarSheet_().appendRow([k, v, aciklama || '']);
+  ayarOnbellekBosalt_();
   return true;
 }
 
@@ -119,6 +132,7 @@ function ayarGuncelle(token, k, v) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     ayarSheet_: ayarSheet_,
+    ayarOnbellekBosalt_: ayarOnbellekBosalt_,
     ayarOku_: ayarOku_,
     ayarYaz_: ayarYaz_,
     ayarVarsayilan_: ayarVarsayilan_,

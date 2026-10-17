@@ -64,12 +64,37 @@ function kasaKategoriEkle_(ana, alt, yon, bolum, sira) {
 
 /** Ana/alt kategori çifti yoksa ekler (otomatik kasa hareketleri için). */
 function kasaKategoriSagla_(ana, alt, yon, bolum) {
-  var d = kasaKategoriSheet_().getDataRange().getValues();
+  return kasaKategorileriSagla_([{ ana: ana, alt: alt, yon: yon, bolum: bolum }]) > 0;
+}
+
+/**
+ * Birden fazla ana/alt kategori çiftini TEK okuma + TEK yazma ile sağlar.
+ * Çok tahsilatlı siparişlerde ödeme başına ayrı okuma yapmamak için.
+ */
+function kasaKategorileriSagla_(ciftler) {
+  if (!ciftler || !ciftler.length) return 0;
+  var s = kasaKategoriSheet_();
+  var d = s.getDataRange().getValues();
+  var var_ = {};
   for (var i = 1; i < d.length; i++) {
-    if (cln_(d[i][0]) === cln_(ana) && cln_(d[i][1]) === cln_(alt)) return false;
+    if (cln_(d[i][0])) var_[cln_(d[i][0]) + '\u0000' + cln_(d[i][1])] = true;
   }
-  kasaKategoriEkle_(ana, alt, yon, bolum, 999);
-  return true;
+  var yeni = [];
+  ciftler.forEach(function (c) {
+    var ana = cln_(c.ana);
+    if (!ana) return;
+    var anahtar = ana + '\u0000' + cln_(c.alt);
+    if (var_[anahtar]) return;
+    var_[anahtar] = true;
+    yeni.push([
+      ana,
+      cln_(c.alt),
+      cln_(c.yon).toUpperCase() === 'GELIR' ? 'GELIR' : 'GIDER',
+      cln_(c.bolum).toUpperCase() === 'FD' ? 'FD' : 'OP',
+      999
+    ]);
+  });
+  return satirlariEkle_(s, yeni, 5);
 }
 
 function kasaKategoriKaydet(token, satirlar) {
@@ -165,15 +190,34 @@ function markalariGetir_() {
  * listeye eklenir; böylece bir dahaki sefere seçilebilir olur.
  */
 function markaSagla_(kategori, marka) {
-  var kat = cln_(kategori);
-  var mrk = cln_(marka);
-  if (!kat || !mrk) return false;
-  var d = markaSheet_().getDataRange().getValues();
+  return markalariSagla_([{ kategori: kategori, marka: marka }]) > 0;
+}
+
+/**
+ * Birden fazla kategori/marka çiftini TEK okuma + TEK yazma ile sağlar.
+ * Siparişteki her ürün satırı için Markalar sayfasını baştan okumamak için.
+ */
+function markalariSagla_(ciftler) {
+  if (!ciftler || !ciftler.length) return 0;
+  var s = markaSheet_();
+  var d = s.getDataRange().getValues();
+  var var_ = {};
   for (var i = 1; i < d.length; i++) {
-    if (cln_(d[i][0]) === kat && cln_(d[i][1]).toLowerCase() === mrk.toLowerCase()) return false;
+    if (cln_(d[i][0]) && cln_(d[i][1])) {
+      var_[cln_(d[i][0]) + '\u0000' + cln_(d[i][1]).toLowerCase()] = true;
+    }
   }
-  markaSheet_().appendRow([kat, mrk, true]);
-  return true;
+  var yeni = [];
+  ciftler.forEach(function (c) {
+    var kat = cln_(c.kategori);
+    var mrk = cln_(c.marka);
+    if (!kat || !mrk) return;
+    var anahtar = kat + '\u0000' + mrk.toLowerCase();
+    if (var_[anahtar]) return;
+    var_[anahtar] = true;
+    yeni.push([kat, mrk, true]);
+  });
+  return satirlariEkle_(s, yeni, 3);
 }
 
 function markaEkle(token, kategori, marka) {
@@ -205,6 +249,7 @@ if (typeof module !== 'undefined' && module.exports) {
     kasaKategorileriGetir_: kasaKategorileriGetir_,
     kasaKategoriEkle_: kasaKategoriEkle_,
     kasaKategoriSagla_: kasaKategoriSagla_,
+    kasaKategorileriSagla_: kasaKategorileriSagla_,
     kasaKategoriKaydet: kasaKategoriKaydet,
     urunKategoriSheet_: urunKategoriSheet_,
     urunKategorileriGetir_: urunKategorileriGetir_,
@@ -212,6 +257,7 @@ if (typeof module !== 'undefined' && module.exports) {
     markaSheet_: markaSheet_,
     markalariGetir_: markalariGetir_,
     markaSagla_: markaSagla_,
+    markalariSagla_: markalariSagla_,
     markaEkle: markaEkle,
     markaSil: markaSil
   };

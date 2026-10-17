@@ -26,16 +26,26 @@ function posHesapAdi_(banka) {
 
 /** Hesap Ayarlar'daki hesap listesinde yoksa ekler (banka mutabakatı için). */
 function hesapSagla_(hesapAdi) {
-  var ad = cln_(hesapAdi);
-  if (!ad) return false;
-  var a = ayarOku_();
-  var liste = listeAyristir_(a.hesaplar);
-  for (var i = 0; i < liste.length; i++) {
-    if (liste[i].toLowerCase() === ad.toLowerCase()) return false;
-  }
-  liste.push(ad);
-  ayarYaz_('hesaplar', liste.join(', '));
-  return true;
+  return hesaplariSagla_([hesapAdi]) > 0;
+}
+
+/** Birden fazla hesabı tek yazmayla sağlar (ödeme başına ayrı yazma yapmamak için). */
+function hesaplariSagla_(hesapAdlari) {
+  var liste = listeAyristir_(ayarOku_().hesaplar);
+  var mevcut = {};
+  liste.forEach(function (h) {
+    mevcut[h.toLowerCase()] = true;
+  });
+  var eklenen = 0;
+  (hesapAdlari || []).forEach(function (x) {
+    var ad = cln_(x);
+    if (!ad || mevcut[ad.toLowerCase()]) return;
+    mevcut[ad.toLowerCase()] = true;
+    liste.push(ad);
+    eklenen++;
+  });
+  if (eklenen) ayarYaz_('hesaplar', liste.join(', '));
+  return eklenen;
 }
 
 /** Bir ödemeden üretilecek kasa hareketini tanımlar. */
@@ -66,15 +76,18 @@ function odemeHareketiOlustur_(siparis, odeme, ayar) {
   };
 }
 
-/** Bu siparişe ait mevcut otomatik hareket satırlarını bulur. */
-function siparisHareketSatirlari_(siparisId) {
-  var d = hareketSheet_().getDataRange().getValues();
+/**
+ * Bu siparişe ait mevcut otomatik hareket satırlarını bulur.
+ * `veri` verilirse sayfa yeniden okunmaz (tek okumayla senkron için).
+ */
+function siparisHareketSatirlari_(siparisId, veri) {
+  var d = veri || hareketSheet_().getDataRange().getValues();
   var onEk = String(siparisId) + ':';
   var out = [];
   for (var i = 1; i < d.length; i++) {
     if (cln_(d[i][11]) !== KASA_KAYNAK_SIPARIS) continue;
     if (cln_(d[i][12]).indexOf(onEk) !== 0) continue;
-    out.push({ row: i + 1, id: cln_(d[i][0]), kaynakId: cln_(d[i][12]) });
+    out.push({ row: i + 1, id: cln_(d[i][0]), kaynakId: cln_(d[i][12]), kaydeden: cln_(d[i][8]) });
   }
   return out;
 }
@@ -92,40 +105,66 @@ function siparisKasaHareketleriniSil_(siparisId) {
 /**
  * Siparişin ödemelerini kasa hareketleriyle eşitler.
  * Sipariş silinmişse (çöpte) hareketleri kaldırır.
+ *
+ * Hız: Hareketler sayfası TEK kez okunur, kategori/hesap kontrolü ödeme
+ * başına değil senkron başına bir kez yapılır, yeni satırlar tek yazmayla
+ * eklenir. `siparisObj` verilirse Siparisler sayfası hiç okunmaz.
  */
-function siparisKasaSenkronla_(siparisId) {
+function siparisKasaSenkronla_(siparisId, siparisObj) {
   var ayar = ayarPaketiGetir_();
   if (!ayar.kasaEntegrasyon) return { eklenen: 0, guncellenen: 0, silinen: 0 };
 
-  var siparis = siparisBul_(siparisTumunuOku_(), siparisId);
+  var siparis = siparisObj && String(siparisObj.id) === String(siparisId) ? siparisObj : null;
+  if (!siparis) siparis = siparisBul_(siparisTumunuOku_(), siparisId);
   if (!siparis) return { eklenen: 0, guncellenen: 0, silinen: siparisKasaHareketleriniSil_(siparisId) };
 
   var hedefler = [];
   if (!siparis.silindi) {
-    siparis.odemeler.forEach(function (o) {
+    (siparis.odemeler || []).forEach(function (o) {
       hedefler.push(odemeHareketiOlustur_(siparis, o, ayar));
     });
   }
 
-  var mevcutSatirlar = siparisHareketSatirlari_(siparis.id);
+  var s = hareketSheet_();
+  var d = s.getDataRange().getValues();
   var mevcutMap = {};
-  mevcutSatirlar.forEach(function (m) {
+  siparisHareketSatirlari_(siparis.id, d).forEach(function (m) {
     mevcutMap[m.kaynakId] = m;
   });
 
+  /* Kategori ve hesap kontrolü: ödeme başına değil, toplu */
+  if (hedefler.length) {
+    kasaKategorileriSagla_(
+      hedefler.map(function (h) {
+        return { ana: h.ana, alt: h.alt, yon: h.yon, bolum: 'OP' };
+      })
+    );
+    hesaplariSagla_(
+      hedefler.map(function (h) {
+        return h.hesap;
+      })
+    );
+  }
+
   var kaydeden = cln_(siparis.olusturanPersonel) || cln_(siparis.personel) || 'Sipariş';
-  var eklenen = 0;
+  var yeniSatirlar = [];
   var guncellenen = 0;
 
   hedefler.forEach(function (h) {
-    kasaKategoriSagla_(h.ana, h.alt, h.yon, 'OP');
-    hesapSagla_(h.hesap);
-    var vardi = !!mevcutMap[h.kaynakId];
-    hareketYaz_(h, kaydeden, KASA_KAYNAK_SIPARIS, h.kaynakId);
-    if (vardi) guncellenen++;
-    else eklenen++;
-    delete mevcutMap[h.kaynakId];
+    var row = hareketSatiriOlustur_(h, kaydeden, KASA_KAYNAK_SIPARIS, h.kaynakId);
+    var m = mevcutMap[h.kaynakId];
+    if (m) {
+      /* Var olan kaydı güncellerken "kaydeden" bilgisini korur. */
+      row[8] = m.kaydeden || kaydeden;
+      s.getRange(m.row, 1, 1, HAREKET_KOLON_SAYISI).setValues([row]);
+      guncellenen++;
+      delete mevcutMap[h.kaynakId];
+    } else {
+      yeniSatirlar.push(row);
+    }
   });
+
+  var eklenen = satirlariEkle_(s, yeniSatirlar, HAREKET_KOLON_SAYISI);
 
   /* Artık karşılığı olmayan (silinmiş ödeme) hareketleri kaldır */
   var kalanlar = Object.keys(mevcutMap).map(function (k) {
@@ -134,7 +173,6 @@ function siparisKasaSenkronla_(siparisId) {
   kalanlar.sort(function (a, b) {
     return b.row - a.row;
   });
-  var s = hareketSheet_();
   kalanlar.forEach(function (m) {
     s.deleteRow(m.row);
   });
@@ -148,7 +186,7 @@ function kasaSenkronYenile(token) {
   var liste = siparisTumunuOku_();
   var toplam = { eklenen: 0, guncellenen: 0, silinen: 0 };
   liste.forEach(function (s) {
-    var r = siparisKasaSenkronla_(s.id);
+    var r = siparisKasaSenkronla_(s.id, s);
     toplam.eklenen += r.eklenen;
     toplam.guncellenen += r.guncellenen;
     toplam.silinen += r.silinen;
@@ -163,6 +201,7 @@ if (typeof module !== 'undefined' && module.exports) {
     kasaKaynakIdUret_: kasaKaynakIdUret_,
     posHesapAdi_: posHesapAdi_,
     hesapSagla_: hesapSagla_,
+    hesaplariSagla_: hesaplariSagla_,
     odemeHareketiOlustur_: odemeHareketiOlustur_,
     siparisHareketSatirlari_: siparisHareketSatirlari_,
     siparisKasaHareketleriniSil_: siparisKasaHareketleriniSil_,

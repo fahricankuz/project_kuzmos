@@ -8,8 +8,14 @@
 
 const crypto = require('crypto');
 
-function createFakeSheet(name, rows) {
+/**
+ * `sayac` verilirse sayfa okuma/yazma çağrıları sayılır. Apps Script'te
+ * performans doğrudan bu çağrı sayısına bağlı olduğu için testler bunu
+ * ölçerek hız gerilemesini yakalayabilir.
+ */
+function createFakeSheet(name, rows, sayac) {
   rows = rows || [];
+  sayac = sayac || { okuma: 0, yazma: 0 };
   return {
     name: name,
     rows: rows,
@@ -17,6 +23,7 @@ function createFakeSheet(name, rows) {
       return rows.length;
     },
     appendRow: function (row) {
+      sayac.yazma++;
       rows.push(row.slice());
     },
     deleteRows: function (startRow, numRows) {
@@ -28,11 +35,13 @@ function createFakeSheet(name, rows) {
     getRange: function (row, col) {
       return {
         setValue: function (v) {
+          sayac.yazma++;
           if (!rows[row - 1]) rows[row - 1] = [];
           rows[row - 1][col - 1] = v;
           return this;
         },
         setValues: function (vals) {
+          sayac.yazma++;
           for (var i = 0; i < vals.length; i++) {
             if (!rows[row - 1 + i]) rows[row - 1 + i] = [];
             for (var j = 0; j < vals[i].length; j++) rows[row - 1 + i][col - 1 + j] = vals[i][j];
@@ -55,11 +64,13 @@ function createFakeSheet(name, rows) {
       var self = this;
       return {
         getValues: function () {
+          sayac.okuma++;
           return self.rows.map(function (r) {
             return r.slice();
           });
         },
         getDisplayValues: function () {
+          sayac.okuma++;
           return self.rows.map(function (r) {
             return r.map(function (v) {
               return v == null ? '' : String(v);
@@ -71,17 +82,18 @@ function createFakeSheet(name, rows) {
   };
 }
 
-function createFakeSpreadsheet(initialSheets) {
+function createFakeSpreadsheet(initialSheets, sayac) {
   var sheets = {};
+  sayac = sayac || { okuma: 0, yazma: 0 };
   Object.keys(initialSheets || {}).forEach(function (name) {
-    sheets[name] = createFakeSheet(name, initialSheets[name]);
+    sheets[name] = createFakeSheet(name, initialSheets[name], sayac);
   });
   return {
     getSheetByName: function (name) {
       return sheets[name] || null;
     },
     insertSheet: function (name) {
-      sheets[name] = createFakeSheet(name, []);
+      sheets[name] = createFakeSheet(name, [], sayac);
       return sheets[name];
     },
     deleteSheet: function (sheet) {
@@ -104,11 +116,13 @@ function installGasMocks(opts) {
   opts = opts || {};
   var props = Object.assign({}, opts.scriptProperties || {});
   var cache = {};
-  var fakeSpreadsheet = createFakeSpreadsheet(opts.sheets || {});
+  var sayac = { okuma: 0, yazma: 0, acma: 0 };
+  var fakeSpreadsheet = createFakeSpreadsheet(opts.sheets || {}, sayac);
   var uuidCounter = 0;
 
   global.SpreadsheetApp = {
     openById: function () {
+      sayac.acma++;
       return fakeSpreadsheet;
     }
   };
@@ -203,7 +217,11 @@ function installGasMocks(opts) {
     }
   };
 
-  return { fakeSpreadsheet: fakeSpreadsheet, props: props, cache: cache };
+  /* src/*.js daha önce yüklenmişse çağrı ömürlü önbellekler bayat kalmasın:
+     her testte yeni bir sahte spreadsheet oluşturuluyor. */
+  if (typeof global.onbellekSifirla_ === 'function') global.onbellekSifirla_();
+
+  return { fakeSpreadsheet: fakeSpreadsheet, props: props, cache: cache, sayac: sayac };
 }
 
 module.exports = { installGasMocks: installGasMocks, createFakeSheet: createFakeSheet };

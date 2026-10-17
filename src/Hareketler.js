@@ -63,31 +63,36 @@ function hareketKaydet(token, h) {
   return hareketYaz_(h, session.ad, '', '');
 }
 
+/** Hareket satırını (13 kolon) üretir; yazma yapmaz. */
+function hareketSatiriOlustur_(h, kaydeden, kaynak, kaynakId) {
+  hareketDogrula_(h);
+  return [
+    cln_(h.id) || Utilities.getUuid(),
+    dstr_(h.tarih),
+    cln_(h.yon),
+    cln_(h.ana),
+    cln_(h.alt),
+    num_(h.tutar),
+    cln_(h.hesap),
+    cln_(h.aciklama),
+    cln_(kaydeden),
+    new Date(),
+    false,
+    cln_(kaynak),
+    cln_(kaynakId)
+  ];
+}
+
 /**
  * Hareketi ekler/günceller. Kaynak dolu ise otomatik üretilmiş demektir.
  * "Kaydeden" her koşulda sunucudan gelir; istemci bunu belirleyemez.
  */
 function hareketYaz_(h, kaydeden, kaynak, kaynakId) {
-  hareketDogrula_(h);
+  var row = hareketSatiriOlustur_(h, kaydeden, kaynak, kaynakId);
   var lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
     var s = hareketSheet_();
-    var row = [
-      cln_(h.id) || Utilities.getUuid(),
-      dstr_(h.tarih),
-      cln_(h.yon),
-      cln_(h.ana),
-      cln_(h.alt),
-      num_(h.tutar),
-      cln_(h.hesap),
-      cln_(h.aciklama),
-      cln_(kaydeden),
-      new Date(),
-      false,
-      cln_(kaynak),
-      cln_(kaynakId)
-    ];
     var d = s.getDataRange().getDisplayValues();
     for (var i = 1; i < d.length; i++) {
       if (cln_(d[i][0]) === String(row[0])) {
@@ -130,6 +135,7 @@ if (typeof module !== 'undefined' && module.exports) {
     hareketleriGetir: hareketleriGetir,
     hareketDogrula_: hareketDogrula_,
     hareketKaydet: hareketKaydet,
+    hareketSatiriOlustur_: hareketSatiriOlustur_,
     hareketYaz_: hareketYaz_,
     hareketSil: hareketSil
   };

@@ -215,7 +215,12 @@ function teslimTarihiHesapla_(mevcutTeslim, durum, odemeler, tutar) {
   return dstr_(mevcutTeslim);
 }
 
-function siparisSatirinaYaz_(s, siparis, odemeler, urunler, mevcut, session, personel) {
+/**
+ * Sipariş satırını yazar ve yazılan kaydın çözümlenmiş halini döner.
+ * `liste` zaten okunmuş sipariş listesidir; sipariş numarası için sayfa
+ * ikinci kez okunmaz.
+ */
+function siparisSatirinaYaz_(s, siparis, odemeler, urunler, mevcut, session, personel, liste) {
   var araToplam = araToplamHesapla_(urunler);
   var tutar = num_(siparis.tutar) > 0 ? num_(siparis.tutar) : araToplam;
   var tahsil = tahsilatToplami_(odemeler);
@@ -235,13 +240,12 @@ function siparisSatirinaYaz_(s, siparis, odemeler, urunler, mevcut, session, per
     siparis.recete
   );
 
-  urunler.forEach(function (p) {
-    if (p.kategori && p.marka) markaSagla_(p.kategori, p.marka);
-  });
+  /* Listede olmayan markalar tek okuma + tek yazmayla eklenir */
+  markalariSagla_(urunler);
 
   var satir = [
     id,
-    mevcut ? mevcut.no : siparisNoUret_(siparis.siparisTarihi, siparisTumunuOku_()),
+    mevcut ? mevcut.no : siparisNoUret_(siparis.siparisTarihi, liste || siparisTumunuOku_()),
     dstr_(siparis.siparisTarihi),
     teslimTarihiHesapla_(mevcut ? mevcut.teslimTarihi : siparis.teslimTarihi, durum, odemeler, tutar),
     cln_(siparis.personel),
@@ -268,14 +272,29 @@ function siparisSatirinaYaz_(s, siparis, odemeler, urunler, mevcut, session, per
     mevcut ? dstr_(mevcut.silinmeTarihi) : ''
   ];
 
+  var row;
   if (mevcut) {
     /* Oluşturma zamanına dokunmadan güncelle */
     s.getRange(mevcut.row, 1, 1, 22).setValues([satir.slice(0, 22)]);
     s.getRange(mevcut.row, 24, 1, 3).setValues([[satir[23], satir[24], satir[25]]]);
+    row = mevcut.row;
   } else {
     s.appendRow(satir);
+    row = s.getLastRow();
   }
-  return { id: id, no: satir[1] };
+  /* Yazdığımız satırı tekrar okumadan çözümle: kasa senkronu ve istemci
+     güncellemesi için sayfaya yeni bir tur atmaya gerek kalmaz. */
+  return { id: id, no: satir[1], kayit: siparisSatiriOku_(satir, row) };
+}
+
+/** İstemciye gönderilecek sipariş kaydı (satır numarası olmadan). */
+function siparisKaydiDisaAktar_(kayit) {
+  if (!kayit) return null;
+  var k = {};
+  Object.keys(kayit).forEach(function (a) {
+    if (a !== 'row') k[a] = kayit[a];
+  });
+  return k;
 }
 
 /* ── API ── */
@@ -303,8 +322,9 @@ function siparisKaydet(token, siparis, personel) {
   lock.waitLock(20000);
   try {
     var s = siparisSheet_();
-    var mevcut = cln_(siparis.id) ? siparisBul_(siparisTumunuOku_(), siparis.id) : null;
-    var sonuc = siparisSatirinaYaz_(s, siparis, odemeler, urunler, mevcut, session, p);
+    var liste = siparisTumunuOku_();
+    var mevcut = cln_(siparis.id) ? siparisBul_(liste, siparis.id) : null;
+    var sonuc = siparisSatirinaYaz_(s, siparis, odemeler, urunler, mevcut, session, p, liste);
     if (p) personelSagla_(p);
     logYaz_(
       token,
@@ -314,8 +334,8 @@ function siparisKaydet(token, siparis, personel) {
       sonuc.no + ' · ' + cln_(siparis.adSoyad) + ' · ' + num_(siparis.tutar),
       p
     );
-    siparisKasaSenkronla_(sonuc.id);
-    return sonuc;
+    siparisKasaSenkronla_(sonuc.id, sonuc.kayit);
+    return { id: sonuc.id, no: sonuc.no, kayit: siparisKaydiDisaAktar_(sonuc.kayit) };
   } finally {
     lock.releaseLock();
   }
@@ -329,7 +349,8 @@ function siparisOdemeEkle(token, id, odeme, personel) {
   lock.waitLock(20000);
   try {
     var s = siparisSheet_();
-    var mevcut = siparisBul_(siparisTumunuOku_(), id);
+    var liste = siparisTumunuOku_();
+    var mevcut = siparisBul_(liste, id);
     if (!mevcut) throw new Error('Sipariş bulunamadı.');
     var odemeler = odemeleriTemizle_(mevcut.odemeler.concat([odeme]));
     var guncel = {
@@ -348,7 +369,7 @@ function siparisOdemeEkle(token, id, odeme, personel) {
       durum: mevcut.durum,
       nebim: mevcut.nebim
     };
-    siparisSatirinaYaz_(s, guncel, odemeler, mevcut.urunler, mevcut, session, p);
+    var sonuc = siparisSatirinaYaz_(s, guncel, odemeler, mevcut.urunler, mevcut, session, p, liste);
     logYaz_(
       token,
       cln_(odeme && odeme.tip).toLowerCase() === 'iade' ? 'SIPARIS_IADE' : 'SIPARIS_TAHSILAT',
@@ -357,8 +378,8 @@ function siparisOdemeEkle(token, id, odeme, personel) {
       mevcut.no + ' · ' + num_(odeme && odeme.tutar) + ' · ' + cln_(odeme && odeme.yontem),
       p
     );
-    siparisKasaSenkronla_(mevcut.id);
-    return true;
+    siparisKasaSenkronla_(mevcut.id, sonuc.kayit);
+    return { id: mevcut.id, no: mevcut.no, kayit: siparisKaydiDisaAktar_(sonuc.kayit) };
   } finally {
     lock.releaseLock();
   }
@@ -380,7 +401,7 @@ function siparisDurumGuncelle(token, id, durum, personel) {
     s.getRange(mevcut.row, 18, 1, 2).setValues([[cln_(durum), simdi]]);
     s.getRange(mevcut.row, 24).setValue(new Date());
     logYaz_(token, 'SIPARIS_DURUM', 'Siparisler', mevcut.id, mevcut.no + ' → ' + cln_(durum), p);
-    return true;
+    return { id: mevcut.id, durum: cln_(durum), durumTarihi: simdi, teslimTarihi: teslim };
   } finally {
     lock.releaseLock();
   }
@@ -396,10 +417,13 @@ function siparisSil(token, id, personel) {
     var s = siparisSheet_();
     var mevcut = siparisBul_(siparisTumunuOku_(), id);
     if (!mevcut) return false;
-    s.getRange(mevcut.row, 25, 1, 2).setValues([[true, dstr_(new Date())]]);
+    var silinmeTarihi = dstr_(new Date());
+    s.getRange(mevcut.row, 25, 1, 2).setValues([[true, silinmeTarihi]]);
     s.getRange(mevcut.row, 24).setValue(new Date());
     logYaz_(token, 'SIPARIS_SIL', 'Siparisler', mevcut.id, mevcut.no + ' · ' + mevcut.adSoyad, p);
-    siparisKasaSenkronla_(mevcut.id);
+    mevcut.silindi = true;
+    mevcut.silinmeTarihi = silinmeTarihi;
+    siparisKasaSenkronla_(mevcut.id, mevcut);
     return true;
   } finally {
     lock.releaseLock();
@@ -418,7 +442,9 @@ function siparisGeriAl(token, id, personel) {
     s.getRange(mevcut.row, 25, 1, 2).setValues([[false, '']]);
     s.getRange(mevcut.row, 24).setValue(new Date());
     logYaz_(token, 'SIPARIS_GERI_AL', 'Siparisler', mevcut.id, mevcut.no, p);
-    siparisKasaSenkronla_(mevcut.id);
+    mevcut.silindi = false;
+    mevcut.silinmeTarihi = '';
+    siparisKasaSenkronla_(mevcut.id, mevcut);
     return true;
   } finally {
     lock.releaseLock();
@@ -488,6 +514,7 @@ if (typeof module !== 'undefined' && module.exports) {
     siparisDogrula_: siparisDogrula_,
     personelDogrula_: personelDogrula_,
     teslimTarihiHesapla_: teslimTarihiHesapla_,
+    siparisKaydiDisaAktar_: siparisKaydiDisaAktar_,
     siparisListele: siparisListele,
     siparisKaydet: siparisKaydet,
     siparisOdemeEkle: siparisOdemeEkle,

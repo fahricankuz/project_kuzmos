@@ -242,9 +242,82 @@ function spreadsheetIdDegistir(yeniId) {
   return 'Artık şu tabloya bağlı: ' + ss.getName() + '\n' + ss.getUrl();
 }
 
+/**
+ * TEŞHİS: Hangi aşamanın kaç milisaniye sürdüğünü ölçer. "Yavaş" hissini
+ * tahminle değil ölçümle takip etmek için; hiçbir veri yazmaz.
+ *
+ * Apps Script editöründe seçip çalıştırın, sonucu "Yürütme günlüğü"nde
+ * görürsünüz.
+ */
+function hizTesti() {
+  var satirlar = [];
+
+  function olc(ad, fn) {
+    var t = Date.now();
+    var sonuc;
+    try {
+      sonuc = fn();
+    } catch (e) {
+      satirlar.push(ad + ': HATA — ' + e.message);
+      return null;
+    }
+    satirlar.push(ad + ': ' + (Date.now() - t) + ' ms' + (sonuc ? ' (' + sonuc + ')' : ''));
+    return sonuc;
+  }
+
+  onbellekSifirla_();
+  var basla = Date.now();
+
+  olc('Spreadsheet açılışı', function () {
+    return ss_().getName();
+  });
+  olc('Ayarlar okuma', function () {
+    return Object.keys(ayarOku_()).length + ' ayar';
+  });
+  olc('Siparişler okuma', function () {
+    return siparisTumunuOku_().length + ' sipariş';
+  });
+  olc('Siparişler (önbellekli 2. okuma)', function () {
+    return siparisTumunuOku_().length + ' sipariş';
+  });
+  olc('Hareketler okuma', function () {
+    return hareketSheet_().getDataRange().getValues().length - 1 + ' hareket';
+  });
+  olc('Müşteriler okuma', function () {
+    return musteriListesiGetir_().length + ' müşteri';
+  });
+  olc('Bugünün tahsilatı (hesaplama)', function () {
+    return Math.round(gunTahsilatiDahili_(dstr_(new Date()))) + ' TL';
+  });
+
+  var mesaj =
+    'HIZ TESTİ\n' +
+    satirlar.join('\n') +
+    '\n─────\nTOPLAM: ' +
+    (Date.now() - basla) +
+    ' ms\n\nNot: ilk çalıştırma Apps Script "soğuk başlangıç" içerir, ikinci\n' +
+    'çalıştırma gerçek hızı daha iyi gösterir.';
+  Logger.log(mesaj);
+  return mesaj;
+}
+
+/** hizTesti için: token gerektirmeden günün tahsilat toplamını hesaplar. */
+function gunTahsilatiDahili_(gun) {
+  var satis = 0;
+  siparisTumunuOku_().forEach(function (s) {
+    if (s.silindi) return;
+    s.odemeler.forEach(function (o) {
+      if (o.tarih !== gun) return;
+      satis += (o.tip === 'iade' ? -1 : 1) * num_(o.tutar);
+    });
+  });
+  return satis;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     sistemDurumu: sistemDurumu,
+    hizTesti: hizTesti,
     spreadsheetIdDegistir: spreadsheetIdDegistir,
     VARSAYILAN_KASA_KATEGORILERI: VARSAYILAN_KASA_KATEGORILERI,
     VARSAYILAN_URUN_KATEGORILERI: VARSAYILAN_URUN_KATEGORILERI,
