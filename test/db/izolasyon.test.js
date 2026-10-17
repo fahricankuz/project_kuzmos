@@ -25,7 +25,7 @@ afterAll(async () => {
 
 /** Bir işletmede tam veri seti üretir (sipariş, müşteri, kasa, hedef...). */
 async function veriUret(k, etiket) {
-  await db.oturumAc(k.uid.magaza);
+  await db.oturumAc(k.uid.magaza_muduru);
   const s = (
     await db.tek('select siparis_kaydet($1::jsonb, $2) as s', [
       JSON.stringify({
@@ -44,7 +44,7 @@ async function veriUret(k, etiket) {
     etiket + ' masrafı',
     etiket + ' Personeli'
   ]);
-  await db.oturumAc(k.uid.muhasebe);
+  await db.oturumAc(k.uid.finans);
   await db.calistir(`select hedef_kaydet('2026-10', 100000, $1)`, [etiket + ' hedefi']);
   await db.calistir(`select cari_kaydet($1, '2026-10', 5000, '')`, [etiket + ' Tedarikçi']);
   await db.calistir('select hareket_kaydet($1::jsonb)', [
@@ -92,19 +92,19 @@ describe('okuma izolasyonu', () => {
   ];
 
   test.each(tablolar)('%s tablosunda yalnızca kendi işletmesinin satırları görünür', async (tablo) => {
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     const a = await db.sor('select isletme_id from ' + tablo);
     expect(a.length).toBeGreaterThan(0);
     expect(a.every((r) => r.isletme_id === A.isletme)).toBe(true);
 
-    await db.oturumAc(B.uid.sahip);
+    await db.oturumAc(B.uid.yonetici);
     const b = await db.sor('select isletme_id from ' + tablo);
     expect(b.length).toBeGreaterThan(0);
     expect(b.every((r) => r.isletme_id === B.isletme)).toBe(true);
   });
 
   test('sipariş ürünleri ve ödemeleri de sızmaz', async () => {
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     const u = await db.sor('select urun from siparis_urunleri');
     expect(u.map((x) => x.urun)).toEqual(['A']);
     const o = await db.sor('select tutar::float8 as tutar from odemeler');
@@ -112,7 +112,7 @@ describe('okuma izolasyonu', () => {
   });
 
   test('görünümler de kiracı kapsamlıdır', async () => {
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     expect(await db.sor('select id from v_siparisler')).toHaveLength(1);
     expect(await db.sor('select tarih from v_gunluk_tahsilat')).toHaveLength(1);
     expect(await db.sor('select id from v_magaza_masraflari')).toHaveLength(1);
@@ -120,7 +120,7 @@ describe('okuma izolasyonu', () => {
   });
 
   test('tum_veri() yalnızca kendi işletmesini döner', async () => {
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     const v = (await db.tek('select tum_veri() as v')).v;
     expect(v.isletme.ad).toBe('A Optik');
     expect(v.siparis).toHaveLength(1);
@@ -132,21 +132,21 @@ describe('okuma izolasyonu', () => {
   });
 
   test('kasa özeti başka işletmenin tahsilatını toplamaz', async () => {
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     const o = (await db.tek(`select kasa_ozeti('gun', '2026-10-01') as o`)).o;
     expect(Number(o.satis.nakit)).toBe(3000);
     expect(Number(o.masrafToplam)).toBe(250);
   });
 
   test('günlük (log) başka işletmenin işlemlerini göstermez', async () => {
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     const l = (await db.tek('select log_listele(500) as l')).l;
     expect(l.length).toBeGreaterThan(0);
     expect(JSON.stringify(l)).not.toMatch(/B Müşterisi|B masrafı/);
   });
 
   test('veri aktarımı (KVKK) yalnızca kendi verisini içerir', async () => {
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     const d = (await db.tek('select isletme_verisi_aktar() as d')).d;
     expect(d.isletme.ad).toBe('A Optik');
     expect(d.siparisler).toHaveLength(1);
@@ -156,7 +156,7 @@ describe('okuma izolasyonu', () => {
 
 describe('yazma izolasyonu', () => {
   test('başka işletmenin şubesine sipariş yazılamaz', async () => {
-    await db.oturumAc(A.uid.magaza);
+    await db.oturumAc(A.uid.magaza_muduru);
     const hata = await hataBekle(() =>
       db.calistir(
         `insert into siparisler (magaza_id, siparis_tarihi, ad_soyad)
@@ -168,7 +168,7 @@ describe('yazma izolasyonu', () => {
   });
 
   test('siparis_kaydet başka işletmenin şubesini kabul etmez, kendi şubesine yazar', async () => {
-    await db.oturumAc(A.uid.magaza);
+    await db.oturumAc(A.uid.magaza_muduru);
     const s = (
       await db.tek('select siparis_kaydet($1::jsonb, $2) as s', [
         JSON.stringify({
@@ -187,9 +187,9 @@ describe('yazma izolasyonu', () => {
   });
 
   test('başka işletmenin siparişi güncellenemez ve silinemez', async () => {
-    await db.oturumAc(B.uid.sahip);
+    await db.oturumAc(B.uid.yonetici);
     const b = await db.tek('select id from siparisler limit 1');
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
 
     const g = await db.calistir('update siparisler set ad_soyad = $2 where id = $1', [b.id, 'Değiştirildi']);
     expect(g.affectedRows).toBe(0);
@@ -200,15 +200,15 @@ describe('yazma izolasyonu', () => {
   });
 
   test('başka işletmenin ödemesi silinemez (kasa bozulamaz)', async () => {
-    await db.oturumAc(B.uid.sahip);
+    await db.oturumAc(B.uid.yonetici);
     const o = await db.tek('select id from odemeler limit 1');
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     const r = await db.calistir('delete from odemeler where id = $1', [o.id]);
     expect(r.affectedRows).toBe(0);
   });
 
   test('başka işletmenin ayarı değiştirilemez', async () => {
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     const r = await db.calistir(
       `update ayarlar set deger = '99' where isletme_id = $1 and anahtar = 'personel_prim'`,
       [B.isletme]
@@ -217,29 +217,31 @@ describe('yazma izolasyonu', () => {
   });
 
   test('başka işletmenin masrafı silinemez', async () => {
-    await db.oturumAc(B.uid.magaza);
+    await db.oturumAc(B.uid.magaza_muduru);
     const m = await db.tek(`select id from v_magaza_masraflari limit 1`);
-    await db.oturumAc(A.uid.magaza);
+    await db.oturumAc(A.uid.magaza_muduru);
     expect((await db.tek('select magaza_masraf_sil($1) as ok', [m.id])).ok).toBe(false);
   });
 
   test('başka işletmenin kullanıcısı devralınamaz', async () => {
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     const hata = await hataBekle(() =>
-      db.calistir(`select profil_olustur('b-magaza@ornek.com', 'Kaçırma', 'yonetici', null)`)
+      db.calistir(`select profil_olustur('b-magaza_muduru@ornek.com', 'Kaçırma', 'yonetici', null)`)
     );
     expect(hata).toMatch(/başka bir işletmeye bağlı/i);
   });
 
   test('başka işletmenin kullanıcısı pasife alınamaz', async () => {
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     expect(
-      await hataBekle(() => db.calistir(`select kullanici_durum_degistir('b-magaza@ornek.com', false)`))
+      await hataBekle(() =>
+        db.calistir(`select kullanici_durum_degistir('b-magaza_muduru@ornek.com', false)`)
+      )
     ).toMatch(/bulunamadı/i);
   });
 
   test('isletme_id elle gönderilse bile üzerine yazılır', async () => {
-    await db.oturumAc(A.uid.muhasebe);
+    await db.oturumAc(A.uid.finans);
     const hesap = await db.tek(`select id from hesaplar limit 1`);
     await db.calistir(
       `insert into cari_plan (isletme_id, tedarikci, ay, planlanan)
@@ -252,14 +254,14 @@ describe('yazma izolasyonu', () => {
   });
 
   test('ikinci işletme kendi sipariş numarasını kendi sayacından alır', async () => {
-    await db.oturumAc(A.uid.magaza);
+    await db.oturumAc(A.uid.magaza_muduru);
     const a = (
       await db.tek('select siparis_kaydet($1::jsonb, $2) as s', [
         JSON.stringify({ siparisTarihi: '2026-11-01', adSoyad: 'A2', urunler: [], odemeler: [], recete: {} }),
         'A Personeli'
       ])
     ).s;
-    await db.oturumAc(B.uid.magaza);
+    await db.oturumAc(B.uid.magaza_muduru);
     const b = (
       await db.tek('select siparis_kaydet($1::jsonb, $2) as s', [
         JSON.stringify({ siparisTarihi: '2026-11-01', adSoyad: 'B2', urunler: [], odemeler: [], recete: {} }),
@@ -268,6 +270,50 @@ describe('yazma izolasyonu', () => {
     ).s;
     expect(a.no).toBe('AA-11-26-0001');
     expect(b.no).toBe('BB-11-26-0001');
+  });
+});
+
+describe('logo dosyaları', () => {
+  test('işletme yalnızca kendi klasörüne logo yazabilir', async () => {
+    await db.oturumAc(A.uid.yonetici);
+    await db.calistir(`insert into storage.objects (bucket_id, name) values ('logolar', $1)`, [
+      A.isletme + '/logo.png'
+    ]);
+    expect(await db.sor('select name from storage.objects')).toHaveLength(1);
+
+    const hata = await hataBekle(() =>
+      db.calistir(`insert into storage.objects (bucket_id, name) values ('logolar', $1)`, [
+        B.isletme + '/logo.png'
+      ])
+    );
+    expect(hata).toMatch(/row-level security/i);
+  });
+
+  test('şube rolleri logo yükleyemez', async () => {
+    await db.oturumAc(A.uid.personel);
+    expect(
+      await hataBekle(() =>
+        db.calistir(`insert into storage.objects (bucket_id, name) values ('logolar', $1)`, [
+          A.isletme + '/logo.png'
+        ])
+      )
+    ).toMatch(/row-level security/i);
+  });
+
+  test('logo adresi işletme ayarına yazılır ve diğer işletmeyi etkilemez', async () => {
+    await db.oturumAc(A.uid.yonetici);
+    const ayar = (await db.tek('select logo_kaydet($1) as a', ['https://cdn/logo-a.png'])).a;
+    expect(ayar.logoUrl).toBe('https://cdn/logo-a.png');
+
+    await db.oturumAc(B.uid.yonetici);
+    expect((await db.tek('select ayar_paketi() as a')).a.logoUrl).toBe('');
+  });
+
+  test('şube rolü logo adresini değiştiremez', async () => {
+    await db.oturumAc(A.uid.personel);
+    expect(await hataBekle(() => db.calistir(`select logo_kaydet('https://kotu/logo.png')`))).toMatch(
+      /yetkiniz yok/i
+    );
   });
 });
 
@@ -301,14 +347,14 @@ describe('platform yöneticisi sınırları', () => {
     ).r;
     expect(r.plan).toBe('pro');
     expect(r.durum).toBe('aktif');
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     const v = (await db.tek('select abonelik_ozeti() as o')).o;
     expect(v.plan).toBe('pro');
     expect(v.yazabilir).toBe(true);
   });
 
   test('kiracı kendi aboneliğini değiştiremez', async () => {
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     const r = await db.calistir(
       `update isletmeler set durum = 'aktif', plan_kod = 'zincir', abonelik_bitis = '2030-01-01'
         where id = $1`,
@@ -323,7 +369,7 @@ describe('platform yöneticisi sınırları', () => {
   });
 
   test('sıradan kullanıcı platform özetini göremez', async () => {
-    await db.oturumAc(A.uid.sahip);
+    await db.oturumAc(A.uid.yonetici);
     expect(await hataBekle(() => db.calistir('select platform_ozet()'))).toMatch(/platform yöneticisine/i);
   });
 });

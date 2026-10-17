@@ -25,12 +25,12 @@ beforeEach(async () => {
 
   /* Tek işletme, iki şube: şube içi yetki sınırlarını sınıyoruz.
      Farklı işletmeler arası izolasyon izolasyon.test.js'de. */
-  const k = await db.kiraciKur({ onEk: 'g', ad: 'Örnek Optik', subeKod: 'DK' });
+  const k = await db.kiraciKur({ onEk: 'g', ad: 'Örnek Optik', subeKod: 'KUZ' });
   isletme = k.isletme;
   magazaA = k.magaza;
-  muhasebeUid = k.uid.muhasebe;
-  magazaUid = k.uid.magaza;
-  yoneticiUid = k.uid.sahip;
+  muhasebeUid = k.uid.finans;
+  magazaUid = k.uid.magaza_muduru;
+  yoneticiUid = k.uid.yonetici;
 
   await db.abonelikAyarla(isletme, { plan: 'pro' }); /* çok şube + çok kullanıcı */
   await db.sistem();
@@ -47,8 +47,8 @@ beforeEach(async () => {
   await db.sistem();
   await db.calistir(
     `insert into profiller (id, isletme_id, magaza_id, ad, rol, eposta)
-     values ($1, $2, $3, 'İkinci Şube', 'magaza', 'g-sube2@ornek.com'),
-            ($4, $2, null, 'Pasif Kullanıcı', 'muhasebe', 'g-pasif@ornek.com')`,
+     values ($1, $2, $3, 'İkinci Şube', 'magaza_muduru', 'g-sube2@ornek.com'),
+            ($4, $2, null, 'Pasif Kullanıcı', 'finans', 'g-pasif@ornek.com')`,
     [magazaBUid, isletme, magazaB, pasifUid]
   );
   await db.calistir('update profiller set aktif = false where id = $1', [pasifUid]);
@@ -74,7 +74,7 @@ beforeEach(async () => {
   );
 });
 
-describe('mağaza rolü', () => {
+describe('şube rolü (mağaza müdürü)', () => {
   beforeEach(() => db.oturumAc(magazaUid));
 
   test('kasa hareketlerinin tamamını göremez, yalnızca kendi masrafını görür', async () => {
@@ -197,7 +197,7 @@ describe('mağaza rolü', () => {
   });
 });
 
-describe('muhasebe rolü', () => {
+describe('finans rolü', () => {
   beforeEach(() => db.oturumAc(muhasebeUid));
 
   test('tüm şubelerin siparişlerini görür', async () => {
@@ -252,7 +252,7 @@ describe('yönetici rolü', () => {
   });
 
   test('kullanıcı rolü atayabilir', async () => {
-    const r = await db.calistir(`update profiller set rol = 'muhasebe' where id = $1`, [magazaUid]);
+    const r = await db.calistir(`update profiller set rol = 'finans' where id = $1`, [magazaUid]);
     expect(r.affectedRows).toBe(1);
   });
 

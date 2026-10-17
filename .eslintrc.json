@@ -31,7 +31,9 @@
     },
     {
       "files": [
-        "web/js/*.js"
+        "web/js/*.js",
+        "tools/demo-api.js",
+        "tools/demo-verisi.js"
       ],
       "env": {
         "browser": true,

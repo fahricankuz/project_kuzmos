@@ -57,7 +57,10 @@
 <div class="view" id="viewSiparis">
   <div class="header" data-baslik="Sipariş Föyü"></div>
   <div class="scroll" id="siparisScroll">
-    <div class="print-firma" id="printFirma"></div>
+    <div class="print-baslik">
+      <img class="print-logo" id="printLogo" alt="">
+      <div class="print-firma" id="printFirma"></div>
+    </div>
     <div class="card print-order-1">
       <div class="card-header"><h3>Sipariş Bilgileri</h3><span class="badge" id="spNoLabel">—</span></div>
       <div class="card-body">
@@ -375,6 +378,16 @@
       <div class="mini-note">Şube kodu sipariş numarasının ön ekidir: KD-10-26-0001</div>
     </div></div>
 
+    <div class="card" id="cardLogo"><div class="card-header"><h3>Logo</h3><span class="sub">sipariş formunda görünür</span></div><div class="card-body">
+      <div class="logo-onizleme" id="logoOnizleme"></div>
+      <div class="form-row cols-2" style="margin-top:10px">
+        <div class="field"><input type="file" id="logoDosya" accept="image/png,image/jpeg,image/webp,image/svg+xml"></div>
+        <button class="btn btn-yellow" style="justify-content:center" onclick="logoYukleTikla()">⬆ Logoyu yükle</button>
+      </div>
+      <button class="load-more" onclick="logoKaldirTikla()">Logoyu kaldır</button>
+      <div class="mini-note">PNG, JPG, WEBP veya SVG · en fazla 1 MB. Sipariş numarası ürün biçimindedir (KUZ-10-26-0001); formda işletmenizi logonuz temsil eder.</div>
+    </div></div>
+
     <div class="card" id="cardMesaj"><div class="card-header"><h3>Müşteri mesajı ve ERP</h3></div><div class="card-body">
       <div class="field"><label>WhatsApp teslim mesajı</label>
         <input type="text" id="ayarWaSablon" placeholder="Sayın {ad}, {no} numaralı siparişiniz hazır. {isletme}">
@@ -666,7 +679,12 @@
       <div class="form-row"><div class="field"><label>E-posta</label><input type="email" id="kEmail" placeholder="ornek@kuzmos.com"></div></div>
       <div class="form-row"><div class="field"><label>Geçici şifre</label><input type="text" id="kSifre" placeholder="En az 8 karakter"></div></div>
       <div class="form-row"><div class="field"><label>Rol</label>
-        <select id="kRol"><option value="magaza">Mağaza</option><option value="muhasebe">Muhasebe</option><option value="yonetici">Yönetici</option></select>
+        <select id="kRol">
+            <option value="personel">Personel</option>
+            <option value="magaza_muduru">Mağaza Müdürü</option>
+            <option value="finans">Finans</option>
+            <option value="yonetici">Yönetici</option>
+          </select>
       </div></div>
     </div>
     <div class="modal-footer">

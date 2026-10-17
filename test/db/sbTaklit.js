@@ -71,6 +71,45 @@ function sbTaklitOlustur(testDb, kullanicilar) {
         }
       },
 
+      /* Storage taklidi: dosya içeriği tutulmaz, yetki politikası sınanır. */
+      storage: {
+        from: function (kova) {
+          return {
+            upload: async function (yol, dosya, opts) {
+              await rolUygula();
+              try {
+                if (opts && opts.upsert) {
+                  await testDb.calistir('delete from storage.objects where bucket_id = $1 and name = $2', [
+                    kova,
+                    yol
+                  ]);
+                }
+                await testDb.calistir(
+                  'insert into storage.objects (bucket_id, name, owner) values ($1, $2, $3)',
+                  [kova, yol, oturum ? oturum.uid : null]
+                );
+                return { data: { path: yol }, error: null };
+              } catch (e) {
+                return { data: null, error: { message: e.message || String(e) } };
+              }
+            },
+            getPublicUrl: function (yol) {
+              return {
+                data: { publicUrl: 'https://test.supabase.co/storage/v1/object/public/' + kova + '/' + yol }
+              };
+            },
+            remove: async function (yollar) {
+              await rolUygula();
+              await testDb.calistir('delete from storage.objects where bucket_id = $1 and name = any($2)', [
+                kova,
+                yollar
+              ]);
+              return { data: null, error: null };
+            }
+          };
+        }
+      },
+
       rpc: async function (ad, parametreler) {
         await rolUygula();
         const adlar = Object.keys(parametreler || {});

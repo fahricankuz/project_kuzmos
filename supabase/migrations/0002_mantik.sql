@@ -36,22 +36,28 @@ returns text language sql stable security definer set search_path = public as $$
   select coalesce(p.ad, '') from profiller p where p.id = auth.uid()
 $$;
 
-/* Kasa/rapor verisine erişen roller. */
+/* İşletme kasasının tamamına ve raporlara erişen roller. */
 create or replace function finans_mi()
 returns boolean language sql stable as $$
-  select coalesce(aktif_rol() in ('sahip', 'yonetici', 'muhasebe'), false)
+  select coalesce(aktif_rol() in ('yonetici', 'finans'), false)
 $$;
 
-/* Kullanıcı ve ayar yönetimi. */
+/* Kullanıcı, şube, işletme bilgisi ve abonelik yönetimi. */
 create or replace function yonetici_mi()
 returns boolean language sql stable as $$
-  select coalesce(aktif_rol() in ('sahip', 'yonetici'), false)
+  select coalesce(aktif_rol() = 'yonetici', false)
 $$;
 
-/* Abonelik ve faturalama. */
-create or replace function sahip_mi()
+/* Şube düzeyinde yönetim: şube kasası özeti, hedef görünümü, personel listesi. */
+create or replace function magaza_yonetimi_mi()
 returns boolean language sql stable as $$
-  select coalesce(aktif_rol() = 'sahip', false)
+  select coalesce(aktif_rol() in ('yonetici', 'finans', 'magaza_muduru'), false)
+$$;
+
+/* Yalnızca kendi şubesinde çalışan roller. */
+create or replace function sube_rolu_mu()
+returns boolean language sql stable as $$
+  select coalesce(aktif_rol() in ('magaza_muduru', 'personel'), false)
 $$;
 
 /* Kuzmos ekibi (platform). Kiracıların iş verisine erişimi yoktur. */
@@ -68,8 +74,8 @@ $$;
 
 /*
  * Şube erişimi: önce işletme, sonra rol.
- * 'magaza' rolü yalnızca kendi şubesini görür; diğer roller işletmenin
- * tüm şubelerini görür.
+ * Şube rolleri (magaza_muduru, personel) yalnızca kendi şubesini görür;
+ * yonetici ve finans işletmenin tüm şubelerini görür.
  */
 create or replace function magaza_erisimi(p_magaza uuid)
 returns boolean language sql stable security definer set search_path = public as $$
@@ -78,7 +84,7 @@ returns boolean language sql stable security definer set search_path = public as
      where m.id = p_magaza
        and p.id = auth.uid() and p.aktif
        and m.isletme_id = p.isletme_id
-       and (p.rol <> 'magaza' or p.magaza_id = m.id)
+       and (p.rol not in ('magaza_muduru', 'personel') or p.magaza_id = m.id)
   )
 $$;
 
@@ -564,7 +570,9 @@ declare
   v_nakit    numeric(12,2);
 begin
   if aktif_rol() is null or v_isletme is null then raise exception 'Yetkisiz.'; end if;
-  v_magaza := case when aktif_rol() = 'magaza' then aktif_magaza() else p_magaza end;
+  /* Şube rolü kendi şubesini görür; yonetici/finans şube seçebilir ya da
+     boş bırakıp işletmenin tamamını görür. */
+  v_magaza := case when sube_rolu_mu() then aktif_magaza() else p_magaza end;
   v_nakit_hesap := ayar_metin(v_isletme, 'nakit_hesap', 'Nakit Kasa');
 
   select jsonb_build_object(
@@ -673,7 +681,7 @@ begin
      and h.isletme_id = v_isletme
      and h.kaynak = 'MAGAZA_MASRAF'
      and not h.silindi
-     and (aktif_rol() <> 'magaza' or h.magaza_id = v_magaza);
+     and (not sube_rolu_mu() or h.magaza_id = v_magaza);
   get diagnostics v_sayi = row_count;
   if v_sayi = 0 then return false; end if;
   insert into log (isletme_id, kullanici_id, personel, islem, tablo, kayit_id)

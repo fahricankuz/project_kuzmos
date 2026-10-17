@@ -8,7 +8,7 @@
 --   1. KİRACI İZOLASYONU — her politika önce isletme_id = aktif_isletme()
 --      kontrolünü yapar. Tarayıcıdan doğrudan sorgu atan biri de bu
 --      sınırın dışına çıkamaz (test/db/izolasyon.test.js).
---   2. ROL — sahip / yonetici / muhasebe / magaza.
+--   2. ROL — yonetici / finans / magaza_muduru / personel.
 --
 -- Ayrıca:
 --   · ABONELİK KAPISI: süresi dolan işletme SALT OKUNUR olur. Verisini
@@ -153,7 +153,7 @@ create policy ekle_magaza on siparisler for insert to authenticated
 create policy guncelle_magaza on siparisler for update to authenticated
   using (magaza_erisimi(magaza_id))
   with check (magaza_erisimi(magaza_id) and yazma_izni());
-/* Kalıcı silme yalnızca muhasebe/yönetici/sahip (mağaza çöp kutusu kullanır) */
+/* Kalıcı silme yalnızca yonetici/finans (şube rolleri çöp kutusu kullanır) */
 create policy sil_finans on siparisler for delete to authenticated
   using (isletme_erisimi(isletme_id) and finans_mi());
 
@@ -267,7 +267,8 @@ revoke execute on function aktif_magaza() from public, anon;
 revoke execute on function aktif_ad() from public, anon;
 revoke execute on function finans_mi() from public, anon;
 revoke execute on function yonetici_mi() from public, anon;
-revoke execute on function sahip_mi() from public, anon;
+revoke execute on function magaza_yonetimi_mi() from public, anon;
+revoke execute on function sube_rolu_mu() from public, anon;
 revoke execute on function platform_mi() from public, anon;
 revoke execute on function isletme_erisimi(uuid) from public, anon;
 revoke execute on function magaza_erisimi(uuid) from public, anon;
@@ -276,7 +277,8 @@ revoke execute on function yazma_izni() from public, anon;
 revoke execute on function varsayilan_magaza() from public, anon;
 
 grant execute on function aktif_rol(), aktif_isletme(), aktif_magaza(), aktif_ad(),
-                          finans_mi(), yonetici_mi(), sahip_mi(), platform_mi(),
+                          finans_mi(), yonetici_mi(), magaza_yonetimi_mi(),
+                          sube_rolu_mu(), platform_mi(),
                           isletme_erisimi(uuid), magaza_erisimi(uuid),
                           abonelik_yazabilir(uuid), yazma_izni(), varsayilan_magaza()
   to authenticated;

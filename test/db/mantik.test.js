@@ -21,8 +21,8 @@ beforeEach(async () => {
   /* Gerçek kayıt akışı: işletme kurulur, roller eklenir */
   const k = await db.kiraciKur({ onEk: 'm', ad: 'Örnek Optik', subeKod: 'DK' });
   magaza = k.magaza;
-  magazaUid = k.uid.magaza;
-  muhasebeUid = k.uid.muhasebe;
+  magazaUid = k.uid.magaza_muduru;
+  muhasebeUid = k.uid.finans;
   await db.oturumAc(magazaUid);
 });
 

@@ -5,14 +5,15 @@
   "description": "Kuzmos · Kasa & Nakit Akış Modülü — Google Apps Script backend + frontend",
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "lint": "eslint src test web/js",
-    "format": "prettier --write \"src/**/*.js\" \"test/**/*.js\" \"web/js/api.js\" \"web/js/config.js\"",
+    "lint": "eslint src test web/js tools",
+    "format": "prettier --write \"src/**/*.js\" \"test/**/*.js\" \"web/js/api.js\" \"web/js/config.js\" \"tools/*.js\"",
     "clasp:login": "clasp login",
     "clasp:push": "clasp push",
     "clasp:open": "clasp open-webapp",
     "clasp:deploy": "clasp deploy",
     "test:db": "node --experimental-vm-modules node_modules/jest/bin/jest.js test/db",
-    "test:gas": "node --experimental-vm-modules node_modules/jest/bin/jest.js test/siparis.test.js test/auth.test.js test/hareketler.test.js test/utils.test.js test/crypto.test.js test/performans.test.js"
+    "test:gas": "node --experimental-vm-modules node_modules/jest/bin/jest.js test/siparis.test.js test/auth.test.js test/hareketler.test.js test/utils.test.js test/crypto.test.js test/performans.test.js",
+    "demo": "node tools/demo-olustur.js"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.10",
@@ -20,6 +21,7 @@
     "eslint": "^8.57.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^30.5.2",
+    "playwright-core": "^1.64.1",
     "prettier": "^3.3.3"
   }
 }

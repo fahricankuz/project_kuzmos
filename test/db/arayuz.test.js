@@ -89,11 +89,12 @@ async function girisYap(email, sifre, basarisizBekle) {
 
 beforeEach(async () => {
   db = await veritabaniKur();
-  kiraci = await db.kiraciKur({ onEk: 'w', ad: 'Örnek Optik', subeKod: 'DK' });
+  kiraci = await db.kiraciKur({ onEk: 'w', ad: 'Örnek Optik', subeKod: 'KUZ' });
   kullanicilar = {
-    'w-magaza@ornek.com': { uid: kiraci.uid.magaza, sifre: 'dogruSifre1' },
-    'w-sahip@ornek.com': { uid: kiraci.uid.sahip, sifre: 'dogruSifre1' },
-    'w-muhasebe@ornek.com': { uid: kiraci.uid.muhasebe, sifre: 'dogruSifre1' }
+    'w-yonetici@ornek.com': { uid: kiraci.uid.yonetici, sifre: 'dogruSifre1' },
+    'w-finans@ornek.com': { uid: kiraci.uid.finans, sifre: 'dogruSifre1' },
+    'w-magaza_muduru@ornek.com': { uid: kiraci.uid.magaza_muduru, sifre: 'dogruSifre1' },
+    'w-personel@ornek.com': { uid: kiraci.uid.personel, sifre: 'dogruSifre1' }
   };
   await arayuzuKur();
 });
@@ -113,14 +114,14 @@ async function veritabanindan(sql, params) {
 
 describe('giriş', () => {
   test('hatalı şifre reddedilir, ekran açılmaz', async () => {
-    await girisYap('w-magaza@ornek.com', 'yanlis', true);
+    await girisYap('w-magaza_muduru@ornek.com', 'yanlis', true);
     expect(d.getElementById('loginErr').textContent).toMatch(/hatalı|başarısız/i);
     expect(d.getElementById('viewLogin').classList.contains('active')).toBe(true);
   });
 
   test('mağaza girişi sipariş ekranını açar ve rol sekmelerini kurar', async () => {
-    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
-    expect(w.KULLANICI.rol).toBe('magaza');
+    await girisYap('w-magaza_muduru@ornek.com', 'dogruSifre1');
+    expect(w.KULLANICI.rol).toBe('magaza_muduru');
     expect(d.getElementById('viewSiparis').classList.contains('active')).toBe(true);
     const nav = d.querySelector('.header[data-baslik]').innerHTML;
     expect(nav).toContain('Sipariş');
@@ -128,16 +129,16 @@ describe('giriş', () => {
     expect(nav).not.toContain('>Kasa<'); /* mağaza kasa sekmesini görmez */
   });
 
-  test('işletme sahibi girişinde kasa sekmeleri görünür', async () => {
-    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
-    expect(w.KULLANICI.rol).toBe('sahip');
+  test('yönetici girişinde kasa sekmeleri görünür', async () => {
+    await girisYap('w-yonetici@ornek.com', 'dogruSifre1');
+    expect(w.KULLANICI.rol).toBe('yonetici');
     const nav = d.querySelector('.header[data-baslik]').innerHTML;
     expect(nav).toContain('Kasa');
     expect(nav).toContain('Hareketler');
   });
 
   test('ayarlar ekranı personel ve marka listesini doldurur', async () => {
-    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
+    await girisYap('w-magaza_muduru@ornek.com', 'dogruSifre1');
     /* Yeni işletme kimsenin personel listesini devralmaz */
     expect(w.DATA.personel).toHaveLength(0);
     expect(w.DATA.isletme.ad).toBe('Örnek Optik');
@@ -149,7 +150,7 @@ describe('giriş', () => {
 });
 
 describe('sipariş formu', () => {
-  beforeEach(() => girisYap('w-magaza@ornek.com', 'dogruSifre1'));
+  beforeEach(() => girisYap('w-magaza_muduru@ornek.com', 'dogruSifre1'));
 
   function formuDoldur(opts) {
     opts = opts || {};
@@ -195,7 +196,12 @@ describe('sipariş formu', () => {
        from siparisler`
     );
     expect(s).toHaveLength(1);
-    expect(s[0]).toMatchObject({ no: 'DK-10-26-0001', ara: 10000, tutar: 10000, ad_soyad: 'Ayşe Yılmaz' });
+    expect(s[0]).toMatchObject({
+      no: 'KUZ-10-26-0001',
+      ara: 10000,
+      tutar: 10000,
+      ad_soyad: 'Ayşe Yılmaz'
+    });
 
     const h = await veritabanindan(
       `select h.yon::text as yon, h.tutar::float8 as tutar, hs.ad as hesap, h.kaynak::text as kaynak
@@ -206,10 +212,10 @@ describe('sipariş formu', () => {
 
     /* Arayüz: yerel veri yamalandı, kayıt listesi ve kasa rozeti güncellendi */
     expect(w.DATA.siparis).toHaveLength(1);
-    expect(w.DATA.siparis[0].no).toBe('DK-10-26-0001');
+    expect(w.DATA.siparis[0].no).toBe('KUZ-10-26-0001');
     w.goster('viewRecords');
     expect(d.getElementById('kayitListe').innerHTML).toContain('Ayşe Yılmaz');
-    expect(d.getElementById('kayitListe').innerHTML).toContain('DK-10-26-0001');
+    expect(d.getElementById('kayitListe').innerHTML).toContain('KUZ-10-26-0001');
   });
 
   test('elle indirim veritabanına indirimli tutar olarak gider', async () => {
@@ -260,7 +266,7 @@ describe('sipariş formu', () => {
 });
 
 describe('kasa özeti ve masraf (mağaza)', () => {
-  beforeEach(() => girisYap('w-magaza@ornek.com', 'dogruSifre1'));
+  beforeEach(() => girisYap('w-magaza_muduru@ornek.com', 'dogruSifre1'));
 
   test('masraf girilir, kasa özeti net nakdi doğru hesaplar', async () => {
     /* Önce tahsilatlı bir sipariş */
@@ -304,14 +310,14 @@ describe('kasa özeti ve masraf (mağaza)', () => {
 
 describe('yetki (arayüz + veritabanı)', () => {
   test('mağaza rolü kasa ekranına geçemez', async () => {
-    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
+    await girisYap('w-magaza_muduru@ornek.com', 'dogruSifre1');
     w.goster('viewOzet');
     expect(d.getElementById('viewOzet').classList.contains('active')).toBe(false);
     expect(w.DATA.hareketler).toEqual([]);
   });
 
-  test('işletme sahibi kasa hareketi girer ve hareket listesinde görür', async () => {
-    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
+  test('yönetici kasa hareketi girer ve hareket listesinde görür', async () => {
+    await girisYap('w-yonetici@ornek.com', 'dogruSifre1');
     w.hareketModaliAc('GIDER');
     d.getElementById('hTarih').value = '2026-10-01';
     d.getElementById('hTutar').value = '15.000';
@@ -328,7 +334,7 @@ describe('yetki (arayüz + veritabanı)', () => {
   });
 
   test('çıkış yapınca oturum kapanır', async () => {
-    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
+    await girisYap('w-magaza_muduru@ornek.com', 'dogruSifre1');
     w.cikisYap();
     await bekle();
     expect(w.TOKEN).toBeNull();
@@ -347,11 +353,11 @@ describe('kayıt ve abonelik (SaaS akışı)', () => {
     w.kayitOl();
     await kosulBekle(() => w.DATA && w.DATA.isletme && w.DATA.isletme.ad === 'Şahin Optik', 8000);
 
-    expect(w.KULLANICI.rol).toBe('sahip');
+    expect(w.KULLANICI.rol).toBe('yonetici');
     expect(w.DATA.isletme.durum).toBe('deneme');
     expect(Number(w.DATA.isletme.kalanGun)).toBe(14);
     expect(w.DATA.magazalar).toHaveLength(1);
-    expect(w.DATA.magazalar[0].kod).toBe('SA');
+    expect(w.DATA.magazalar[0].kod).toBe('KUZ');
     /* Kendi kategori/marka listesiyle başlar, kimsenin personelini almaz */
     expect(w.DATA.urunKategorileri.length).toBeGreaterThan(0);
     expect(w.DATA.personel).toHaveLength(0);
@@ -366,7 +372,7 @@ describe('kayıt ve abonelik (SaaS akışı)', () => {
   test('aynı e-posta ile ikinci kez kaydolunamaz', async () => {
     w.goster('viewKayit', true);
     d.getElementById('kayitIsletme').value = 'Deneme';
-    d.getElementById('kayitEposta').value = 'w-magaza@ornek.com';
+    d.getElementById('kayitEposta').value = 'w-magaza_muduru@ornek.com';
     d.getElementById('kayitSifre').value = 'guclüSifre1';
     w.kayitOl();
     await kosulBekle(() => /hesap var/i.test(d.getElementById('kayitErr').textContent), 6000);
@@ -389,7 +395,7 @@ describe('kayıt ve abonelik (SaaS akışı)', () => {
   });
 
   test('deneme bandı kalan günü gösterir', async () => {
-    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
+    await girisYap('w-magaza_muduru@ornek.com', 'dogruSifre1');
     const b = d.getElementById('abonelikBant');
     expect(b.className).toContain('show');
     expect(b.textContent).toMatch(/Deneme sürümü · 14 gün kaldı/);
@@ -398,7 +404,7 @@ describe('kayıt ve abonelik (SaaS akışı)', () => {
 
   test('deneme bitince uyarı bandı çıkar ve kayıt engellenir', async () => {
     await db.abonelikAyarla(kiraci.isletme, { denemeBitis: '2020-01-01' });
-    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
+    await girisYap('w-magaza_muduru@ornek.com', 'dogruSifre1');
 
     const b = d.getElementById('abonelikBant');
     expect(b.className).toContain('uyari');
@@ -420,7 +426,7 @@ describe('kayıt ve abonelik (SaaS akışı)', () => {
   });
 
   test('ayarlar ekranı abonelik kartını ve şube limitini gösterir', async () => {
-    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
+    await girisYap('w-yonetici@ornek.com', 'dogruSifre1');
     w.goster('viewAyar');
     await bekle(10);
 
@@ -432,7 +438,7 @@ describe('kayıt ve abonelik (SaaS akışı)', () => {
   });
 
   test('plan limiti aşan şube ekleme ekranda hata verir', async () => {
-    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
+    await girisYap('w-yonetici@ornek.com', 'dogruSifre1');
     w.goster('viewAyar');
     await bekle(10);
     d.getElementById('yeniSubeAd').value = 'İkinci Şube';
@@ -444,7 +450,7 @@ describe('kayıt ve abonelik (SaaS akışı)', () => {
   });
 
   test('işletme bilgileri güncellenir, ticari alanlar korunur', async () => {
-    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
+    await girisYap('w-yonetici@ornek.com', 'dogruSifre1');
     w.goster('viewAyar');
     await bekle(10);
     d.getElementById('isletmeAd').value = 'Örnek Optik A.Ş.';
@@ -457,16 +463,16 @@ describe('kayıt ve abonelik (SaaS akışı)', () => {
   });
 
   test('WhatsApp mesajı işletmenin kendi şablonunu kullanır', async () => {
-    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
-    const m = w.whatsappMesaji('Ayşe Yılmaz', 'DK-10-26-0001');
+    await girisYap('w-yonetici@ornek.com', 'dogruSifre1');
+    const m = w.whatsappMesaji('Ayşe Yılmaz', 'KUZ-10-26-0001');
     expect(m).toMatch(/Ayşe Yılmaz/);
-    expect(m).toMatch(/DK-10-26-0001/);
+    expect(m).toMatch(/KUZ-10-26-0001/);
     expect(m).toMatch(/Örnek Optik/);
     expect(m).not.toMatch(/Damla/);
   });
 
   test('ERP işareti varsayılan olarak kapalıdır, ayarla açılır', async () => {
-    await girisYap('w-sahip@ornek.com', 'dogruSifre1');
+    await girisYap('w-yonetici@ornek.com', 'dogruSifre1');
     expect(w.erpAktifMi()).toBe(false);
     expect(d.getElementById('chipErp').style.display).toBe('none');
 
@@ -480,7 +486,105 @@ describe('kayıt ve abonelik (SaaS akışı)', () => {
   });
 
   test('yazdırma başlığında işletme adı görünür', async () => {
-    await girisYap('w-magaza@ornek.com', 'dogruSifre1');
+    await girisYap('w-magaza_muduru@ornek.com', 'dogruSifre1');
     expect(d.getElementById('printFirma').textContent).toBe('Örnek Optik');
+  });
+});
+
+describe('roller (işletme içi kırılım)', () => {
+  test('personel kasa özetini ve paneli göremez', async () => {
+    await girisYap('w-personel@ornek.com', 'dogruSifre1');
+    expect(w.KULLANICI.rol).toBe('personel');
+
+    const nav = d.querySelector('.header[data-baslik]').innerHTML;
+    expect(nav).toContain('Sipariş');
+    expect(nav).toContain('Masraf');
+    expect(nav).not.toContain('>Panel<');
+    expect(nav).not.toContain('>Kasa<');
+
+    /* Gün sonu kasa rozetleri gizli */
+    expect(d.querySelector('.stat-box').style.display).toBe('none');
+    w.kasaOzetModaliAc('gun');
+    await bekle(5);
+    expect(d.getElementById('kasaOzetOverlay').classList.contains('open')).toBe(false);
+    expect(d.getElementById('toast').textContent).toMatch(/yetkiniz yok/i);
+
+    /* Sipariş girebilir */
+    w.goster('viewSiparis');
+    expect(d.getElementById('viewSiparis').classList.contains('active')).toBe(true);
+  });
+
+  test('mağaza müdürü kendi şubesinin kasa özetini görür', async () => {
+    await girisYap('w-magaza_muduru@ornek.com', 'dogruSifre1');
+    const nav = d.querySelector('.header[data-baslik]').innerHTML;
+    expect(nav).toContain('>Panel<');
+    expect(nav).not.toContain('>Hareketler<');
+    expect(d.querySelector('.stat-box').style.display).not.toBe('none');
+
+    w.kasaOzetModaliAc('gun');
+    await kosulBekle(() => d.getElementById('kasaOzetBody').innerHTML.indexOf('Hesaplanıyor') === -1);
+    expect(d.getElementById('kasaOzetBody').innerHTML).toMatch(/Nakit satış/);
+  });
+
+  test('finans kasayı görür ama kullanıcı ve şube yönetemez', async () => {
+    await girisYap('w-finans@ornek.com', 'dogruSifre1');
+    const nav = d.querySelector('.header[data-baslik]').innerHTML;
+    expect(nav).toContain('>Hareketler<');
+    w.goster('viewAyar');
+    await bekle(10);
+    expect(d.getElementById('cardKullanicilar').style.display).toBe('none');
+    expect(d.getElementById('cardSubeler').style.display).toBe('none');
+    expect(d.getElementById('cardLogo').style.display).toBe('none');
+    /* Ama personel ve marka ayarlarını düzenler */
+    expect(d.getElementById('cardPersonel').style.display).not.toBe('none');
+  });
+
+  test('yönetici kullanıcı listesinde kurucuyu görür', async () => {
+    await girisYap('w-yonetici@ornek.com', 'dogruSifre1');
+    w.goster('viewAyar');
+    await kosulBekle(() => d.getElementById('kullaniciListe').innerHTML.indexOf('@') > -1);
+    const liste = d.getElementById('kullaniciListe').innerHTML;
+    expect(liste).toContain('w-yonetici@ornek.com');
+    expect(liste).toContain('w-personel@ornek.com');
+  });
+});
+
+describe('logo', () => {
+  test('yönetici logo yükler, sipariş formu başlığında görünür', async () => {
+    await girisYap('w-yonetici@ornek.com', 'dogruSifre1');
+    w.goster('viewAyar');
+    await bekle(10);
+    expect(d.getElementById('logoOnizleme').textContent).toMatch(/yüklenmemiş/);
+
+    /* Dosya seçimini taklit et */
+    const dosya = new w.File([new w.Uint8Array([137, 80, 78, 71])], 'logo.png', {
+      type: 'image/png'
+    });
+    const girdi = d.getElementById('logoDosya');
+    Object.defineProperty(girdi, 'files', { value: [dosya], configurable: true });
+
+    w.logoYukleTikla();
+    await kosulBekle(() => !!(w.DATA.ayar && w.DATA.ayar.logoUrl), 8000);
+
+    expect(w.DATA.ayar.logoUrl).toMatch(/logolar\/.+\/logo\.png/);
+    expect(d.getElementById('printLogo').getAttribute('src')).toBe(w.DATA.ayar.logoUrl);
+    expect(d.getElementById('logoOnizleme').innerHTML).toContain('<img');
+
+    /* Veritabanında doğru klasöre yazıldı */
+    const o = await veritabanindan('select name from storage.objects');
+    expect(o[0].name).toBe(kiraci.isletme + '/logo.png');
+  });
+
+  test('logo kaldırılır', async () => {
+    await girisYap('w-yonetici@ornek.com', 'dogruSifre1');
+    await db.oturumAc(kiraci.uid.yonetici);
+    await db.calistir(`select logo_kaydet('https://cdn/logo.png')`);
+    await girisYap('w-yonetici@ornek.com', 'dogruSifre1');
+    expect(w.DATA.ayar.logoUrl).toBe('https://cdn/logo.png');
+
+    w.confirm = () => true;
+    w.logoKaldirTikla();
+    await kosulBekle(() => w.DATA.ayar.logoUrl === '', 6000);
+    expect(d.getElementById('printLogo').getAttribute('src')).toBeNull();
   });
 });

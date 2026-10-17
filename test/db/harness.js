@@ -26,9 +26,33 @@ const AUTH_SHIM = `
     $$ select nullif(current_setting('app.uid', true), '')::uuid $$;
   create or replace function auth.jwt() returns jsonb language sql stable as
     $$ select coalesce(nullif(current_setting('app.jwt', true), '')::jsonb, '{}'::jsonb) $$;
+  /* Supabase Storage'ın test karşılığı: kova + nesne tabloları ve
+     klasör yardımcısı. Gerçek projede bunlar hazır gelir. */
+  create schema if not exists storage;
+  create table storage.buckets (
+    id text primary key,
+    name text not null,
+    public boolean not null default false,
+    file_size_limit bigint,
+    allowed_mime_types text[]
+  );
+  create table storage.objects (
+    id uuid primary key default gen_random_uuid(),
+    bucket_id text not null references storage.buckets,
+    name text not null,
+    owner uuid,
+    olusturma timestamptz not null default now()
+  );
+  alter table storage.objects enable row level security;
+  create or replace function storage.foldername(name text) returns text[]
+    language sql immutable as
+    $$ select string_to_array(regexp_replace(name, '/[^/]*$', ''), '/') $$;
+
   create role anon;
   create role authenticated;
-  grant usage on schema auth to anon, authenticated;
+  grant usage on schema auth, storage to anon, authenticated;
+  grant select, insert, update, delete on storage.objects to authenticated;
+  grant select on storage.buckets to anon, authenticated;
   grant select on auth.users to authenticated;
   grant execute on function auth.uid() to anon, authenticated;
   grant execute on function auth.jwt() to anon, authenticated;
@@ -123,9 +147,9 @@ class TestDb {
     opts = opts || {};
     const onEk = opts.onEk || 'k1';
     const ad = opts.ad || 'Örnek Optik';
-    const subeKod = opts.subeKod || 'DK';
+    const subeKod = opts.subeKod || 'KUZ';
 
-    const sahip = await this.kullaniciOlustur(onEk + '-sahip@ornek.com');
+    const sahip = await this.kullaniciOlustur(onEk + '-yonetici@ornek.com');
     await this.oturumAc(sahip);
     const ozet = (
       await this.tek('select isletme_olustur($1, $2, $3, $4, $5) as o', [
@@ -142,15 +166,17 @@ class TestDb {
       await this.tek('select id from magazalar where isletme_id = $1 order by olusturma limit 1', [isletme])
     ).id;
 
-    const etiket = { muhasebe: 'Muhasebe', magaza: 'Mağaza', yonetici: 'Yönetici' };
-    const kullanicilar = { sahip: sahip };
-    for (const r of opts.roller || ['muhasebe', 'magaza']) {
+    const etiket = { finans: 'Finans', magaza_muduru: 'Mağaza Müdürü', personel: 'Personel' };
+    const subeRolu = { magaza_muduru: true, personel: true };
+    /* Kurucu kullanıcı 'yonetici' rolündedir (isletme_olustur böyle kurar) */
+    const kullanicilar = { yonetici: sahip };
+    for (const r of opts.roller || ['finans', 'magaza_muduru', 'personel']) {
       const uid = await this.kullaniciOlustur(onEk + '-' + r + '@ornek.com');
       await this.sistem();
       await this.calistir(
         `insert into profiller (id, isletme_id, magaza_id, ad, rol, eposta)
          values ($1, $2, $3, $4, $5, $6)`,
-        [uid, isletme, r === 'magaza' ? magaza : null, etiket[r] || r, r, onEk + '-' + r + '@ornek.com']
+        [uid, isletme, subeRolu[r] ? magaza : null, etiket[r] || r, r, onEk + '-' + r + '@ornek.com']
       );
       kullanicilar[r] = uid;
     }

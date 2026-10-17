@@ -203,7 +203,7 @@ begin
     raise exception 'Aboneliğiniz yazma işlemine kapalı. Lütfen planınızı yenileyin.';
   end if;
   if v_ad = '' then raise exception 'Müşteri adı zorunludur.'; end if;
-  if aktif_rol() = 'magaza' and btrim(coalesce(p_personel, '')) = '' then
+  if sube_rolu_mu() and btrim(coalesce(p_personel, '')) = '' then
     raise exception 'İşlemi yapan satış personelini seçin.';
   end if;
 
@@ -337,7 +337,7 @@ begin
   if not yazma_izni() then
     raise exception 'Aboneliğiniz yazma işlemine kapalı. Lütfen planınızı yenileyin.';
   end if;
-  if aktif_rol() = 'magaza' and btrim(coalesce(p_personel, '')) = '' then
+  if sube_rolu_mu() and btrim(coalesce(p_personel, '')) = '' then
     raise exception 'İşlemi yapan satış personelini seçin.';
   end if;
   if coalesce((p->>'tutar')::numeric, 0) <= 0 then
@@ -441,6 +441,7 @@ begin
       'Sayın {ad}, {no} numaralı siparişiniz teslimata hazırdır. {isletme} iyi günler diler.'),
     'erpAktif', coalesce(nullif(v_ham->>'erp_aktif', ''), 'hayir') in ('evet', 'true', '1'),
     'erpEtiket', coalesce(nullif(v_ham->>'erp_etiket', ''), 'ERP''ye İşlendi'),
+    'logoUrl', coalesce(v_ham->>'logo_url', ''),
     'kasaEntegrasyon', true
   );
 

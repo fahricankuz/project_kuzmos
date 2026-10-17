@@ -226,6 +226,7 @@ function gunlukGrafikCiz(gunluk){
 
 /* ═══════════ KASA ÖZET MODALI (bugün / bu ay) ═══════════ */
 function kasaOzetModaliAc(tip){
+  if(!magazaYonetimiMi()){ toast('Kasa özetini görme yetkiniz yok',false); return; }
   var deger=tip==='ay'?buAyStr():bugunStr();
   document.getElementById('kasaOzetBaslik').textContent=tip==='ay'?'Bu Ayın Kasası':'Bugünün Kasası';
   document.getElementById('kasaOzetAlt').textContent=tip==='ay'?deger:tarihGoster(deger);
@@ -402,6 +403,37 @@ function verileriIndir(){
   },function(e){ toast('Alınamadı: '+((e&&e.message)||''),false); });
 }
 
+/* ═══════════ LOGO ═══════════ */
+function logoKartiCiz(){
+  var el=document.getElementById('logoOnizleme'); if(!el)return;
+  var url=(DATA.ayar&&DATA.ayar.logoUrl)||'';
+  el.innerHTML=url
+    ? '<img src="'+esc(url)+'" alt="Logo">'
+    : 'Logo yüklenmemiş';
+}
+
+function logoYukleTikla(){
+  var g=document.getElementById('logoDosya');
+  var dosya=g&&g.files&&g.files[0];
+  if(!dosya){ toast('Dosya seçin',false); return; }
+  toast('Logo yükleniyor...');
+  gcall('logoYukle',[TOKEN,dosya],function(ayar){
+    if(ayar)DATA.ayar=ayar;
+    g.value='';
+    toast('Logo kaydedildi');
+    veriDegisti(); logoKartiCiz(); basliklariKur();
+  },function(e){ toast('Yüklenemedi: '+((e&&e.message)||''),false); });
+}
+
+function logoKaldirTikla(){
+  if(!confirm('Logo kaldırılsın mı?'))return;
+  gcall('logoKaldir',[],function(ayar){
+    if(ayar)DATA.ayar=ayar;
+    toast('Logo kaldırıldı');
+    veriDegisti(); logoKartiCiz(); basliklariKur();
+  },function(e){ toast('Kaldırılamadı: '+((e&&e.message)||''),false); });
+}
+
 /* ═══════════ MÜŞTERİ MESAJI VE ERP ═══════════ */
 function mesajAyarlariCiz(){
   var w=document.getElementById('ayarWaSablon'); if(!w)return;
@@ -433,7 +465,7 @@ function mesajAyarKaydetTikla(){
 
 /* ═══════════ HEDEF ═══════════ */
 function hedefModaliAc(ay){
-  if(!finansMi()){ toast('Hedefi yönetici/muhasebe belirler',false); return; }
+  if(!finansMi()){ toast('Hedefi yönetici veya finans belirler',false); return; }
   var a=ay||donemAy();
   document.getElementById('hedefAy').value=a;
   var h=(DATA.hedefler||{})[a];
@@ -464,10 +496,10 @@ function ayarlarCiz(){
     var e=document.getElementById(id); if(e)e.style.display=finansMi()?'':'none';
   });
   /* İşletme, şube ve kullanıcı yönetimi: sahip + yönetici */
-  ['cardKullanicilar','cardIsletme','cardSubeler'].forEach(function(id){
+  ['cardKullanicilar','cardIsletme','cardSubeler','cardLogo'].forEach(function(id){
     var e=document.getElementById(id); if(e)e.style.display=yoneticiMi()?'':'none';
   });
-  if(yoneticiMi()){ isletmeKartiCiz(); subeListesiCiz(); kullanicilariYukle(); }
+  if(yoneticiMi()){ isletmeKartiCiz(); subeListesiCiz(); logoKartiCiz(); kullanicilariYukle(); }
   if(finansMi())mesajAyarlariCiz();
   if(!finansMi())return;
 

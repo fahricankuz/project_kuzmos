@@ -5,32 +5,47 @@ var donemOfset=0, gunleriGoster=false, kayitLimit=100;
 /* Her veri değişiminde artar; ağır hesapların önbelleğini geçersiz kılar. */
 var DATA_SURUM=0;
 var AYLAR=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-var ROL_ETIKET={sahip:'İşletme Sahibi',yonetici:'Yönetici',muhasebe:'Muhasebe',magaza:'Mağaza'};
+var ROL_ETIKET={yonetici:'Yönetici',finans:'Finans',magaza_muduru:'Mağaza Müdürü',personel:'Personel'};
 var DURUMLAR=['Satış Yapıldı','Cam Siparişi Verildi','Montaj Yapıldı','Teslim Edildi'];
 var DURUM_KISA=['Satış','Cam Sip.','Montaj','Teslim'];
 var DURUM_RENK=['#378ADD','#BA7517','#639922','#639922'];
 var GECIKME_LIMIT={'Satış Yapıldı':1,'Cam Siparişi Verildi':7,'Montaj Yapıldı':1};
 
-/* Rol bazlı sekmeler: [viewId, etiket, roller] */
+/*
+ * Rol bazlı sekmeler: [viewId, etiket, roller]
+ *   yonetici      — her şey + kullanıcı/şube/işletme yönetimi
+ *   finans        — kasa, rapor, cari, banka (kullanıcı yönetmez)
+ *   magaza_muduru — kendi şubesi + şube kasası özeti ve paneli
+ *   personel      — kendi şubesi: sipariş, tahsilat, müşteri, masraf
+ */
+var TUM_ROLLER=['yonetici','finans','magaza_muduru','personel'];
+var SUBE_YONETIM=['yonetici','finans','magaza_muduru'];
+var FINANS_ROLLER=['yonetici','finans'];
 var NAVS=[
-  ['viewSiparis','Sipariş',['magaza','muhasebe','yonetici','sahip']],
-  ['viewRecords','Kayıtlar',['magaza','muhasebe','yonetici','sahip']],
-  ['viewCustomers','Müşteriler',['magaza','muhasebe','yonetici','sahip']],
-  ['viewPipeline','Pipeline',['magaza','muhasebe','yonetici','sahip']],
-  ['viewPanel','Panel',['magaza','muhasebe','yonetici','sahip']],
-  ['viewMasraf','Masraf',['magaza','muhasebe','yonetici','sahip']],
-  ['viewOzet','Kasa',['muhasebe','yonetici','sahip']],
-  ['viewRapor','Rapor',['muhasebe','yonetici','sahip']],
-  ['viewHareket','Hareketler',['muhasebe','yonetici','sahip']],
-  ['viewCari','Planlanan',['muhasebe','yonetici','sahip']],
-  ['viewBanka','Banka',['muhasebe','yonetici','sahip']],
-  ['viewYillik','Yıllık',['muhasebe','yonetici','sahip']],
-  ['viewAyar','Ayarlar',['magaza','muhasebe','yonetici','sahip']]
+  ['viewSiparis','Sipariş',TUM_ROLLER],
+  ['viewRecords','Kayıtlar',TUM_ROLLER],
+  ['viewCustomers','Müşteriler',TUM_ROLLER],
+  ['viewPipeline','Pipeline',TUM_ROLLER],
+  ['viewPanel','Panel',SUBE_YONETIM],
+  ['viewMasraf','Masraf',TUM_ROLLER],
+  ['viewOzet','Kasa',FINANS_ROLLER],
+  ['viewRapor','Rapor',FINANS_ROLLER],
+  ['viewHareket','Hareketler',FINANS_ROLLER],
+  ['viewCari','Planlanan',FINANS_ROLLER],
+  ['viewBanka','Banka',FINANS_ROLLER],
+  ['viewYillik','Yıllık',FINANS_ROLLER],
+  ['viewAyar','Ayarlar',TUM_ROLLER]
 ];
 
-function rol(){ return KULLANICI?KULLANICI.rol:'magaza'; }
-function finansMi(){ var r=rol(); return r==='muhasebe'||r==='yonetici'||r==='sahip'; }
-function yoneticiMi(){ var r=rol(); return r==='yonetici'||r==='sahip'; }
+function rol(){ return KULLANICI?KULLANICI.rol:'personel'; }
+/** İşletme kasasının tamamı ve raporlar. */
+function finansMi(){ var r=rol(); return r==='yonetici'||r==='finans'; }
+/** Kullanıcı, şube, işletme bilgisi ve abonelik. */
+function yoneticiMi(){ return rol()==='yonetici'; }
+/** Şube kasası özeti, hedef ve panel. */
+function magazaYonetimiMi(){ return SUBE_YONETIM.indexOf(rol())>-1; }
+/** Yalnızca kendi şubesinde çalışan roller. */
+function subeRoluMu(){ var r=rol(); return r==='magaza_muduru'||r==='personel'; }
 
 /* ═══════════ PARA / TARİH ═══════════ */
 function pTR(s){ if(s==null||s==='')return 0; if(typeof s==='number')return s;
@@ -146,7 +161,7 @@ function verileriYukle(ilk){
        sipariş ekranı açılır — ilk iş sipariş girmektir. */
     if(ilk!==false){
       var ilkKurulum=!(DATA.siparis||[]).length;
-      goster((rol()==='magaza'||ilkKurulum)?'viewSiparis':'viewOzet',true);
+      goster((subeRoluMu()||ilkKurulum)?'viewSiparis':'viewOzet',true);
     }
     /* Form sadece hiç kurulmamışsa hazırlanır; doldurulmuş form asla silinmez. */
     if(!formKirli&&!formUrunler.length) siparisFormTemizle(false);
@@ -194,6 +209,11 @@ function basliklariKur(){
   /* Yazdırma başlığı ve ERP alanı işletmeye göre ayarlanır */
   var pf=document.getElementById('printFirma');
   if(pf)pf.textContent=(DATA.isletme&&DATA.isletme.ad)||'';
+  var pl=document.getElementById('printLogo');
+  if(pl){
+    var logo=(DATA.ayar&&DATA.ayar.logoUrl)||'';
+    if(logo)pl.setAttribute('src',logo); else pl.removeAttribute('src');
+  }
   if(typeof erpAlaniKur==='function')erpAlaniKur();
   var gorunur=NAVS.filter(function(n){ return n[2].indexOf(r)>-1; });
   document.querySelectorAll('.header[data-baslik]').forEach(function(h){
@@ -385,7 +405,7 @@ function pickTemizle(){ var f=pickCtx&&pickCtx.temizle; modalKapat(null,'pickOve
 /* Personel seçimi: mağaza rolünde zorunlu, diğer rollerde doğrudan devam */
 var personelSecCtx=null;
 function personelSor(varsayilan,devam){
-  if(rol()!=='magaza'){ devam(varsayilan||''); return; }
+  if(!subeRoluMu()){ devam(varsayilan||''); return; }
   var liste=(DATA.personel||[]).filter(function(p){return p.aktif!==false;});
   personelSecCtx=devam;
   document.getElementById('personelSecGrid').innerHTML=liste.map(function(p){
@@ -483,6 +503,10 @@ function donemTahsilat(donem){
   return t;
 }
 function kasaRozetleriGuncelle(){
+  /* Gün sonu kasa sayımı mağaza müdürünün işi; personel rolü görmez */
+  var gorunur=magazaYonetimiMi();
+  document.querySelectorAll('.stat-box').forEach(function(e){ e.style.display=gorunur?'':'none'; });
+  if(!gorunur)return;
   var bugun=donemTahsilat(bugunStr()), ay=donemTahsilat(buAyStr());
   document.querySelectorAll('[id^="hdrBugun_"]').forEach(function(e){e.textContent=fTR(bugun)+' ₺';});
   document.querySelectorAll('[id^="hdrAy_"]').forEach(function(e){e.textContent=fTR(ay)+' ₺';});

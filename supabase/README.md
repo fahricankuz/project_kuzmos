@@ -1,16 +1,18 @@
 # Kuzmos · Veri katmanı (Supabase / Postgres)
 
-Kuzmos **çok kiracılı (multi-tenant) bir SaaS** olarak kurulur: tek bir
-Supabase projesi, içinde birbirinden yalıtılmış İŞLETMELER.
+Kuzmos aylık abonelikle satılan bir üründür: **tek bir Supabase projesi**,
+içinde birbirinden yalıtılmış **abone işletmeler**. (Mimarinin teknik adı
+çok kiracılı / multi-tenant; "kiracı" dediğimiz şey abone optik
+işletmesidir.)
 
 ```
-isletmeler (kiracı / abone)
+isletmeler (abone optik işletmesi)
   ├── magazalar (şubeler)
   │     └── siparisler → siparis_urunleri, odemeler
   ├── musteriler, personel, hesaplar, kategoriler, markalar, ayarlar
   ├── hareketler (kasa), hedefler, cari_plan, banka_dogrulama, tekrarlayan
   └── log
-planlar · abonelik_hareketleri · platform_yoneticileri   (platform katmanı)
+planlar · abonelik_hareketleri · platform_yoneticileri   (Kuzmos ekibi)
 ```
 
 ## Dosyalar
@@ -18,29 +20,32 @@ planlar · abonelik_hareketleri · platform_yoneticileri   (platform katmanı)
 | Dosya | Ne yapar |
 |---|---|
 | `migrations/0001_sema.sql` | Tablolar, tipler, indeksler; platform + kiracı katmanı |
-| `migrations/0002_mantik.sql` | Sipariş no, toplamlar, teslim tarihi, sipariş→kasa senkronu, kasa özeti, kiracı damgası |
-| `migrations/0003_guvenlik.sql` | RLS: kiracı izolasyonu + rol + abonelik kapısı |
+| `migrations/0002_mantik.sql` | Sipariş no, toplamlar, teslim tarihi, sipariş→kasa senkronu, kasa özeti, işletme damgası |
+| `migrations/0003_guvenlik.sql` | RLS: işletme yalıtımı + rol + abonelik kapısı |
 | `migrations/0004_api.sql` | Uygulama uçları: `tum_veri()`, `siparis_kaydet()`, `abonelik_ozeti()` … |
 | `migrations/0005_kullanicilar.sql` | Kullanıcı/şube yönetimi, plan limitleri, veri aktarımı |
 | `migrations/0006_onboarding.sql` | `isletme_olustur()` (kayıt), varsayılanlar, platform uçları |
+| `migrations/0007_logo.sql` | İşletme logosu (Storage kovası ve yetkileri) |
 | `seed.sql` | Yalnızca satış paketleri (`planlar`) |
 
 Hepsi `test/db/*.test.js` ile gerçek Postgres üzerinde test edilir
-(`npm run test:db` — 180 test). Test ortamı PGlite kullanır, Supabase'e
+(`npm run test:db` — 190 test). Test ortamı PGlite kullanır, Supabase'e
 bağlanmaz.
 
-## Çok kiracılı güvenlik — nasıl çalışıyor
+## Güvenlik — nasıl çalışıyor
 
 Üç bağımsız katman:
 
-1. **Kiracı izolasyonu.** Kiracıya ait her tabloda `isletme_id` var ve her
+1. **İşletme yalıtımı.** İşletmeye ait her tabloda `isletme_id` var ve her
    RLS politikası önce `isletme_id = aktif_isletme()` kontrolünü yapar.
    `isletme_id` istemciden GELMEZ: `isletme_damgala()` trigger'ı onu üst
    kayıttan (şube/kategori/hesap) veya oturumdan damgalar. İstemci başka bir
    işletmenin id'sini göndererek veri sızdıramaz.
-2. **Rol.** `sahip` (abonelik dahil her şey) · `yonetici` (kullanıcı/ayar) ·
-   `muhasebe` (kasa/rapor) · `magaza` (yalnızca kendi şubesi, kasanın
-   tamamını göremez).
+2. **Rol.** `yonetici` (kullanıcı, şube, ayar, abonelik) · `finans` (kasa,
+   rapor, cari, banka) · `magaza_muduru` (kendi şubesi + şube kasası özeti)
+   · `personel` (kendi şubesi: sipariş, tahsilat, müşteri, masraf; kasa
+   özetini görmez). İşletmeyi kuran kullanıcı `kurucu` işaretlidir: rolü
+   düşürülemez, hesabı pasife alınamaz.
 3. **Abonelik kapısı.** Süresi dolan işletme **salt okunur** olur:
    verisini görür ve indirir, yeni kayıt giremez (`yazma_izni()`). Veriyi
    rehin almak yok — KVKK taşınabilirlik hakkı da bunu gerektirir.
@@ -60,6 +65,16 @@ Ayrıca:
 
 `test/db/izolasyon.test.js` 15 tabloyu tek tek dolaşıp iki ayrı işletmenin
 birbirini görmediğini doğrular; bir politika eksik kalırsa test kırılır.
+Logo dosyaları da aynı sınıra tabidir: her işletme yalnızca kendi
+klasörüne (`logolar/<isletme_id>/`) yazabilir.
+
+## Sipariş numarası ve logo
+
+Sipariş numarası ürün biçimindedir: **KUZ-10-26-0001** (ön ek · ay · yıl ·
+sıra). Ön ek şube kodudur ve yeni işletmede `KUZ` olarak açılır; sipariş
+formunda işletmeyi **logosu** temsil eder (Ayarlar → Logo). Çok şubeli
+işletmeler ikinci şubeye farklı bir kod verir — her şubenin kendi sayacı
+vardır.
 
 ## Kurulum
 
@@ -68,7 +83,7 @@ birbirini görmediğini doğrular; bir politika eksik kalırsa test kırılır.
    **Frankfurt (eu-central-1)**, veritabanı şifresini kaydet.
 2. **SQL Editor** → aşağıdaki dosyaların içeriğini **sırayla** yapıştır + Run:
    `0001_sema` → `0002_mantik` → `0003_guvenlik` → `0004_api` →
-   `0005_kullanicilar` → `0006_onboarding` → `seed.sql`
+   `0005_kullanicilar` → `0006_onboarding` → `0007_logo` → `seed.sql`
 
 ### 2. Kayıt akışını aç
 **Authentication → Providers → Email**: "Enable email provider" açık olsun.
@@ -141,3 +156,5 @@ Kod tarafı hazır; bunlar **senin ticari kararına** bağlı ve ayrıca kurulma
   (`delete from isletmeler ... cascade`), erişim günlüğü (`log`).
 - **Platform paneli.** `platform_ozet()` verisi hazır; ayrı bir yönetim
   ekranı henüz yok (şimdilik SQL Editor).
+- **Logo kovası** `0007_logo.sql` ile açılır; Storage → `logolar` kovasının
+  oluştuğunu Supabase panelinden doğrulayabilirsin.

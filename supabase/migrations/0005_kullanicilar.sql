@@ -10,14 +10,15 @@ create or replace function kullanici_listesi()
 returns jsonb language sql stable as $$
   select coalesce(jsonb_agg(jsonb_build_object(
     'email', p.eposta, 'ad', p.ad, 'rol', p.rol, 'aktif', p.aktif,
-    'magaza', coalesce(m.ad, ''), 'sonGiris', ''
+    'kurucu', p.kurucu, 'magaza', coalesce(m.ad, ''), 'sonGiris', ''
   ) order by p.rol, p.ad), '[]'::jsonb)
   from profiller p left join magazalar m on m.id = p.magaza_id
 $$;
 
 /*
  * Yeni kullanıcının profilini açar (auth kaydı tarayıcıda signUp ile
- * yapılır). Plan limiti burada kontrol edilir; 'sahip' rolü atanamaz.
+ * yapılır). Plan limiti burada kontrol edilir; işletmeyi kuran kullanıcının
+ * (kurucu) rolü başkası tarafından düşürülemez.
  */
 create or replace function profil_olustur(
   p_eposta text, p_ad text, p_rol text, p_magaza_kod text default null
@@ -36,9 +37,6 @@ begin
   end if;
 
   v_rol := p_rol::rol_tipi;
-  if v_rol = 'sahip' then
-    raise exception 'Sahip rolü devredilerek değişir, elle atanamaz.';
-  end if;
 
   select id into v_uid from auth.users where lower(email) = lower(btrim(p_eposta));
   if v_uid is null then
@@ -57,11 +55,18 @@ begin
     raise exception 'Planınız en fazla % kullanıcıya izin veriyor. Planı yükseltin.', v_limit;
   end if;
 
-  if v_rol = 'magaza' then
+  if v_rol in ('magaza_muduru', 'personel') then
     select id into v_magaza from magazalar
      where isletme_id = v_isletme and kod = coalesce(btrim(p_magaza_kod), kod)
      order by (kod = btrim(coalesce(p_magaza_kod, ''))) desc, olusturma limit 1;
     if v_magaza is null then raise exception 'Şube bulunamadı: %', p_magaza_kod; end if;
+  end if;
+
+  /* Kurucunun rolü düşürülemez (kendisi hariç kimse değiştiremez) */
+  perform 1 from profiller
+   where id = v_uid and kurucu and v_rol <> 'yonetici' and id <> auth.uid();
+  if found then
+    raise exception 'İşletmeyi kuran kullanıcının rolü düşürülemez.';
   end if;
 
   insert into profiller (id, isletme_id, magaza_id, ad, rol, eposta)
@@ -81,16 +86,17 @@ declare
   v_isletme uuid := aktif_isletme();
   v_uid     uuid;
   v_rol     rol_tipi;
+  v_kurucu  boolean;
 begin
   if not yonetici_mi() then raise exception 'Bu işlem için yetkiniz yok.'; end if;
-  select id, rol into v_uid, v_rol from profiller
-   where isletme_id = v_isletme and lower(eposta) = lower(btrim(p_eposta));
+  select p.id, p.rol, p.kurucu into v_uid, v_rol, v_kurucu from profiller p
+   where p.isletme_id = v_isletme and lower(p.eposta) = lower(btrim(p_eposta));
   if v_uid is null then raise exception 'Kullanıcı bulunamadı.'; end if;
   if v_uid = auth.uid() and not p_aktif then
     raise exception 'Kendi hesabınızı pasif yapamazsınız.';
   end if;
-  if v_rol = 'sahip' and not p_aktif then
-    raise exception 'İşletme sahibinin hesabı pasife alınamaz.';
+  if v_kurucu and not p_aktif then
+    raise exception 'İşletmeyi kuran kullanıcının hesabı pasife alınamaz.';
   end if;
   update profiller set aktif = p_aktif where id = v_uid;
   perform log_ekle('KULLANICI_DURUM', 'profiller', v_uid::text, '',

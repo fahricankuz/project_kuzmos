@@ -18,7 +18,14 @@
 --   · Tutarlar numeric(12,2) — kayan nokta hatası yok.
 -- ═══════════════════════════════════════════════════════════════════════
 
-create type rol_tipi as enum ('sahip', 'yonetici', 'muhasebe', 'magaza');
+/*
+ * İşletme içi roller (Kuzmos ekibi bunlardan ayrıdır: platform_yoneticileri)
+ *   yonetici      — işletmenin tamamı: kullanıcı, şube, ayar, kasa, rapor
+ *   finans        — kasa, rapor, cari, banka; kullanıcı/şube yönetemez
+ *   magaza_muduru — kendi şubesi: sipariş, müşteri, masraf, şube kasası
+ *   personel      — kendi şubesi: sipariş, tahsilat, müşteri, masraf
+ */
+create type rol_tipi as enum ('yonetici', 'finans', 'magaza_muduru', 'personel');
 create type abonelik_durumu as enum ('deneme', 'aktif', 'odeme_bekliyor', 'askida', 'iptal');
 create type siparis_durumu as enum (
   'Satış Yapıldı', 'Cam Siparişi Verildi', 'Montaj Yapıldı', 'Teslim Edildi'
@@ -118,10 +125,13 @@ create index magazalar_isletme_idx on magazalar (isletme_id);
 create table profiller (
   id          uuid primary key references auth.users on delete cascade,
   isletme_id  uuid references isletmeler on delete cascade,
+  /* null => işletmenin tüm şubeleri (yonetici/finans) */
   magaza_id   uuid references magazalar on delete set null,
   ad          text not null default '',
   eposta      text not null default '',
-  rol         rol_tipi not null default 'magaza',
+  rol         rol_tipi not null default 'personel',
+  /* İşletmeyi kuran kullanıcı: pasife alınamaz, rolü düşürülemez */
+  kurucu      boolean not null default false,
   aktif       boolean not null default true,
   olusturma   timestamptz not null default now()
 );

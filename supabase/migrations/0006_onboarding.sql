@@ -3,7 +3,8 @@
 --
 -- Bir optik işletmesi kendi kendine kaydolur:
 --   1. Tarayıcı auth.signUp ile hesap açar
---   2. isletme_olustur(...) işletmeyi + ilk şubeyi + sahip profilini kurar
+--   2. isletme_olustur(...) işletmeyi + ilk şubeyi + yönetici (kurucu)
+--      profilini kurar
 --      ve o işletmeye ait varsayılan listeleri yükler
 --   3. 14 günlük deneme başlar
 --
@@ -24,12 +25,15 @@ begin
   return left(v, 40);
 end $$;
 
-/* Şube kodu: "Damlakuz Optik" → "DA" (sipariş numarası ön eki) */
+/*
+ * Sipariş numarası ön eki. Varsayılan ürün ön eki 'KUZ' — sipariş formunda
+ * işletmeyi logosu temsil eder, numara biçimi KUZ-10-26-0001 olarak sabittir.
+ * Çok şubeli işletmeler ikinci şubeye farklı bir kod verir (şube başına
+ * benzersiz olmak zorunda: her şubenin kendi sayacı var).
+ */
 create or replace function sube_kodu_uret(p_ad text)
 returns text language sql immutable as $$
-  select upper(left(regexp_replace(
-    translate(coalesce(p_ad, 'KZ'), 'ĞÜŞİÖÇğüşıöç', 'GUSIOCgusioc'), '[^A-Za-z0-9]', '', 'g'
-  ) || 'KZ', 2))
+  select 'KUZ'
 $$;
 
 /* Yeni işletmeye varsayılan ayar, kategori, marka ve kasa ağacını yükler. */
@@ -157,13 +161,13 @@ begin
                          sube_kodu_uret(p_isletme_ad))))
   returning id into v_magaza;
 
-  insert into profiller (id, isletme_id, magaza_id, ad, rol, eposta)
+  insert into profiller (id, isletme_id, magaza_id, ad, rol, kurucu, eposta)
   values (v_uid, v_isletme, null,
           coalesce(nullif(btrim(p_ad_soyad), ''), split_part(v_eposta, '@', 1)),
-          'sahip', lower(v_eposta))
+          'yonetici', true, lower(v_eposta))
   on conflict (id) do update
-    set isletme_id = excluded.isletme_id, ad = excluded.ad, rol = 'sahip',
-        eposta = excluded.eposta, aktif = true;
+    set isletme_id = excluded.isletme_id, ad = excluded.ad, rol = 'yonetici',
+        kurucu = true, eposta = excluded.eposta, aktif = true;
 
   perform isletme_varsayilanlari(v_isletme);
 

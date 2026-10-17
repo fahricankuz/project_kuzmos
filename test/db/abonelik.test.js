@@ -24,8 +24,14 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await db.sifirla();
-  k = await db.kiraciKur({ onEk: 'ab', ad: 'Deneme Optik', subeKod: 'DN' });
-  await db.oturumAc(k.uid.magaza);
+  /* Deneme planı 3 kullanıcıyla sınırlı: kurucu + personel = 2 */
+  k = await db.kiraciKur({
+    onEk: 'ab',
+    ad: 'Deneme Optik',
+    subeKod: 'DN',
+    roller: ['personel']
+  });
+  await db.oturumAc(k.uid.personel);
 });
 
 function siparis(ek) {
@@ -61,7 +67,7 @@ describe('deneme süresi', () => {
   test('deneme bitince yazma kapanır, okuma açık kalır', async () => {
     const ilk = await kaydet();
     await db.abonelikAyarla(k.isletme, { denemeBitis: '2020-01-01' });
-    await db.oturumAc(k.uid.magaza);
+    await db.oturumAc(k.uid.personel);
 
     const o = (await db.tek('select abonelik_ozeti() as o')).o;
     expect(o.yazabilir).toBe(false);
@@ -85,7 +91,7 @@ describe('deneme süresi', () => {
     /* Okuma ve dışa aktarma açık */
     const v = (await db.tek('select tum_veri() as v')).v;
     expect(v.siparis).toHaveLength(1);
-    await db.oturumAc(k.uid.sahip);
+    await db.oturumAc(k.uid.yonetici);
     const d = (await db.tek('select isletme_verisi_aktar() as d')).d;
     expect(d.siparisler).toHaveLength(1);
   });
@@ -93,7 +99,7 @@ describe('deneme süresi', () => {
   test('askıya alınmış işletme de salt okunur', async () => {
     await kaydet();
     await db.abonelikAyarla(k.isletme, { durum: 'askida' });
-    await db.oturumAc(k.uid.magaza);
+    await db.oturumAc(k.uid.personel);
     expect((await db.tek('select abonelik_ozeti() as o')).o.yazabilir).toBe(false);
     expect(await hataBekle(() => kaydet({ adSoyad: 'X' }))).toMatch(/Aboneliğiniz/);
     expect((await db.tek('select tum_veri() as v')).v.siparis).toHaveLength(1);
@@ -101,7 +107,7 @@ describe('deneme süresi', () => {
 
   test('ödeme bekleyen işletme yazmaya devam eder (ödeme hatırlatma dönemi)', async () => {
     await db.abonelikAyarla(k.isletme, { durum: 'odeme_bekliyor' });
-    await db.oturumAc(k.uid.magaza);
+    await db.oturumAc(k.uid.personel);
     expect((await db.tek('select abonelik_ozeti() as o')).o.yazabilir).toBe(true);
     expect((await kaydet()).s.no).toBeTruthy();
   });
@@ -112,20 +118,20 @@ describe('deneme süresi', () => {
       plan: 'temel',
       abonelikBitis: '2020-01-01'
     });
-    await db.oturumAc(k.uid.magaza);
+    await db.oturumAc(k.uid.personel);
     expect((await db.tek('select abonelik_ozeti() as o')).o.yazabilir).toBe(false);
   });
 
   test('yenilenen abonelikte yazma geri açılır', async () => {
     await db.abonelikAyarla(k.isletme, { denemeBitis: '2020-01-01' });
-    await db.oturumAc(k.uid.magaza);
+    await db.oturumAc(k.uid.personel);
     expect(await hataBekle(() => kaydet())).toMatch(/Aboneliğiniz/);
     await db.abonelikAyarla(k.isletme, {
       durum: 'aktif',
       plan: 'temel',
       abonelikBitis: '2030-01-01'
     });
-    await db.oturumAc(k.uid.magaza);
+    await db.oturumAc(k.uid.personel);
     expect((await kaydet()).s.no).toBeTruthy();
   });
 
@@ -141,39 +147,45 @@ describe('deneme süresi', () => {
 
 describe('plan limitleri', () => {
   test('deneme planı 3 kullanıcıyla sınırlı', async () => {
+    await db.kullaniciOlustur('ab-uc@ornek.com');
     await db.kullaniciOlustur('ab-dort@ornek.com');
-    await db.oturumAc(k.uid.sahip);
-    /* sahip + muhasebe + magaza = 3, dördüncü reddedilir */
+    await db.oturumAc(k.uid.yonetici);
+    /* kurucu + personel = 2; üçüncü girer, dördüncü reddedilir */
+    expect(
+      (await db.tek(`select profil_olustur('ab-uc@ornek.com', 'Üçüncü', 'finans', null) as ok`)).ok
+    ).toBe(true);
     expect(
       await hataBekle(() =>
-        db.calistir(`select profil_olustur('ab-dort@ornek.com', 'Dördüncü', 'muhasebe', null)`)
+        db.calistir(`select profil_olustur('ab-dort@ornek.com', 'Dördüncü', 'finans', null)`)
       )
     ).toMatch(/en fazla 3 kullanıcı/);
   });
 
   test('pasife alınan kullanıcı limitten düşer', async () => {
+    await db.kullaniciOlustur('ab-uc@ornek.com');
     await db.kullaniciOlustur('ab-dort@ornek.com');
-    await db.oturumAc(k.uid.sahip);
-    await db.calistir(`select kullanici_durum_degistir('ab-muhasebe@ornek.com', false)`);
+    await db.oturumAc(k.uid.yonetici);
+    await db.calistir(`select profil_olustur('ab-uc@ornek.com', 'Üçüncü', 'finans', null)`);
+    await db.calistir(`select kullanici_durum_degistir('ab-uc@ornek.com', false)`);
     expect(
-      (await db.tek(`select profil_olustur('ab-dort@ornek.com', 'Dördüncü', 'muhasebe', null) as ok`)).ok
+      (await db.tek(`select profil_olustur('ab-dort@ornek.com', 'Dördüncü', 'finans', null) as ok`)).ok
     ).toBe(true);
   });
 
   test('deneme planı tek şube; Pro üçe çıkarır', async () => {
-    await db.oturumAc(k.uid.sahip);
+    await db.oturumAc(k.uid.yonetici);
     expect(await hataBekle(() => db.calistir(`select magaza_ekle('İkinci', 'IK')`))).toMatch(
       /en fazla 1 şube/
     );
     await db.abonelikAyarla(k.isletme, { plan: 'pro' });
-    await db.oturumAc(k.uid.sahip);
+    await db.oturumAc(k.uid.yonetici);
     expect((await db.tek(`select magaza_ekle('İkinci', 'IK') as m`)).m.kod).toBe('IK');
     expect(Number((await db.tek('select abonelik_ozeti() as o')).o.magazaSayisi)).toBe(2);
   });
 
   test('şube kodu sipariş numarasında kullanılır, biçimi doğrulanır', async () => {
     await db.abonelikAyarla(k.isletme, { plan: 'pro' });
-    await db.oturumAc(k.uid.sahip);
+    await db.oturumAc(k.uid.yonetici);
     expect(await hataBekle(() => db.calistir(`select magaza_ekle('Hatalı', 'çok uzun kod')`))).toMatch(
       /1-6 harf/
     );
@@ -182,7 +194,7 @@ describe('plan limitleri', () => {
   test('süresi dolan işletme yeni kullanıcı/şube ekleyemez', async () => {
     await db.abonelikAyarla(k.isletme, { plan: 'pro', denemeBitis: '2020-01-01' });
     await db.kullaniciOlustur('ab-yeni@ornek.com');
-    await db.oturumAc(k.uid.sahip);
+    await db.oturumAc(k.uid.yonetici);
     expect(
       await hataBekle(() =>
         db.calistir(`select profil_olustur('ab-yeni@ornek.com', 'Yeni', 'muhasebe', null)`)
@@ -200,7 +212,7 @@ describe('kayıt (onboarding)', () => {
   });
 
   test('zaten bir işletmeye bağlı kullanıcı ikinci işletme kuramaz', async () => {
-    await db.oturumAc(k.uid.sahip);
+    await db.oturumAc(k.uid.yonetici);
     expect(await hataBekle(() => db.calistir(`select isletme_olustur('İkinci İşletme')`))).toMatch(
       /zaten bir işletmeye bağlı/i
     );
@@ -214,26 +226,38 @@ describe('kayıt (onboarding)', () => {
     );
   });
 
-  test('kurulumda şube kodu verilmezse addan üretilir', async () => {
+  test('şube kodu verilmezse ürün ön eki KUZ kullanılır', async () => {
     const uid = await db.kullaniciOlustur('ab-kodsuz@ornek.com');
     await db.oturumAc(uid);
     await db.calistir(`select isletme_olustur('Şahin Optik', 'Ali', '', '', '')`);
     const m = await db.tek(`select kod from magazalar where ad = 'Şahin Optik'`);
-    expect(m.kod).toBe('SA');
+    expect(m.kod).toBe('KUZ');
   });
 
-  test('sahip rolü elle atanamaz', async () => {
-    await db.kullaniciOlustur('ab-sahte@ornek.com');
-    await db.oturumAc(k.uid.sahip);
+  test('kurucunun rolü düşürülemez, hesabı pasife alınamaz', async () => {
+    await db.oturumAc(k.uid.personel);
+    const kurucuEposta = 'ab-yonetici@ornek.com';
+    await db.oturumAc(k.uid.yonetici);
+    /* Kurucu kendi rolünü koruyabilir ama başka biri düşüremez */
+    expect(
+      await hataBekle(() => db.calistir(`select kullanici_durum_degistir($1, false)`, [kurucuEposta]))
+    ).toMatch(/Kendi hesabınızı|kuran kullanıcının/);
+
+    await db.kullaniciOlustur('ab-yeni-yonetici@ornek.com');
+    await db.calistir(
+      `select profil_olustur('ab-yeni-yonetici@ornek.com', 'İkinci Yönetici', 'yonetici', null)`
+    );
+    const yeni = await db.tek(`select id from profiller where eposta = 'ab-yeni-yonetici@ornek.com'`);
+    await db.oturumAc(yeni.id);
     expect(
       await hataBekle(() =>
-        db.calistir(`select profil_olustur('ab-sahte@ornek.com', 'Sahte Sahip', 'sahip', null)`)
+        db.calistir(`select profil_olustur($1, 'Düşürme Denemesi', 'personel', 'DN')`, [kurucuEposta])
       )
-    ).toMatch(/Sahip rolü/);
+    ).toMatch(/kuran kullanıcının rolü düşürülemez/);
   });
 
   test('kurumsal bilgiler güncellenir, ticari alanlar korunur', async () => {
-    await db.oturumAc(k.uid.sahip);
+    await db.oturumAc(k.uid.yonetici);
     const o = (
       await db.tek('select isletme_guncelle($1::jsonb) as o', [
         JSON.stringify({

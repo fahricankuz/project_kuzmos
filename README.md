@@ -8,22 +8,26 @@ yönetici aynı veriden rapor alır. Mağaza kasanın tamamını göremez.
 14 gün dener, kendi yalıtılmış verisiyle devam eder (bkz. *Ürün: çok
 kiracılı SaaS*).
 
-## Roller
+## Roller (abone işletmenin kendi içinde)
 
-| Yetki | magaza | muhasebe | yonetici | sahip |
+| Yetki | personel | magaza_muduru | finans | yonetici |
 | --- | --- | --- | --- | --- |
 | Sipariş oluştur / düzenle / tahsilat / iade | ✅ | ✅ | ✅ | ✅ |
-| Müşteriler, pipeline, mağaza paneli | ✅ | ✅ | ✅ | ✅ |
+| Müşteriler, pipeline | ✅ | ✅ | ✅ | ✅ |
 | Mağaza masrafı girme | ✅ | ✅ | ✅ | ✅ |
-| Günün/ayın kasası özeti | ✅ | ✅ | ✅ | ✅ |
-| Kasa hareketleri, rapor, cari, banka, yıllık | ❌ | ✅ | ✅ | ✅ |
-| Personel / marka / hedef / oran ayarları | ❌ | ✅ | ✅ | ✅ |
-| Kullanıcı ve şube yönetimi, işletme bilgileri | ❌ | ❌ | ✅ | ✅ |
-| Siparişi kalıcı silme | ❌ | ✅ | ✅ | ✅ |
-| Abonelik (plan görüntüleme, veri indirme) | ❌ | ❌ | ✅ | ✅ |
+| Günün/ayın kasası özeti, mağaza paneli, hedef görünümü | ❌ | ✅ | ✅ | ✅ |
+| Kasa hareketleri, rapor, cari, banka, yıllık | ❌ | ❌ | ✅ | ✅ |
+| Personel / marka / hedef / oran ayarları | ❌ | ❌ | ✅ | ✅ |
+| Siparişi kalıcı silme | ❌ | ❌ | ✅ | ✅ |
+| Kullanıcı ve şube yönetimi, işletme bilgileri, logo | ❌ | ❌ | ❌ | ✅ |
+| Abonelik durumu, tüm veriyi indirme | ❌ | ❌ | ❌ | ✅ |
 
-`sahip` işletmeyi kuran kullanıcıdır; elle atanamaz, pasife alınamaz.
-Apps Script sürümünde `sahip` yoktur (`admin`/`personel` → `yonetici`/`muhasebe`).
+`personel` ve `magaza_muduru` yalnızca kendi şubesini görür; `finans` ve
+`yonetici` işletmenin tüm şubelerini görür. İşletmeyi kuran kullanıcı
+`kurucu` işaretlidir: rolü düşürülemez, hesabı pasife alınamaz.
+
+Apps Script sürümündeki eski roller farklıdır (`admin`/`personel` →
+`yonetici`/`muhasebe`).
 
 Eski sürümdeki `admin` / `personel` rolleri girişte otomatik olarak `yonetici`
 ve `muhasebe`ye eşlenir (`rolNormallestir_`).
@@ -136,26 +140,42 @@ test/
 Arayüz `HtmlService.createTemplateFromFile` ile birleştirilir; `Index.html`
 içindeki `<?!= include('Css') ?>` çağrıları diğer HTML dosyalarını gömer.
 
-## Ürün: çok kiracılı SaaS
+## Ürün: aylık abonelikle satılan uygulama
 
-Kuzmos tek bir işletmenin iç aracı değil, **optik işletmelerine satılan bir
-ürün**. Tek kurulum (bir Supabase projesi + bir statik site) birçok aboneye
-hizmet eder:
+Kuzmos tek bir işletmenin iç aracı değil, **optik işletmelerine aylık
+abonelikle satılan bir ürün**. Tek kurulum (bir Supabase projesi + bir
+statik site) bütün abonelere hizmet eder; her abone işletme kendi yalıtılmış
+verisiyle çalışır. (Bu mimarinin teknik adı "çok kiracılı / multi-tenant"tır;
+kodda abone işletme `isletmeler` tablosudur.)
+
+İki taraf vardır:
+
+| | Kim | Ne yapar |
+|---|---|---|
+| **Platform** | Kuzmos ekibi (`platform_yoneticileri`) | Abonelik ve kullanım verisini görür, plan/fiyat belirler, ödeme sonrası aboneliği açar. Abonelerin iş verisine erişemez. |
+| **Abone işletme** | Optik işletmesi (`isletmeler`) | Kendi kullanıcıları, şubeleri, siparişleri ve kasasıyla çalışır. |
+
+
 
 | | Çalışan sürüm (Apps Script) | Ürün sürümü (Supabase) |
 |---|---|---|
 | Kod | `src/` | `web/` + `supabase/` |
 | Veri | Google Sheets | Postgres |
-| Kapsam | Tek işletme | Çok kiracı (`isletmeler`) |
-| Yetki | `guard_*` fonksiyonları | RLS: kiracı + rol + abonelik |
-| Roller | yonetici / muhasebe / magaza | sahip / yonetici / muhasebe / magaza |
+| Kapsam | Tek işletme | Bütün abone işletmeler |
+| Yetki | `guard_*` fonksiyonları | RLS: işletme + rol + abonelik |
+| Roller | yonetici / muhasebe / magaza | yonetici / finans / magaza_muduru / personel |
 | Kayıt | Elle kurulum | Kendi kendine kayıt + 14 gün deneme |
 | Sipariş→kasa | `KasaSenkron.js` (elle) | Veritabanı trigger'ı |
-| Test | `npm run test:gas` (86) | `npm run test:db` (180) |
+| Test | `npm run test:gas` (86) | `npm run test:db` (190) |
 
-Kiracı izolasyonu, rol yetkileri ve abonelik kapısı veritabanındadır;
-arayüz atlanarak doğrudan sorgu atıldığında da geçerlidir. Ayrıntı:
+İşletme yalıtımı, rol yetkileri ve abonelik kapısı veritabanındadır; arayüz
+atlanarak doğrudan sorgu atıldığında da geçerlidir. Ayrıntı:
 `supabase/README.md`. Abone akışı ve yayına alma: `web/README.md`.
+
+### Arayüzü görmek
+
+`node tools/demo-olustur.js` tek dosyalık, sunucusuz bir demo üretir:
+gerçek arayüz + örnek veri, rol değiştirici ile dört rolün gördüğü ekranlar.
 
 `src/` (Apps Script) ilk müşterinin çalışan kurulumudur; ürün sürümüne
 geçene kadar dokunulmadan durur.

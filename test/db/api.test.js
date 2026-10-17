@@ -7,7 +7,7 @@ const { veritabaniKur, hataBekle } = require('./harness');
 
 jest.setTimeout(30000);
 
-let db, isletme, magaza, magazaUid, muhasebeUid, yoneticiUid;
+let db, isletme, magazaUid, muhasebeUid, yoneticiUid;
 
 beforeAll(async () => {
   db = await veritabaniKur();
@@ -19,12 +19,11 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await db.sifirla();
-  const k = await db.kiraciKur({ onEk: 'a', ad: 'Örnek Optik', subeKod: 'DK' });
+  const k = await db.kiraciKur({ onEk: 'a', ad: 'Örnek Optik', subeKod: 'KUZ' });
   isletme = k.isletme;
-  magaza = k.magaza;
-  magazaUid = k.uid.magaza;
-  muhasebeUid = k.uid.muhasebe;
-  yoneticiUid = k.uid.sahip; /* sahip, yönetici yetkilerini de taşır */
+  magazaUid = k.uid.magaza_muduru;
+  muhasebeUid = k.uid.finans;
+  yoneticiUid = k.uid.yonetici; /* sahip, yönetici yetkilerini de taşır */
   await db.oturumAc(magazaUid);
 });
 
@@ -66,7 +65,7 @@ async function tumVeri() {
 describe('siparis_kaydet', () => {
   test('yeni sipariş: no, toplamlar, müşteri ve marka otomatik', async () => {
     const s = await kaydet(ornek());
-    expect(s.no).toBe('DK-10-26-0001');
+    expect(s.no).toBe('KUZ-10-26-0001');
     expect(s.araToplam).toBe(10000);
     expect(s.tutar).toBe(10000);
     expect(s.kalan).toBe(10000);
@@ -241,9 +240,9 @@ describe('tum_veri rol filtresi', () => {
     await db.calistir(`select magaza_masraf_ekle('Kargo', 500, '2026-10-01', null, '', 'Nursu')`);
   });
 
-  test('mağaza rolü kasa verisi almaz, kendi masrafını alır', async () => {
+  test('şube rolü kasa verisi almaz, kendi masrafını alır', async () => {
     const v = await tumVeri();
-    expect(v.kullanici.rol).toBe('magaza');
+    expect(v.kullanici.rol).toBe('magaza_muduru');
     expect(v.hareketler).toEqual([]);
     expect(v.cari).toEqual([]);
     expect(v.kasaKategorileri).toEqual([]);
@@ -253,10 +252,10 @@ describe('tum_veri rol filtresi', () => {
     expect(v.ayar.acilisKasa).toBeUndefined();
   });
 
-  test('muhasebe tam veri seti alır', async () => {
+  test('finans tam veri seti alır', async () => {
     await db.oturumAc(muhasebeUid);
     const v = await tumVeri();
-    expect(v.kullanici.rol).toBe('muhasebe');
+    expect(v.kullanici.rol).toBe('finans');
     expect(v.hareketler).toHaveLength(2);
     expect(v.kasaKategorileri.length).toBeGreaterThan(10);
     expect(v.kasaKategorileri[0].alt.length).toBeGreaterThan(0);
@@ -272,7 +271,7 @@ describe('tum_veri rol filtresi', () => {
     expect(v.ayar.kkKomisyon['3 Taksit']).toBe(9);
     expect(v.ayar.bankalar).toContain('Garanti');
     expect(v.ayar.taksitler[0]).toBe('Tek çekim');
-    expect(v.ayar.siparisNoOnEk).toBe('DK');
+    expect(v.ayar.siparisNoOnEk).toBe('KUZ');
     expect(v.ayar.hesaplar).toContain('Nakit Kasa');
   });
 
@@ -285,7 +284,7 @@ describe('tum_veri rol filtresi', () => {
 });
 
 describe('kasa yazma uçları', () => {
-  test('mağaza rolü kasaya hareket yazamaz', async () => {
+  test('şube rolü kasaya hareket yazamaz', async () => {
     const hata = await hataBekle(() =>
       db.calistir('select hareket_kaydet($1::jsonb)', [
         JSON.stringify({
@@ -300,7 +299,7 @@ describe('kasa yazma uçları', () => {
     expect(hata).toMatch(/yetkiniz yok/i);
   });
 
-  test('muhasebe hareket yazar, istemcinin uydurduğu id sorun olmaz', async () => {
+  test('finans hareket yazar, istemcinin uydurduğu id sorun olmaz', async () => {
     await db.oturumAc(muhasebeUid);
     const h = (
       await db.tek('select hareket_kaydet($1::jsonb) as h', [
@@ -316,7 +315,7 @@ describe('kasa yazma uçları', () => {
         })
       ])
     ).h;
-    expect(h).toMatchObject({ yon: 'GIDER', ana: 'Kira & Aidat', tutar: 15000, kaydeden: 'Muhasebe' });
+    expect(h).toMatchObject({ yon: 'GIDER', ana: 'Kira & Aidat', tutar: 15000, kaydeden: 'Finans' });
     expect((await tumVeri()).hareketler).toHaveLength(1);
   });
 
@@ -338,7 +337,7 @@ describe('kasa yazma uçları', () => {
     ).toMatch(/Ana kategori/);
   });
 
-  test('hedef mağazada yazılamaz, muhasebede yazılır ve görünür', async () => {
+  test('hedef şube rolünde yazılamaz, finansta yazılır ve görünür', async () => {
     expect(await hataBekle(() => db.calistir(`select hedef_kaydet('2026-10', 500000, '')`))).toMatch(
       /row-level security/i
     );
@@ -349,7 +348,7 @@ describe('kasa yazma uçları', () => {
     expect(v.hedefler['2026-10']).toMatchObject({ hedef: 500000, notu: 'Ekim hedefi' });
   });
 
-  test('ayar yalnızca yöneticide değişir', async () => {
+  test('ayar yalnızca yöneticide değişir (finans bile değiştiremez)', async () => {
     await db.oturumAc(muhasebeUid);
     expect(await hataBekle(() => db.calistir(`select ayar_guncelle('personel_prim', '6')`))).toMatch(
       /row-level security/i
@@ -378,55 +377,58 @@ describe('kullanıcı yönetimi', () => {
 
   test('yönetici kullanıcıları listeler', async () => {
     const l = (await db.tek('select kullanici_listesi() as l')).l;
-    expect(l).toHaveLength(3);
-    expect(l.map((x) => x.rol).sort()).toEqual(['magaza', 'muhasebe', 'sahip']);
-    expect(l.filter((x) => x.rol === 'magaza')[0].magaza).toBe('Örnek Optik');
+    expect(l).toHaveLength(4);
+    expect(l.map((x) => x.rol).sort()).toEqual(['finans', 'magaza_muduru', 'personel', 'yonetici']);
+    expect(l.filter((x) => x.rol === 'personel')[0].magaza).toBe('Örnek Optik');
+    expect(l.filter((x) => x.kurucu)).toHaveLength(1);
   });
 
-  test('mağaza rolü kullanıcı listesini göremez', async () => {
+  test('şube rolü kullanıcı listesini göremez', async () => {
     await db.oturumAc(magazaUid);
     const l = (await db.tek('select kullanici_listesi() as l')).l;
     expect(l).toHaveLength(1); /* yalnızca kendi profili */
-    expect(l[0].rol).toBe('magaza');
+    expect(l[0].rol).toBe('magaza_muduru');
   });
 
   test('yönetici kullanıcıyı pasife alır, kendini alamaz', async () => {
-    expect((await db.tek(`select kullanici_durum_degistir('a-magaza@ornek.com', false) as ok`)).ok).toBe(
-      true
-    );
+    expect(
+      (await db.tek(`select kullanici_durum_degistir('a-magaza_muduru@ornek.com', false) as ok`)).ok
+    ).toBe(true);
     await db.oturumAc(magazaUid);
     expect(await hataBekle(() => db.calistir('select tum_veri()'))).toMatch(/pasif|geçersiz/i);
     await db.oturumAc(yoneticiUid);
     expect(
-      await hataBekle(() => db.calistir(`select kullanici_durum_degistir('a-sahip@ornek.com', false)`))
+      await hataBekle(() => db.calistir(`select kullanici_durum_degistir('a-yonetici@ornek.com', false)`))
     ).toMatch(/Kendi hesabınızı|sahibinin/);
   });
 
-  test('muhasebe kullanıcı durumu değiştiremez', async () => {
+  test('finans kullanıcı durumu değiştiremez', async () => {
     await db.oturumAc(muhasebeUid);
     expect(
-      await hataBekle(() => db.calistir(`select kullanici_durum_degistir('a-magaza@ornek.com', false)`))
+      await hataBekle(() =>
+        db.calistir(`select kullanici_durum_degistir('a-magaza_muduru@ornek.com', false)`)
+      )
     ).toMatch(/yetkiniz yok/i);
   });
 
   test('profil_olustur auth kaydı olmayan e-postayı reddeder', async () => {
     expect(
-      await hataBekle(() => db.calistir(`select profil_olustur('yok@ornek.com', 'Yok', 'magaza', 'DK')`))
+      await hataBekle(() => db.calistir(`select profil_olustur('yok@ornek.com', 'Yok', 'personel', 'KUZ')`))
     ).toMatch(/hesap bulunamadı/i);
   });
 
-  test('yönetici yeni profil açar, mağaza rolü şubeye bağlanır', async () => {
+  test('yönetici yeni profil açar, şube rolü şubeye bağlanır', async () => {
     const yeniUid = await db.kullaniciOlustur('yeni@ornek.com');
     await db.oturumAc(yoneticiUid);
     expect(
-      (await db.tek(`select profil_olustur('yeni@ornek.com', 'Yeni Kişi', 'magaza', 'DK') as ok`)).ok
+      (await db.tek(`select profil_olustur('yeni@ornek.com', 'Yeni Kişi', 'personel', 'KUZ') as ok`)).ok
     ).toBe(true);
     await db.oturumAc(yeniUid);
     const v = (await db.tek('select tum_veri() as v')).v;
-    expect(v.kullanici).toMatchObject({ ad: 'Yeni Kişi', rol: 'magaza' });
+    expect(v.kullanici).toMatchObject({ ad: 'Yeni Kişi', rol: 'personel' });
   });
 
-  test('mağaza rolü profil açamaz', async () => {
+  test('şube rolü profil açamaz', async () => {
     await db.kullaniciOlustur('sahte@ornek.com');
     await db.oturumAc(magazaUid);
     expect(

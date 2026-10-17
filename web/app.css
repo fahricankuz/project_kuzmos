@@ -1,11 +1,11 @@
 :root { --yellow:#F5C800; --yellow-dark:#D4A800; --black:#111; --gray-900:#1a1a1a; --gray-600:#555; --gray-400:#999; --gray-200:#e8e8e8; --gray-100:#f4f4f4; --white:#fff; --red:#e53935; --green:#2e7d32; --blue:#1565c0; --radius:10px; --radius-sm:6px; --font:'DM Sans',sans-serif; --mono:'DM Mono',monospace; }
 * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
 html, body { height:100%; font-family:var(--font); background:var(--gray-100); color:var(--black); }
-.view { display:none; flex-direction:column; height:100vh; overflow:hidden; }
+.view { display:none; flex-direction:column; height:100%; overflow:hidden; }
 .view.active { display:flex; }
 
 /* ═══ GİRİŞ ═══ */
-#viewLogin { display:none; align-items:center; justify-content:center; height:100vh; background:var(--black); flex-direction:column; }
+#viewLogin { display:none; align-items:center; justify-content:center; height:100%; background:var(--black); flex-direction:column; }
 #viewLogin.active { display:flex; }
 .login-box { text-align:center; padding:30px 24px; width:100%; max-width:330px; }
 .login-brand { font-size:30px; font-weight:600; color:var(--white); letter-spacing:.02em; }
@@ -469,9 +469,16 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
   .rec-chip.sel-chk { display:inline-flex !important; font-size:10px !important; padding:2px 7px !important; border:1.5px solid #000 !important; border-radius:4px !important; background:white !important; font-weight:800 !important; }
 }
 
-/* Yazdırmada işletme adı başlığı (her abone kendi adıyla yazdırır) */
-.print-firma { display:none; }
+/* Yazdırma başlığı: işletmenin logosu ve adı */
+.print-baslik { display:none; }
+.print-logo { display:none; }
 @media print {
-  .print-firma { display:block; text-align:center; font-size:15px; font-weight:600;
-    margin:0 0 6px; letter-spacing:.02em; }
+  .print-baslik { display:flex; align-items:center; justify-content:center; gap:10px;
+    margin:0 0 8px; }
+  .print-logo[src] { display:block; max-height:42px; max-width:160px; object-fit:contain; }
+  .print-firma { font-size:15px; font-weight:600; letter-spacing:.02em; }
 }
+.logo-onizleme { display:flex; align-items:center; justify-content:center; min-height:70px;
+  border:1px dashed var(--gray-200); border-radius:10px; background:var(--gray-50);
+  color:var(--gray-400); font-size:12px; }
+.logo-onizleme img { max-height:60px; max-width:200px; object-fit:contain; }

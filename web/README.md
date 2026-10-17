@@ -1,11 +1,21 @@
 # Kuzmos · Web arayüzü
 
-Optik işletmelerine satılan çok kiracılı uygulamanın arayüzü. Statik
-dosyalar: sunucu kodu yok, tarayıcı doğrudan Postgres'e RPC çağırır,
-yetkiyi ve kiracı izolasyonunu RLS tutar.
+Optik işletmelerine aylık abonelikle satılan uygulamanın arayüzü. Statik
+dosyalar: sunucu kodu yok, tarayıcı doğrudan Postgres'e RPC çağırır, yetkiyi
+ve işletme yalıtımını RLS tutar.
 
 **Tek kurulum, çok abone.** Aynı adrese kaydolan her optik işletmesi kendi
 yalıtılmış verisiyle çalışır; ayrı kurulum/deploy gerekmez.
+
+## Demo (sunucusuz önizleme)
+
+```bash
+node tools/demo-olustur.js        # kuzmos-demo.html üretir
+```
+
+Gerçek arayüz + örnek veri, tek dosyada. Alt bandındaki rol değiştirici ile
+Yönetici / Finans / Mağaza Müdürü / Personel görünümleri karşılaştırılır.
+Yazma işlemleri bellekte kalır, sayfa yenilenince başa döner.
 
 | Dosya | Ne |
 |---|---|
@@ -34,8 +44,23 @@ Ekran kodları Apps Script sürümüyle neredeyse aynıdır: sunucu çağrısı 
    Süre dolunca uygulama **salt okunur** olur: veri durur, yeni kayıt
    girilemez, "Tüm verimi indir" çalışmaya devam eder.
 
+## Roller
+
+| | personel | magaza_muduru | finans | yonetici |
+|---|---|---|---|---|
+| Sipariş, tahsilat, müşteri, masraf | ✅ | ✅ | ✅ | ✅ |
+| Gün/ay kasa özeti, panel, hedef görünümü | ❌ | ✅ | ✅ | ✅ |
+| Kasa hareketleri, rapor, cari, banka, yıllık | ❌ | ❌ | ✅ | ✅ |
+| Kullanıcı, şube, işletme bilgisi, logo, abonelik | ❌ | ❌ | ❌ | ✅ |
+
+Şube rolleri (`personel`, `magaza_muduru`) yalnızca kendi şubesini görür.
+Ortak tablet `personel` hesabıyla açılır; işlemi yapan satış personeli her
+kayıtta listeden seçilir (listede yoksa adı yazılır, listeye eklenir).
+
 Hiçbir işletme adı, personel adı veya mesaj şablonu koda gömülü değildir;
-hepsi işletme ayarıdır (Ayarlar → İşletme / Müşteri mesajı ve ERP).
+hepsi işletme ayarıdır (Ayarlar → İşletme / Logo / Müşteri mesajı ve ERP).
+Sipariş numarası ürün biçimindedir (KUZ-10-26-0001); sipariş formunda
+işletmeyi yüklediği logo temsil eder.
 
 ## 1. Bağlantı bilgilerini yaz
 

@@ -111,6 +111,33 @@ var API = {
     return rpc('isletme_verisi_aktar');
   },
 
+  /**
+   * İşletme logosu: dosya 'logolar/<isletme_id>/logo.<uzanti>' yoluna
+   * yüklenir (Storage politikası başka işletmenin klasörüne yazmayı
+   * engeller), adresi ayarlara yazılır.
+   */
+  logoYukle: async function (token, dosya) {
+    if (!dosya) throw new Error('Dosya seçin.');
+    if (dosya.size > 1048576) throw new Error('Logo en fazla 1 MB olabilir.');
+    var izinli = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+    if (izinli.indexOf(dosya.type) === -1) throw new Error('PNG, JPG, WEBP veya SVG yükleyin.');
+
+    var ozet = await rpc('abonelik_ozeti');
+    var uzanti = (dosya.name.split('.').pop() || 'png').toLowerCase();
+    var yol = ozet.id + '/logo.' + uzanti;
+    var sb = sbIstemci();
+    var y = await sb.storage.from('logolar').upload(yol, dosya, { upsert: true });
+    if (y.error) throw new Error(hataCevir(y.error));
+    var genel = sb.storage.from('logolar').getPublicUrl(yol);
+    var url = (genel && genel.data && genel.data.publicUrl) || '';
+    /* Önbellek kırıcı: logo değişince tarayıcı eskisini göstermesin */
+    return rpc('logo_kaydet', { p_url: url + '?v=' + Date.now() });
+  },
+
+  logoKaldir: function () {
+    return rpc('logo_kaydet', { p_url: '' });
+  },
+
   mevcutKullaniciGetir: async function () {
     var s = await sbIstemci().auth.getSession();
     if (!s.data || !s.data.session) throw new Error('Oturum bulunamadı.');
