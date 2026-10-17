@@ -1,7 +1,13 @@
 {
   "root": true,
-  "env": { "es2021": true, "node": true },
-  "parserOptions": { "ecmaVersion": 2021, "sourceType": "script" },
+  "env": {
+    "es2021": true,
+    "node": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2021,
+    "sourceType": "script"
+  },
   "extends": "eslint:recommended",
   "globals": {
     "SpreadsheetApp": "readonly",
@@ -15,12 +21,45 @@
   },
   "overrides": [
     {
-      "files": ["test/**/*.js"],
-      "env": { "jest": true, "node": true }
+      "files": [
+        "test/**/*.js"
+      ],
+      "env": {
+        "jest": true,
+        "node": true
+      }
+    },
+    {
+      "files": [
+        "web/js/*.js"
+      ],
+      "env": {
+        "browser": true,
+        "es2021": true,
+        "node": false
+      },
+      "globals": {
+        "supabase": "readonly",
+        "Chart": "readonly"
+      },
+      "rules": {
+        "no-unused-vars": "off",
+        "no-empty": [
+          "error",
+          {
+            "allowEmptyCatch": true
+          }
+        ]
+      }
     }
   ],
   "rules": {
-    "no-unused-vars": ["warn", { "args": "none" }],
+    "no-unused-vars": [
+      "warn",
+      {
+        "args": "none"
+      }
+    ],
     "no-undef": "off"
   }
 }

@@ -24,11 +24,14 @@ const AUTH_SHIM = `
   );
   create or replace function auth.uid() returns uuid language sql stable as
     $$ select nullif(current_setting('app.uid', true), '')::uuid $$;
+  create or replace function auth.jwt() returns jsonb language sql stable as
+    $$ select coalesce(nullif(current_setting('app.jwt', true), '')::jsonb, '{}'::jsonb) $$;
   create role anon;
   create role authenticated;
   grant usage on schema auth to anon, authenticated;
   grant select on auth.users to authenticated;
   grant execute on function auth.uid() to anon, authenticated;
+  grant execute on function auth.jwt() to anon, authenticated;
 `;
 
 const SEED_SQL = fs.readFileSync(SEED, 'utf8');
@@ -71,7 +74,12 @@ class TestDb {
   /** Verilen kullanıcı olarak 'authenticated' rolünde çalış (RLS aktif). */
   async oturumAc(uid) {
     await this.db.exec('reset role;');
+    const u = await this.tek('select email from auth.users where id = $1', [uid]);
     await this.db.query('select set_config($1, $2, false)', ['app.uid', uid]);
+    await this.db.query('select set_config($1, $2, false)', [
+      'app.jwt',
+      JSON.stringify({ sub: uid, email: (u && u.email) || '' })
+    ]);
     await this.db.exec('set role authenticated;');
     this.uid = uid;
   }

@@ -34,7 +34,7 @@ function finansMi(){ return rol()==='muhasebe'||rol()==='yonetici'; }
 
 /* ═══════════ PARA / TARİH ═══════════ */
 function pTR(s){ if(s==null||s==='')return 0; if(typeof s==='number')return s;
-  var t=String(s).trim().replace(/[^0-9.,\-]/g,'');
+  var t=String(s).trim().replace(/[^0-9.,-]/g,'');
   if(t.indexOf(',')>-1){ t=t.replace(/\./g,'').replace(',','.'); }
   else { var p=t.split('.');
     if(p.length>2)t=p.join('');

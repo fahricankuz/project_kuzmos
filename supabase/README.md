@@ -11,10 +11,13 @@ Bu dizin, Sheets yerine gerçek bir veritabanı kullanan yeni veri katmanıdır.
 | `migrations/0001_sema.sql` | Tablolar, tipler, indeksler, kısıtlar |
 | `migrations/0002_mantik.sql` | Sipariş no, toplamlar, teslim tarihi, sipariş→kasa senkronu, kasa özeti, günlük |
 | `migrations/0003_guvenlik.sql` | RLS politikaları ve fonksiyon yetkileri |
+| `migrations/0004_api.sql` | Uygulama uçları: `tum_veri()`, `siparis_kaydet()`, `kasa_ozeti()`, ... |
+| `migrations/0005_kullanicilar.sql` | Kullanıcı/profil yönetimi ve küçük uçlar |
 | `seed.sql` | Ayarlar, kategoriler, markalar, personel, kasa kategori ağacı |
 
 Hepsi `test/db/*.test.js` ile gerçek Postgres üzerinde test edilir
-(`npm run test:db` — 63 test). Test ortamı PGlite kullanır, Supabase'e
+(`npm run test:db` — 114 test; 98'i veritabanı mantığı/güvenliği, 16'sı
+arayüzden veritabanına uçtan uca). Test ortamı PGlite kullanır, Supabase'e
 bağlanmaz.
 
 ## Sheets'ten farkı (neden daha sağlam)
@@ -48,7 +51,9 @@ ve her birinde **Run**:
 1. `migrations/0001_sema.sql`
 2. `migrations/0002_mantik.sql`
 3. `migrations/0003_guvenlik.sql`
-4. `seed.sql`
+4. `migrations/0004_api.sql`
+5. `migrations/0005_kullanicilar.sql`
+6. `seed.sql`
 
 Her biri "Success. No rows returned" demeli. Hata verirse sonraki dosyaya
 geçme.
@@ -68,17 +73,23 @@ Sonra **SQL Editor**'de rolleri ata:
 
 ```sql
 -- Yönetici
-insert into profiller (id, ad, rol)
-select id, 'Fahri Can Kuz', 'yonetici' from auth.users where email = 'can@damlakuzoptik.com'
-on conflict (id) do update set rol = 'yonetici', ad = excluded.ad;
+insert into profiller (id, ad, rol, eposta)
+select id, 'Fahri Can Kuz', 'yonetici', email
+from auth.users where email = 'can@damlakuzoptik.com'
+on conflict (id) do update
+  set rol = 'yonetici', ad = excluded.ad, eposta = excluded.eposta, aktif = true;
 
 -- Mağaza (şubeye bağlı)
-insert into profiller (id, magaza_id, ad, rol)
-select u.id, m.id, 'Atrium Mağaza', 'magaza'
+insert into profiller (id, magaza_id, ad, rol, eposta)
+select u.id, m.id, 'Atrium Mağaza', 'magaza', u.email
 from auth.users u, magazalar m
 where u.email = 'damlakuzoptik@gmail.com' and m.kod = 'DK'
-on conflict (id) do update set rol = 'magaza', magaza_id = excluded.magaza_id;
+on conflict (id) do update
+  set rol = 'magaza', magaza_id = excluded.magaza_id, eposta = excluded.eposta, aktif = true;
 ```
+
+Bundan sonraki kullanıcıları uygulamanın **Ayarlar** ekranından
+ekleyebilirsin (yönetici hesabıyla); SQL'e dönmen gerekmez.
 
 ### 4. Oturum ayarları
 **Authentication → Providers → Email**: "Confirm email" kapalı olsun (mağaza

@@ -107,14 +107,45 @@ src/
   JsPanel.html       — Mağaza paneli, kasa özeti, masraf, hedef, ayarlar
   JsKasa.html        — Kasa özeti, rapor, hareketler, cari, banka, yıllık
 
+supabase/            — YENİ veri katmanı (Postgres); bkz. supabase/README.md
+  migrations/        — Şema, mantık, RLS, uygulama uçları
+  seed.sql           — Başlangıç verisi
+
+web/                 — YENİ arayüz (statik, Supabase'e bağlanır)
+  index.html         — Tüm ekranlar
+  app.css            — Stiller (ekran + A4 yazdırma)
+  js/config.js       — Supabase URL + anon anahtar
+  js/api.js          — gcall(...) → Supabase RPC köprüsü
+  js/core.js         — src/JsCore.html'in dosya hali (diğerleri de aynı)
+
 test/
   gasMocks.js        — Apps Script global'lerinin Jest sahteleri
   loadSrc.js         — src/*.js dosyalarını ortak global scope'a yükler
-  *.test.js          — Jest testleri (76 test)
+  *.test.js          — Apps Script testleri (86 test)
+  db/harness.js      — PGlite (WASM Postgres) + Supabase auth taklidi
+  db/sbTaklit.js     — supabase-js istemcisinin test taklidi
+  db/*.test.js       — Şema, mantık, RLS ve uçtan uca arayüz testleri (114)
 ```
 
 Arayüz `HtmlService.createTemplateFromFile` ile birleştirilir; `Index.html`
 içindeki `<?!= include('Css') ?>` çağrıları diğer HTML dosyalarını gömer.
+
+## İki sürüm bir arada
+
+Proje Sheets'ten Postgres'e taşınıyor. Geçiş bitene kadar iki yığın yan yana
+durur ve **birbirine dokunmaz**:
+
+| | Çalışan sürüm (Apps Script) | Yeni sürüm (Supabase) |
+|---|---|---|
+| Kod | `src/` | `web/` + `supabase/` |
+| Veri | Google Sheets | Postgres |
+| Yetki | `guard_*` fonksiyonları | RLS politikaları |
+| Sipariş→kasa | `KasaSenkron.js` (elle) | Veritabanı trigger'ı |
+| Test | `npm run test:gas` (86) | `npm run test:db` (114) |
+
+Neden taşınıyor: Sheets'te sorgu yok (her ekran tüm sayfayı okur), eşzamanlı
+yazma kilit sırasına girer, taban gecikme 1-1,5 sn'nin altına inmez ve tablo
+elle bozulabilir. Ayrıntı ve kurulum: `supabase/README.md`, `web/README.md`.
 
 ## Sheets sayfaları
 

@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#F5C800">
+<title>Kuzmos</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- ══ GİRİŞ ══ -->
+<div class="view active" id="viewLogin">
+  <div class="login-box">
+    <div class="login-brand">Kuz<span>mos</span></div>
+    <div class="login-sub">Kuz Management Operating System</div>
+    <input class="login-input" type="email" id="loginEmail" placeholder="E-posta" autocomplete="username">
+    <input class="login-input" type="password" id="loginPass" placeholder="Şifre" autocomplete="current-password">
+    <button class="login-btn" onclick="doLogin()">Giriş yap</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ══ SİPARİŞ FÖYÜ ══ -->
+<div class="view" id="viewSiparis">
+  <div class="header" data-baslik="Sipariş Föyü"></div>
+  <div class="scroll" id="siparisScroll">
+    <div class="card print-order-1">
+      <div class="card-header"><h3>Sipariş Bilgileri</h3><span class="badge" id="spNoLabel">—</span></div>
+      <div class="card-body">
+        <div class="form-row cols-4">
+          <div class="field"><label>Sipariş No</label><input class="no-input" type="text" id="spNo" readonly placeholder="Kaydedince atanır"></div>
+          <div class="field"><label>Sipariş Tarihi</label><input type="date" id="spTarih"></div>
+          <div class="field"><label>Teslim Tarihi</label><input type="text" id="spTeslim" readonly placeholder="Otomatik"></div>
+          <div class="field"><label>Satış Personeli</label><select id="spPersonel"></select></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card print-order-2">
+      <div class="card-header"><h3>Müşteri Bilgileri</h3></div>
+      <div class="card-body">
+        <div class="form-row cols-2">
+          <div class="field"><label>Ad Soyad</label><input type="text" id="spAdSoyad" placeholder="Müşteri adı soyadı" autocomplete="off" oninput="musteriOnerileri(this.value)"><div id="spOneriler" class="autocomplete-list"></div></div>
+          <div class="field"><label>Telefon</label><input type="tel" id="spTelefon" placeholder="05__ ___ __ __" autocomplete="off"></div>
+        </div>
+        <div class="form-row cols-2">
+          <div class="field"><label>E-Posta</label><input type="email" id="spEposta" placeholder="ornek@mail.com" autocomplete="off"></div>
+          <div class="field"><label>TC / Vergi No</label><input type="text" id="spTcVergi" placeholder="TCKN veya VKN" autocomplete="off"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card print-order-5">
+      <div class="card-header"><h3>Reçete</h3></div>
+      <div class="card-body">
+        <span class="rx-section-label">UZAK</span>
+        <div class="rx-wrapper" id="rxUzak"></div>
+        <span class="rx-section-label" style="margin-top:14px">YAKIN</span>
+        <div class="rx-wrapper" id="rxYakin"></div>
+      </div>
+    </div>
+
+    <div class="card print-order-4">
+      <div class="card-header"><h3>Ürünler</h3></div>
+      <div class="card-body">
+        <div class="prod-table-wrapper">
+          <div class="prod-header-row">
+            <span>Marka</span>
+            <span>Ürün Adı / Model</span>
+            <span class="th-c">Adet</span>
+            <span class="th-c">Ekar.</span>
+            <span class="th-c">Köprü</span>
+            <span class="th-c">Kol</span>
+            <span class="th-r">Birim Fiyat (₺)</span>
+            <span></span>
+          </div>
+          <div id="spUrunler"></div>
+        </div>
+        <button class="add-row-btn print-hide" onclick="urunSatiriEkle()">＋ Ürün Ekle</button>
+      </div>
+    </div>
+
+    <div class="card print-order-3">
+      <div class="card-header"><h3>Ödeme ve Kayıt</h3></div>
+      <div class="card-body">
+        <div class="payment-grid">
+          <div class="payment-group" style="background:var(--white)">
+            <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:500;color:var(--gray-600)">
+              <span>ARA TOPLAM: <b id="lblAraToplam" style="font-family:var(--mono);color:var(--black)">0 ₺</b></span>
+              <span id="lblIndirim" style="color:var(--red);font-weight:600;display:none"></span>
+            </div>
+            <span class="payment-label">Genel Toplam</span>
+            <input class="payment-amount total" type="text" id="spTutar" placeholder="0" oninput="genelToplamGirildi(this)" onfocus="this.select()">
+          </div>
+          <div class="payment-group">
+            <span class="payment-label">Tahsil Edilen</span>
+            <input class="payment-amount" type="text" id="spTahsil" readonly placeholder="0">
+            <div class="pay-method"><span class="pay-chip pay-chip-ro" id="chipNakit">💵 Nakit</span><span class="pay-chip pay-chip-ro" id="chipKK">💳 K.Kartı</span></div>
+            <div id="spOdemeListe" class="pay-list"></div>
+          </div>
+          <div class="payment-group">
+            <span class="payment-label">Kalan</span>
+            <input class="payment-amount" type="text" id="spKalan" readonly placeholder="0">
+            <div class="pay-status-wrap"><span class="pay-status pay-status-wait" id="spKalanRozet">⏳ Tahsilat yok</span></div>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding-top:16px;border-top:1px dashed var(--gray-200)" class="print-hide">
+          <span class="payment-label" style="display:block;margin-bottom:8px">Tahsilat ve Kayıt</span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" class="rec-chip rec-chip-action" onclick="tahsilatModaliAc('form','tahsilat')">＋ Tahsilat Ekle</button>
+            <button type="button" class="rec-chip" onclick="tahsilatModaliAc('form','iade')">↩ İade</button>
+            <label class="rec-chip" id="chipNebim"><input type="checkbox" onchange="nebimDegistir(this)"> 🏢 Nebim'e İşlendi</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="height:20px"></div>
+  </div>
+  <div class="search-bar" style="border-top:1px solid var(--gray-200);border-bottom:none">
+    <button class="btn btn-ghost" onclick="siparisFormTemizle(true)">🗑 Temizle</button>
+    <button class="btn btn-outline" onclick="window.print()">🖨 Yazdır</button>
+    <button class="btn btn-yellow" style="flex:2;justify-content:center" onclick="siparisKaydetTikla()">💾 Kaydet</button>
+  </div>
+</div>
+
+<!-- ══ KAYITLAR ══ -->
+<div class="view" id="viewRecords">
+  <div class="header" data-baslik="Kayıtlı Siparişler"></div>
+  <div class="search-bar">
+    <div class="search-box">🔍 <input type="text" id="kayitArama" placeholder="Sipariş no, ad, telefon, ürün, marka..." oninput="kayitAramaDegisti()"></div>
+    <button class="btn btn-red btn-sm" onclick="goster('viewTrash')">🗑 Çöp</button>
+    <button class="btn btn-outline btn-sm" onclick="siparisCsvIndir()">📤 İndir</button>
+  </div>
+  <div class="uncat-banner" id="uncatBanner" onclick="markasizFiltreDegistir()">
+    <div class="uncat-content">
+      <span>⚠️</span>
+      <span class="uncat-text"><b id="uncatSayi">0</b> siparişte marka/kategori eksik</span>
+      <span class="uncat-action" id="uncatAksiyon">Sadece bunları göster →</span>
+    </div>
+  </div>
+  <div class="sync-banner" id="syncBanner"><span class="sync-txt"><b id="syncSayi">0</b> kayıt gönderilemedi</span><button class="btn btn-red btn-sm" onclick="kuyrugaTekrarDene()">Tekrar dene</button></div>
+  <div class="scroll" id="kayitListe"></div>
+</div>
+
+<!-- ══ MÜŞTERİLER ══ -->
+<div class="view" id="viewCustomers">
+  <div class="header" data-baslik="Müşteri Rehberi"></div>
+  <div class="search-bar"><div class="search-box">🔍 <input type="text" id="musteriArama" placeholder="Müşteri adı veya telefon ara..." oninput="musteriListesiCiz()"></div></div>
+  <div class="scroll" id="musteriListe"></div>
+</div>
+
+<!-- ══ PIPELINE ══ -->
+<div class="view" id="viewPipeline">
+  <div class="header" data-baslik="Pipeline · Aktif Siparişler"></div>
+  <div class="pipe-summary">
+    <div>
+      <div class="pipe-summary-title">Aktif Pipeline</div>
+      <div class="pipe-summary-meta">Sürükleyerek aşama değiştir · Teslim Edildi'ye bırak</div>
+    </div>
+    <div class="pipe-summary-stats">
+      <div style="text-align:right"><div class="pipe-stat-label">Toplam Ciro</div><div class="pipe-stat-val" id="pipeToplam">0 ₺</div></div>
+      <div style="text-align:right"><div class="pipe-stat-label">Aktif Sipariş</div><div class="pipe-stat-val" id="pipeAdet">0</div></div>
+    </div>
+  </div>
+  <div class="scroll">
+    <div class="pipe-cols" id="pipeCols"></div>
+  </div>
+</div>
+
+<!-- ══ ÇÖP ══ -->
+<div class="view" id="viewTrash">
+  <div class="header" data-baslik="Çöp Kutusu"></div>
+  <div class="search-bar" style="justify-content:center;background:#fffbe6;border-bottom:1px solid var(--yellow-dark)">
+    <span style="font-size:13px;color:var(--yellow-dark);font-weight:500">Silinen siparişler 3 gün sonra kalıcı olarak temizlenir.</span>
+  </div>
+  <div class="scroll" id="copListe"></div>
+</div>
+
+<!-- ══ MAĞAZA PANELİ ══ -->
+<div class="view" id="viewPanel">
+  <div class="header" data-baslik="Mağaza Paneli"></div>
+  <div class="scroll">
+    <div class="period-nav">
+      <button class="period-btn" onclick="donemKaydir(-1)">◀</button>
+      <div class="period-label" id="panelDonem">—</div>
+      <button class="period-btn" id="panelIleri" onclick="donemKaydir(1)">▶</button>
+      <button class="period-today" id="panelBugun" onclick="donemSifirla()">Bugün</button>
+    </div>
+    <div class="card" id="hedefKart">
+      <div class="card-header"><h3>Aylık Hedef</h3><span class="sub" id="hedefDuzenle" style="cursor:pointer">düzenle</span></div>
+      <div class="card-body" id="hedefBody"></div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card"><span class="stat-title">Ciro (sipariş)</span><span class="stat-val" id="panelCiro">0</span><span class="stat-sub" id="panelSiparisAdet">0 sipariş</span></div>
+      <div class="stat-card"><span class="stat-title">Kasaya giren</span><span class="stat-val green" id="panelKasa">0</span><span class="stat-sub">KDV <b id="panelKdv">0</b></span><span class="stat-sub">Komisyon+prim <b id="panelKom">0</b></span><span class="stat-sub net-line">Net <b id="panelNet">0</b></span></div>
+      <div class="stat-card"><span class="stat-title">Bekleyen alacak</span><span class="stat-val red" id="panelAlacak">0</span><span class="stat-sub" id="panelAlacakAdet">0 sipariş</span></div>
+    </div>
+    <div class="dash-chart-card"><div class="dash-chart-title">Günlük Tahsilat Trendi <span class="dash-chart-sub" id="panelAy1">—</span></div><div class="chart-wrap"><canvas id="panelChart"></canvas></div></div>
+    <div class="dash-chart-card"><div class="dash-chart-title">Personel Performansı <span class="dash-chart-sub" id="panelAy2">—</span></div><div class="table-wrap" id="panelPersonelTablo"></div></div>
+    <div class="dash-chart-card"><div class="dash-chart-title">Kategori Bazlı Satış <span class="dash-chart-sub" id="panelAy3">—</span></div><div class="table-wrap" id="panelKategoriTablo"></div></div>
+    <div class="dash-chart-card"><div class="dash-chart-title">Marka Bazlı Satış <span class="dash-chart-sub" id="panelAy4">—</span></div><div class="table-wrap" id="panelMarkaTablo"></div></div>
+    <div class="dash-chart-card"><div class="dash-chart-title">Yıllık Özet <span class="dash-chart-sub" id="panelYil">—</span></div><div class="table-wrap" id="panelYillikTablo"></div></div>
+    <div style="height:20px"></div>
+  </div>
+</div>
+
+<!-- ══ MASRAFLAR ══ -->
+<div class="view" id="viewMasraf">
+  <div class="header" data-baslik="Mağaza Masrafları"></div>
+  <div class="search-bar">
+    <div class="search-box">🔍 <input type="text" id="masrafArama" placeholder="Kalem veya açıklama ara..." oninput="masrafListesiCiz()"></div>
+    <button class="btn btn-yellow btn-sm" onclick="masrafModaliAc()">＋ Masraf</button>
+  </div>
+  <div class="scroll" id="masrafListe"></div>
+</div>
+
+<!-- ══ KASA ÖZET ══ -->
+<div class="view" id="viewOzet">
+  <div class="header" data-baslik="Kasa · Özet"></div>
+  <div class="scroll">
+    <div class="period-nav">
+      <button class="period-btn" onclick="donemKaydir(-1)">◀</button>
+      <div class="period-label" id="ozetDonem">—</div>
+      <button class="period-btn" id="ozetIleri" onclick="donemKaydir(1)">▶</button>
+      <button class="period-today" id="ozetBugun" onclick="donemSifirla()">Bugün</button>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card"><span class="stat-title">Kapanış kasa</span><span class="stat-val" id="oKapanis">0</span><span class="stat-sub">Açılış <b id="oAcilis">0</b></span></div>
+      <div class="stat-card"><span class="stat-title">Operasyonel net</span><span class="stat-val" id="oOpNet">0</span><span class="stat-sub">Gelir <b id="oOpGelir">0</b> · Gider <b id="oOpGider">0</b></span></div>
+      <div class="stat-card"><span class="stat-title">Satış / net satış</span><span class="stat-val" id="oSatis">0</span><span class="stat-sub">KDV hariç <b id="oSatisNet">0</b></span></div>
+    </div>
+    <div class="alert-row" id="ozetUyarilar"></div>
+    <div class="card"><div class="card-header"><h3>Bu hafta</h3><span class="sub" id="haftaAralik">—</span></div><div class="card-body" id="haftaBody"></div></div>
+    <div class="card"><div class="card-header"><h3>Yaklaşan ödemeler</h3></div><div class="card-body" id="yaklasanBody"></div></div>
+    <div class="card"><div class="card-header"><h3>Personel satış</h3><span class="sub">tahsilat bazlı</span></div><div class="card-body" id="personelBody"></div></div>
+    <div class="card"><div class="card-header"><h3>Kategori bazlı satış</h3><span class="sub">sipariş modülünden</span></div><div class="card-body" id="katBody"></div></div>
+    <div style="height:20px"></div>
+  </div>
+</div>
+
+<!-- ══ AYLIK RAPOR ══ -->
+<div class="view" id="viewRapor">
+  <div class="header" data-baslik="Aylık Kasa Raporu"></div>
+  <div class="scroll">
+    <div class="period-nav">
+      <button class="period-btn" onclick="donemKaydir(-1)">◀</button>
+      <div class="period-label" id="raporDonem">—</div>
+      <button class="period-btn" id="raporIleri" onclick="donemKaydir(1)">▶</button>
+      <button class="period-today" onclick="gunleriGosterDegistir()" id="gunToggle">Günleri göster</button>
+    </div>
+    <div class="card"><div class="card-body" style="padding:0"><div class="table-wrap" id="raporWrap"></div></div></div>
+    <div style="height:20px"></div>
+  </div>
+</div>
+
+<!-- ══ HAREKETLER ══ -->
+<div class="view" id="viewHareket">
+  <div class="header" data-baslik="Kasa Hareketleri"></div>
+  <div class="search-bar">
+    <div class="search-box">🔍 <input type="text" id="hareketArama" placeholder="Kategori, açıklama veya hesap ara..." oninput="hareketListesiCiz()"></div>
+    <button class="btn btn-outline btn-sm" onclick="hareketCsvIndir()">📤 İndir</button>
+    <button class="btn btn-yellow btn-sm" onclick="hareketModaliAc()">＋ Hareket</button>
+  </div>
+  <div class="scroll" id="hareketListe"></div>
+</div>
+
+<!-- ══ PLANLANAN ÖDEMELER ══ -->
+<div class="view" id="viewCari">
+  <div class="header" data-baslik="Planlanan Ödemeler"></div>
+  <div class="scroll">
+    <div class="period-nav">
+      <button class="period-btn" onclick="donemKaydir(-1)">◀</button>
+      <div class="period-label" id="cariDonem">—</div>
+      <button class="period-btn" id="cariIleri" onclick="donemKaydir(1)">▶</button>
+      <button class="period-today" onclick="donemSifirla()">Bugün</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Planlanan ödemeler</h3><span class="sub">ödenen ve kalan otomatik</span></div>
+      <div class="card-body" style="padding:13px 13px 0"><button class="btn btn-yellow" style="width:100%;justify-content:center" onclick="cariKalemSec()">＋ Planlanan ödeme ekle</button></div>
+      <div class="card-body" style="padding:13px 0 0"><div class="table-wrap" id="cariWrap"></div></div>
+    </div>
+    <div style="height:20px"></div>
+  </div>
+</div>
+
+<!-- ══ BANKA ══ -->
+<div class="view" id="viewBanka">
+  <div class="header" data-baslik="Banka Pozisyonu"></div>
+  <div class="scroll">
+    <div class="card"><div class="card-header"><h3>Haftalık doğrulama</h3><span class="sub" id="dogrulamaTarih">—</span></div>
+      <div class="card-body">
+        <div class="mini-note" style="margin:0 0 12px">Sistem her hesabın bakiyesini hareketlerden hesaplar. Cuma kapanışında gerçek bakiyeleri gir, tutmayan satır kırmızı çıkar.</div>
+        <div class="table-wrap" id="bankaWrap"></div>
+        <div style="display:flex;gap:8px;margin-top:14px"><button class="btn btn-yellow" style="flex:1;justify-content:center" onclick="bankaKaydetTikla()">Doğrulamayı kaydet</button></div>
+      </div>
+    </div>
+    <div class="card"><div class="card-header"><h3>KK / KMH borç durumu</h3></div><div class="card-body" id="borcBody"></div></div>
+    <div style="height:20px"></div>
+  </div>
+</div>
+
+<!-- ══ YILLIK ══ -->
+<div class="view" id="viewYillik">
+  <div class="header" data-baslik="Yıllık Özet"></div>
+  <div class="scroll">
+    <div class="card"><div class="card-header"><h3>Yıllık performans</h3><span class="sub" id="yilLabel">—</span></div><div class="card-body" style="padding:0"><div class="table-wrap" id="yillikWrap"></div></div></div>
+    <div style="height:20px"></div>
+  </div>
+</div>
+
+<!-- ══ AYARLAR ══ -->
+<div class="view" id="viewAyar">
+  <div class="header" data-baslik="Ayarlar"></div>
+  <div class="scroll">
+    <div class="card" id="cardHesabim"><div class="card-header"><h3>Hesabım</h3></div><div class="card-body">
+      <div class="split-row"><span class="split-name">Ad</span><span class="split-val" id="hesabimAd">—</span></div>
+      <div class="split-row"><span class="split-name">E-posta</span><span class="split-val" id="hesabimEmail">—</span></div>
+      <div class="split-row"><span class="split-name">Rol</span><span class="split-val" id="hesabimRol">—</span></div>
+      <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:10px" onclick="sifreModaliAc()">Şifremi değiştir</button>
+    </div></div>
+
+    <div class="card" id="cardPersonel"><div class="card-header"><h3>Satış Personeli</h3><span class="sub">sipariş formunda seçilir</span></div><div class="card-body">
+      <div id="personelListe"></div>
+      <div class="form-row cols-2" style="margin-top:10px">
+        <div class="field"><input type="text" id="yeniPersonelAd" placeholder="Ad Soyad"></div>
+        <button class="btn btn-yellow" style="justify-content:center" onclick="personelEkleTikla()">＋ Personel ekle</button>
+      </div>
+      <div class="mini-note">Bunlar giriş hesabı değildir; sadece satışı/işlemi kimin yaptığını seçmek içindir.</div>
+    </div></div>
+
+    <div class="card" id="cardMarka"><div class="card-header"><h3>Markalar</h3><span class="sub">kategori → marka</span></div><div class="card-body">
+      <div id="markaListe"></div>
+      <div class="form-row cols-3" style="margin-top:10px">
+        <div class="field"><select id="yeniMarkaKategori"></select></div>
+        <div class="field"><input type="text" id="yeniMarkaAd" placeholder="Marka adı"></div>
+        <button class="btn btn-yellow" style="justify-content:center" onclick="markaEkleTikla()">＋ Marka ekle</button>
+      </div>
+      <div class="mini-note">Sipariş formunda "Diğer" ile yazılan markalar da otomatik olarak bu listeye eklenir.</div>
+    </div></div>
+
+    <div class="card" id="cardHedefAyar"><div class="card-header"><h3>Aylık Hedefler</h3></div><div class="card-body">
+      <div id="hedefListe"></div>
+      <button class="load-more" style="margin-top:10px" onclick="hedefModaliAc()">＋ Hedef belirle</button>
+    </div></div>
+
+    <div class="card" id="cardTekrar"><div class="card-header"><h3>Tekrarlayan ödemeler</h3><span class="sub">kira, maaş, SGK, aidat</span></div>
+      <div class="card-body">
+        <div id="tekrarListe"></div>
+        <button class="load-more" onclick="tekrarModaliAc()" style="margin-top:10px">＋ Tekrarlayan ödeme ekle</button>
+      </div>
+    </div>
+
+    <div class="card" id="cardOranlar"><div class="card-header"><h3>Oranlar ve Listeler</h3><span class="sub">Sheets · Ayarlar sayfası</span></div><div class="card-body" id="oranBody"></div></div>
+
+    <div class="card" id="cardKullanicilar"><div class="card-header"><h3>Kullanıcılar</h3><span class="sub">sadece yönetici</span></div><div class="card-body">
+      <div id="kullaniciListe"></div>
+      <button class="load-more" onclick="kullaniciModaliAc()" style="margin-top:10px">＋ Kullanıcı ekle</button>
+    </div></div>
+
+    <div class="card"><div class="card-header"><h3>Oturum</h3></div><div class="card-body"><button class="btn btn-red" style="width:100%;justify-content:center" onclick="cikisYap()">Çıkış yap</button></div></div>
+    <div style="height:20px"></div>
+  </div>
+</div>
+
+<!-- ══ MODALLAR ══ -->
+<div class="overlay" id="pickOverlay" onclick="modalKapat(event,'pickOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="pickBaslik">Seç</div>
+    <div class="modal-body"><div id="pickGeri"></div><div class="pick-grid" id="pickGrid"></div></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="pickTemizle()">Temizle</button>
+      <button class="btn btn-outline" onclick="modalKapat(null,'pickOverlay')">Vazgeç</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="personelOverlay" onclick="modalKapat(event,'personelOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Bu işlemi kim yapıyor?</div>
+    <div class="modal-sub">Kayıt bu personel adına loglanacak.</div>
+    <div class="modal-body"><div class="pick-grid" id="personelSecGrid"></div></div>
+    <div class="modal-footer"><button class="btn btn-ghost" style="width:100%" onclick="personelSecimIptal()">Vazgeç</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="tahsilatOverlay" onclick="modalKapat(event,'tahsilatOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="tahsilatBaslik">Tahsilat Ekle</div>
+    <div class="modal-sub">Kalan: <strong id="tahsilatKalan" style="color:var(--black);font-family:var(--mono);font-size:16px"></strong></div>
+    <div class="modal-body">
+      <div class="form-row cols-2">
+        <div class="field"><label>Tutar</label><input type="text" id="tahsilatTutar" class="payment-amount" style="font-size:16px;padding:11px" placeholder="0" oninput="paraFormatla(this)" onfocus="this.select()"></div>
+        <div class="field"><label>Tarih</label><input type="date" id="tahsilatTarih"></div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" style="width:100%;border:1.5px dashed var(--gray-200)" onclick="tahsilatKalaniYaz()">Kalanın tamamını yaz</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px">
+        <button class="btn btn-outline" style="padding:20px;flex-direction:column;gap:6px" onclick="tahsilatYontemSec('nakit')">💵<span style="font-size:13px;font-weight:600">Nakit</span></button>
+        <button class="btn btn-outline" style="padding:20px;flex-direction:column;gap:6px" onclick="tahsilatYontemSec('kk')">💳<span style="font-size:13px;font-weight:600">Kredi Kartı</span></button>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" style="width:100%" onclick="modalKapat(null,'tahsilatOverlay')">İptal</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="kkOverlay" onclick="modalKapat(event,'kkOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Kredi Kartı Detayı</div>
+    <div class="modal-body">
+      <label class="payment-label" style="display:block;margin:6px 0 8px">Banka</label>
+      <div class="pick-grid grid-3" id="bankaGrid"></div>
+      <label class="payment-label" style="display:block;margin:16px 0 8px">Taksit</label>
+      <div class="pick-grid grid-3" id="taksitGrid"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="modalKapat(null,'kkOverlay')">İptal</button>
+      <button class="btn btn-yellow" style="flex:2" onclick="kkOnayla()">Onayla</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="detayOverlay" onclick="modalKapat(event,'detayOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="detayBaslik"></div>
+    <div class="modal-sub" id="detayAltBaslik"></div>
+    <div id="detayTracker"></div>
+    <div class="modal-body"><dl class="modal-dl" id="detayDL"></dl></div>
+    <div class="modal-footer" id="detayFooter"></div>
+  </div>
+</div>
+
+<div class="overlay" id="musteriOverlay" onclick="modalKapat(event,'musteriOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="mBaslik">Müşteri</div>
+    <div class="modal-sub" id="mAltBaslik">—</div>
+    <div class="customer-stat-grid">
+      <div class="c-stat"><div class="c-stat-label">Toplam Harcama</div><div class="c-stat-val" id="mHarcama">0</div></div>
+      <div class="c-stat"><div class="c-stat-label">Sipariş</div><div class="c-stat-val" id="mAdet">0</div></div>
+      <div class="c-stat"><div class="c-stat-label">Ort. İndirim</div><div class="c-stat-val" id="mIndirim">%0</div></div>
+    </div>
+    <div class="modal-body" id="mBody"></div>
+    <div class="modal-footer"><button class="btn btn-outline" style="width:100%" onclick="modalKapat(null,'musteriOverlay')">Kapat</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="kasaOzetOverlay" onclick="modalKapat(event,'kasaOzetOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="kasaOzetBaslik">Bugünün Kasası</div>
+    <div class="modal-sub" id="kasaOzetAlt">—</div>
+    <div class="modal-body" id="kasaOzetBody"></div>
+    <div class="modal-footer"><button class="btn btn-outline" style="width:100%" onclick="modalKapat(null,'kasaOzetOverlay')">Kapat</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="masrafOverlay" onclick="modalKapat(event,'masrafOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Masraf Ekle</div>
+    <div class="modal-body">
+      <div class="form-row cols-2">
+        <div class="field"><label>Tarih</label><input type="date" id="masrafTarih"></div>
+        <div class="field"><label>Tutar</label><input type="text" class="amount-input" id="masrafTutar" placeholder="0" oninput="paraFormatla(this)" onfocus="this.select()"></div>
+      </div>
+      <div class="form-row"><div class="field"><label>Kalem</label><select id="masrafKalem"></select></div></div>
+      <div class="form-row"><div class="field"><label>Hesap</label><select id="masrafHesap"></select></div></div>
+      <div class="form-row"><div class="field"><label>Açıklama</label><input type="text" id="masrafAciklama" placeholder="Opsiyonel"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="modalKapat(null,'masrafOverlay')">İptal</button>
+      <button class="btn btn-yellow" style="flex:2" onclick="masrafKaydetTikla()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="hareketOverlay" onclick="modalKapat(event,'hareketOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="hmBaslik">Hareket ekle</div>
+    <div class="modal-body">
+      <div class="yon-toggle">
+        <div class="yon-opt" id="yonGider" onclick="hareketYonSec('GIDER')">Gider</div>
+        <div class="yon-opt" id="yonGelir" onclick="hareketYonSec('GELIR')">Gelir</div>
+      </div>
+      <div class="form-row cols-2">
+        <div class="field"><label>Tarih</label><input type="date" id="hTarih"></div>
+        <div class="field"><label>Tutar</label><input type="text" class="amount-input" id="hTutar" placeholder="0" oninput="paraFormatla(this)" onfocus="this.select()"></div>
+      </div>
+      <div class="form-row"><div class="field"><label>Kategori</label><input type="text" class="select-mock" id="hKategori" readonly placeholder="— Kategori seç —" onclick="kasaKategoriSecici('h')"></div></div>
+      <div class="form-row"><div class="field"><label>Hesap</label><input type="text" class="select-mock" id="hHesap" readonly placeholder="— Hesap seç —" onclick="hesapSecici('h')"></div></div>
+      <div class="form-row"><div class="field"><label>Açıklama</label><input type="text" id="hAciklama" placeholder="Örn. Ağustos mal alım faturası"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="modalKapat(null,'hareketOverlay')">İptal</button>
+      <button class="btn btn-yellow" style="flex:2" onclick="hareketKaydetTikla()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="cariOverlay" onclick="modalKapat(event,'cariOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Planlanan tutar</div>
+    <div class="modal-sub" id="cariAlt">—</div>
+    <div class="modal-body">
+      <div class="field"><label>Planlanan</label><input type="text" class="amount-input" id="cariTutar" placeholder="0" oninput="paraFormatla(this)" onfocus="this.select()"></div>
+      <div class="field" style="margin-top:12px"><label>Not</label><input type="text" id="cariNot" placeholder="Opsiyonel"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="modalKapat(null,'cariOverlay')">İptal</button>
+      <button class="btn btn-yellow" style="flex:2" onclick="cariKaydetTikla()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="tekrarOverlay" onclick="modalKapat(event,'tekrarOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Tekrarlayan ödeme</div>
+    <div class="modal-body">
+      <div class="form-row"><div class="field"><label>Ad</label><input type="text" id="tAd" placeholder="Örn. Mağaza kirası"></div></div>
+      <div class="form-row cols-2">
+        <div class="field"><label>Tutar</label><input type="text" class="amount-input" id="tTutar" placeholder="0" oninput="paraFormatla(this)"></div>
+        <div class="field"><label>Ayın günü</label><input type="number" id="tGun" min="1" max="31" value="5"></div>
+      </div>
+      <div class="form-row"><div class="field"><label>Kategori</label><input type="text" class="select-mock" id="tKategori" readonly placeholder="— Kategori seç —" onclick="kasaKategoriSecici('t')"></div></div>
+      <div class="form-row"><div class="field"><label>Hesap</label><input type="text" class="select-mock" id="tHesap" readonly placeholder="— Hesap seç —" onclick="hesapSecici('t')"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="modalKapat(null,'tekrarOverlay')">İptal</button>
+      <button class="btn btn-yellow" style="flex:2" onclick="tekrarKaydetTikla()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="hedefOverlay" onclick="modalKapat(event,'hedefOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Aylık Hedef</div>
+    <div class="modal-body">
+      <div class="form-row cols-2">
+        <div class="field"><label>Ay</label><input type="month" id="hedefAy"></div>
+        <div class="field"><label>Hedef (₺)</label><input type="text" class="amount-input" id="hedefTutar" placeholder="0" oninput="paraFormatla(this)"></div>
+      </div>
+      <div class="form-row"><div class="field"><label>Not</label><input type="text" id="hedefNot" placeholder="Opsiyonel"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="modalKapat(null,'hedefOverlay')">İptal</button>
+      <button class="btn btn-yellow" style="flex:2" onclick="hedefKaydetTikla()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="sifreOverlay" onclick="modalKapat(event,'sifreOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Şifremi değiştir</div>
+    <div class="modal-body">
+      <div class="field"><label>Yeni şifre</label><input type="password" id="sifreYeni" placeholder="En az 8 karakter"></div>
+      <div class="field" style="margin-top:12px"><label>Yeni şifre (tekrar)</label><input type="password" id="sifreTekrar" placeholder="Tekrar girin"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="modalKapat(null,'sifreOverlay')">İptal</button>
+      <button class="btn btn-yellow" style="flex:2" onclick="sifreKaydetTikla()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="kullaniciOverlay" onclick="modalKapat(event,'kullaniciOverlay')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Kullanıcı ekle</div>
+    <div class="modal-body">
+      <div class="form-row"><div class="field"><label>Ad Soyad</label><input type="text" id="kAd" placeholder="Ad Soyad"></div></div>
+      <div class="form-row"><div class="field"><label>E-posta</label><input type="email" id="kEmail" placeholder="ornek@kuzmos.com"></div></div>
+      <div class="form-row"><div class="field"><label>Geçici şifre</label><input type="text" id="kSifre" placeholder="En az 8 karakter"></div></div>
+      <div class="form-row"><div class="field"><label>Rol</label>
+        <select id="kRol"><option value="magaza">Mağaza</option><option value="muhasebe">Muhasebe</option><option value="yonetici">Yönetici</option></select>
+      </div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="modalKapat(null,'kullaniciOverlay')">İptal</button>
+      <button class="btn btn-yellow" style="flex:2" onclick="kullaniciKaydetTikla()">Ekle</button>
+    </div>
+  </div>
+</div>
+
+<div id="successOverlay" class="success-overlay">
+  <div class="success-content">
+    <div class="success-logo">KUZ</div>
+    <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52"><circle class="checkmark__circle" cx="26" cy="26" r="25" fill="none"/><path class="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/></svg>
+    <div class="success-title" id="successTitle">Harika İş Çıkardın!</div>
+    <div class="success-rep" id="successRep"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/core.js"></script>
+<script src="js/siparis.js"></script>
+<script src="js/panel.js"></script>
+<script src="js/kasa.js"></script>
+</body>
+</html>
