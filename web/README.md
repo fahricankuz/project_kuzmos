@@ -52,6 +52,7 @@ Hazır paletler (`:root[data-tema="..."]`):
 | *(öntanımlı)* **Gece Mavisi** | `#1F56E3` | Banka/fintek mavisi; güven ve "para" çağrışımı |
 | `berrak` | `#0E7C86` | Teal; optik/sağlık tarafına yakın, daha yumuşak |
 | `kasa` | `#0B8A52` | Zümrüt; "kasa/nakit" vurgusu |
+| `grafit` | `#1C1C1F` | Siyah/gri tek renk; renk yalnızca para yönünde |
 | `mevcut` | `#F5C800` | Eski siyah + sarı görünüm (geri dönüş için) |
 
 Paleti değiştirmek: `document.documentElement.setAttribute('data-tema','berrak')`.

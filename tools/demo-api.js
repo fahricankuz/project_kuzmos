@@ -636,6 +636,7 @@ var DEMO_TEMALAR = [
   ['', 'Gece Mavisi'],
   ['berrak', 'Berrak'],
   ['kasa', 'Kasa Yeşili'],
+  ['grafit', 'Grafit'],
   ['mevcut', 'Mevcut (siyah/sarı)']
 ];
 var DEMO_TEMA = '';

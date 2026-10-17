@@ -57,7 +57,7 @@ ${css}
   border: 1px solid rgba(255,255,255,.28);
 }
 .demo-chip:hover { border-color: var(--koyu-vurgu); }
-.demo-chip.on { background: var(--vurgu); color: var(--vurgu-ust); border-color: var(--vurgu); }
+.demo-chip.on { background: var(--koyu-vurgu); color: var(--koyu-zemin); border-color: var(--koyu-vurgu); font-weight: 600; }
 .demo-chip:focus-visible { outline: 2px solid var(--koyu-vurgu); outline-offset: 2px; }
 /* Demo kabuğu ve abonelik bandı için alt boşluk (kabuk iki satır) */
 .scroll { padding-bottom: 170px; }

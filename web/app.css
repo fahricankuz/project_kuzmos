@@ -78,6 +78,23 @@
   --koyu-zemin:#11221A; --koyu-metin:#FFFFFF; --koyu-vurgu:#5FD19B;
 }
 
+/* ── Tema: Grafit (siyah / gri, tek renk) ──
+   Vurgu da nötr olduğu için "bilgi" tonu griye çekilir; para yönünü
+   gösteren yeşil/kırmızı korunur, yoksa gelir-gider ayırt edilemez. */
+:root[data-tema="grafit"] {
+  --vurgu:#1C1C1F; --vurgu-koyu:#000000; --vurgu-silik:#ECECEE; --vurgu-ust:#FFFFFF;
+  --vurgu-rgb:28,28,31;
+  --zemin:#F6F6F7; --yuzey:#FFFFFF; --yuzey-2:#FAFAFA; --cizgi:#E3E3E7;
+  --metin:#18181B; --metin-soluk:#5C5C66; --metin-silik:#8E8E98;
+  --ust-zemin:#FFFFFF; --ust-metin:#18181B; --ust-metin-soluk:#71717A; --ust-cizgi:#E3E3E7;
+  --ust-kutu:#F6F6F7; --ust-kutu-cizgi:#E3E3E7;
+  --baslik-zemin:#FFFFFF; --baslik-metin:#18181B; --baslik-alt:#8E8E98; --baslik-cizgi:#EFEFF1;
+  --bilgi:#3F3F46; --bilgi-silik:#F0F0F2; --bilgi-cizgi:#D7D7DC;
+  --koyu-zemin:#121214; --koyu-metin:#FFFFFF; --koyu-vurgu:#D4D4D8;
+  --golge:0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.04);
+}
+:root[data-tema="grafit"] .brand span { color:var(--metin-silik); }
+
 /* ── Tema: Mevcut (siyah + sarı) ── */
 :root[data-tema="mevcut"] {
   --vurgu:#F5C800; --vurgu-koyu:#D4A800; --vurgu-silik:rgba(245,200,0,.15); --vurgu-ust:#111111;
