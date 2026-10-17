@@ -273,6 +273,12 @@ var API = {
   personelKaydet: function (token, liste) {
     return rpc('personel_kaydet', { p_liste: liste || [] });
   },
+  urunKategorileriKaydet: function (token, liste) {
+    return rpc('urun_kategorileri_kaydet', { p_liste: liste || [] });
+  },
+  kkKomisyonKaydet: function (token, liste) {
+    return rpc('kk_komisyon_kaydet', { p_liste: liste || [] });
+  },
   markaEkle: function (token, kategori, marka) {
     return rpc('marka_ekle', { p_kategori: kategori, p_marka: marka });
   },

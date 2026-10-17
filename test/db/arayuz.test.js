@@ -144,7 +144,9 @@ describe('giriş', () => {
     expect(w.DATA.isletme.ad).toBe('Örnek Optik');
     expect(w.DATA.isletme.durum).toBe('deneme');
     expect(w.DATA.markalar['Optik Cam']).toContain('Seiko');
-    expect(w.DATA.ayar.kkKomisyon['Tek çekim']).toBe(3.5);
+    /* Komisyon banka × taksit matrisi; yeni işletmede varsayılan satır 0 */
+    expect(w.DATA.ayar.kkKomisyon['']['Tek çekim']).toBe(0);
+    expect(w.DATA.ayar.kdvModu).toBe('dahil');
     expect(w.DATA.magazalar).toHaveLength(1);
   });
 });
@@ -586,5 +588,91 @@ describe('logo', () => {
     w.logoKaldirTikla();
     await kosulBekle(() => w.DATA.ayar.logoUrl === '', 6000);
     expect(d.getElementById('printLogo').getAttribute('src')).toBeNull();
+  });
+});
+
+describe('oran ayarları (arayüz)', () => {
+  beforeEach(() => girisYap('w-finans@ornek.com', 'dogruSifre1'));
+
+  test('KDV kartı kategorileri listeler ve kaydeder', async () => {
+    w.goster('viewAyar');
+    await bekle(10);
+    const satirlar = d.getElementById('kdvListe').querySelectorAll('input');
+    expect(satirlar.length).toBe(w.DATA.urunKategorileri.length);
+    expect(d.getElementById('ayarKdvModu').value).toBe('dahil');
+
+    /* Optik Cam'ı %20 yap ve KDV hariç moduna geç */
+    const i = w.DATA.urunKategorileri.findIndex((k) => k.ad === 'Optik Cam');
+    d.getElementById('kdvOran' + i).value = '20';
+    d.getElementById('ayarKdvModu').value = 'haric';
+    w.kdvKaydetTikla();
+    await kosulBekle(() => w.DATA.ayar.kdvModu === 'haric', 8000);
+
+    const kat = await veritabanindan(
+      `select kdv::float8 as kdv from urun_kategorileri where ad = 'Optik Cam'`
+    );
+    expect(kat[0].kdv).toBe(20);
+  });
+
+  test('komisyon matrisi banka satırı ekler ve kaydeder', async () => {
+    w.goster('viewAyar');
+    await bekle(10);
+    /* Varsayılan satır + taksit sütunları */
+    expect(d.getElementById('komisyonTablo').innerHTML).toContain('Varsayılan');
+    d.getElementById('kom_0_0').value = '3,5';
+
+    d.getElementById('komisyonYeniBanka').value = 'Garanti';
+    w.komisyonBankaEkle();
+    expect(d.getElementById('komisyonTablo').innerHTML).toContain('Garanti');
+    d.getElementById('kom_1_0').value = '2,9';
+
+    w.komisyonKaydetTikla();
+    await kosulBekle(() => !!(w.DATA.ayar.kkKomisyon || {})['Garanti'], 8000);
+
+    expect(w.DATA.ayar.kkKomisyon['']['Tek çekim']).toBe(3.5);
+    expect(w.DATA.ayar.kkKomisyon['Garanti']['Tek çekim']).toBe(2.9);
+    /* Hesaplama motoru bankanın oranını kullanır */
+    expect(w.komisyonOrani('Garanti', 'Tek çekim')).toBe(2.9);
+    expect(w.komisyonOrani('Akbank', 'Tek çekim')).toBe(3.5);
+  });
+
+  test('varsayılan prim oranı kaydedilir, kişiye özel oran ezer', async () => {
+    w.goster('viewAyar');
+    await bekle(10);
+    d.getElementById('ayarPrimOran').value = '4,5';
+    w.primKaydetTikla();
+    await kosulBekle(() => w.DATA.ayar.personelPrim === 4.5, 8000);
+
+    /* Kişiye özel oran */
+    await db.oturumAc(kiraci.uid.finans);
+    await db.calistir('select personel_kaydet($1::jsonb)', [
+      JSON.stringify([
+        { ad: 'Elif', aktif: true, primMuaf: false, primOrani: 3 },
+        { ad: 'Burak', aktif: true, primMuaf: false, primOrani: '' }
+      ])
+    ]);
+    await girisYap('w-finans@ornek.com', 'dogruSifre1');
+
+    expect(w.personelPrimOrani('Elif')).toBe(3);
+    expect(w.personelPrimOrani('Burak')).toBe(4.5);
+  });
+
+  test('KDV hariç modda form toplamı KDV ile birlikte hesaplanır', async () => {
+    await db.oturumAc(kiraci.uid.finans);
+    await db.calistir(`select ayar_guncelle('kdv_modu', 'haric')`);
+    await girisYap('w-finans@ornek.com', 'dogruSifre1');
+
+    w.goster('viewSiparis', true);
+    d.getElementById('spAdSoyad').value = 'KDV Testi';
+    w.formUrunler = [
+      { marka: 'Seiko', kategori: 'Optik Cam', urun: 'A', adet: 1, fiyat: 1000 },
+      { marka: 'Ray-Ban', kategori: 'Güneş Gözlüğü', urun: 'B', adet: 1, fiyat: 1000 }
+    ];
+    w.urunleriCiz();
+    w.toplamlariGuncelle();
+
+    expect(w.pTR(d.getElementById('lblAraToplam').textContent)).toBe(2000);
+    expect(d.getElementById('lblKdv').textContent).toMatch(/300/);
+    expect(w.pTR(d.getElementById('spTutar').value)).toBe(2300);
   });
 });

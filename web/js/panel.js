@@ -403,6 +403,138 @@ function verileriIndir(){
   },function(e){ toast('Alınamadı: '+((e&&e.message)||''),false); });
 }
 
+/* ═══════════ KDV ═══════════ */
+function kdvKartiCiz(){
+  var el=document.getElementById('kdvListe'); if(!el)return;
+  var mod=document.getElementById('ayarKdvModu');
+  if(mod&&!mod.dataset.kirli)mod.value=kdvDahilMi()?'dahil':'haric';
+  var not=document.getElementById('kdvModuNot');
+  if(not)not.textContent=kdvDahilMi()
+    ? 'Ürün fiyatı KDV dahil girilir; rapor KDV\'yi fiyatın içinden ayırır.'
+    : 'Ürün fiyatı KDV hariç girilir; KDV genel toplama eklenir.';
+  el.innerHTML='<table class="oran-tablo"><thead><tr><th>Kategori</th><th>KDV (%)</th></tr></thead><tbody>'
+    +(DATA.urunKategorileri||[]).map(function(k,i){
+      return '<tr><td class="satir-ad">'+esc(k.ikon||'')+' '+esc(k.ad)+'</td>'
+        +'<td><input type="text" inputmode="decimal" id="kdvOran'+i+'" value="'+esc(String(k.kdv))+'"></td></tr>';
+    }).join('')+'</tbody></table>';
+}
+
+function kdvKaydetTikla(){
+  var liste=(DATA.urunKategorileri||[]).map(function(k,i){
+    var e=document.getElementById('kdvOran'+i);
+    return { ad:k.ad, kdv:pTR(e?e.value:k.kdv), ikon:k.ikon, aktif:true };
+  });
+  var mod=document.getElementById('ayarKdvModu').value;
+  gcall('urunKategorileriKaydet',[TOKEN,liste],function(){
+    gcall('ayarGuncelle',[TOKEN,'kdv_modu',mod],function(){
+      toast('KDV ayarları kaydedildi'); verileriYukle(false);
+    },function(e){ toast('Kaydedilemedi: '+((e&&e.message)||''),false); });
+  },function(e){ toast('Kaydedilemedi: '+((e&&e.message)||''),false); });
+}
+
+/* ═══════════ KREDİ KARTI KOMİSYONU ═══════════ */
+/*
+ * Banka × taksit matrisi. Tablo yeniden çizilirken (banka eklendiğinde)
+ * ekranda yazılı ama henüz kaydedilmemiş oranların kaybolmaması için
+ * değerler önce modele okunur.
+ */
+var komisyonSatirlari=null, komisyonDeger=null;
+
+function komisyonTaksitleri(){ return (DATA.ayar&&DATA.ayar.taksitler)||[]; }
+
+function komisyonModeliHazirla(){
+  if(komisyonDeger)return;
+  var matris=(DATA.ayar&&DATA.ayar.kkKomisyon)||{};
+  komisyonDeger={};
+  Object.keys(matris).forEach(function(b){ komisyonDeger[b]=Object.assign({},matris[b]); });
+  if(!komisyonDeger[''])komisyonDeger['']={};
+  komisyonSatirlari=Object.keys(komisyonDeger).sort(function(a,b){
+    return a===''?-1:(b===''?1:a.localeCompare(b,'tr'));
+  });
+}
+
+/** Ekrandaki değerleri modele alır (yeniden çizimden önce). */
+function komisyonDomdanOku(){
+  if(!komisyonSatirlari)return;
+  var taksitler=komisyonTaksitleri();
+  komisyonSatirlari.forEach(function(b,bi){
+    komisyonDeger[b]=komisyonDeger[b]||{};
+    taksitler.forEach(function(t,ti){
+      var e=document.getElementById('kom_'+bi+'_'+ti);
+      if(!e)return;
+      if(e.value==='')delete komisyonDeger[b][t];
+      else komisyonDeger[b][t]=pTR(e.value);
+    });
+  });
+}
+
+function komisyonKartiCiz(){
+  var el=document.getElementById('komisyonTablo'); if(!el)return;
+  komisyonModeliHazirla();
+  var taksitler=komisyonTaksitleri();
+  el.innerHTML='<table class="oran-tablo"><thead><tr><th>Banka</th>'
+    +taksitler.map(function(t){ return '<th>'+esc(t)+'</th>'; }).join('')
+    +'<th></th></tr></thead><tbody>'
+    +komisyonSatirlari.map(function(b,bi){
+      return '<tr><td class="satir-ad">'+(b===''?'Varsayılan':esc(b))+'</td>'
+        +taksitler.map(function(t,ti){
+          var v=(komisyonDeger[b]||{})[t];
+          return '<td><input type="text" inputmode="decimal" id="kom_'+bi+'_'+ti+'" value="'
+            +(v===undefined||v===null?'':esc(String(v)))+'" placeholder="—"></td>';
+        }).join('')
+        +'<td>'+(b===''?'':'<button class="icon-btn" onclick="komisyonBankaSil('+bi+')">🗑</button>')+'</td></tr>';
+    }).join('')+'</tbody></table>';
+
+  var sec=document.getElementById('komisyonYeniBanka');
+  if(sec){
+    var kalan=((DATA.ayar&&DATA.ayar.bankalar)||[]).filter(function(b){
+      return komisyonSatirlari.indexOf(b)===-1;
+    });
+    sec.innerHTML=kalan.map(function(b){ return '<option value="'+esc(b)+'">'+esc(b)+'</option>'; }).join('')
+      ||'<option value="">Tüm bankalar eklendi</option>';
+  }
+}
+
+function komisyonBankaEkle(){
+  var b=document.getElementById('komisyonYeniBanka').value;
+  if(!b){ toast('Eklenecek banka yok',false); return; }
+  komisyonDomdanOku();
+  if(komisyonSatirlari.indexOf(b)>-1){ toast('Bu banka zaten listede',false); return; }
+  komisyonDeger[b]={};
+  komisyonSatirlari.push(b);
+  komisyonKartiCiz();
+}
+
+function komisyonBankaSil(bi){
+  komisyonDomdanOku();
+  var b=komisyonSatirlari[bi];
+  if(b==='')return;
+  delete komisyonDeger[b];
+  komisyonSatirlari.splice(bi,1);
+  komisyonKartiCiz();
+}
+
+function komisyonKaydetTikla(){
+  komisyonDomdanOku();
+  var liste=[];
+  komisyonSatirlari.forEach(function(b){
+    Object.keys(komisyonDeger[b]||{}).forEach(function(t){
+      liste.push({ banka:b, taksit:t, oran:komisyonDeger[b][t] });
+    });
+  });
+  gcall('kkKomisyonKaydet',[TOKEN,liste],function(){
+    komisyonSatirlari=null; komisyonDeger=null;
+    toast('Komisyon oranları kaydedildi'); verileriYukle(false);
+  },function(e){ toast('Kaydedilemedi: '+((e&&e.message)||''),false); });
+}
+
+function primKaydetTikla(){
+  var v=document.getElementById('ayarPrimOran').value;
+  gcall('ayarGuncelle',[TOKEN,'personel_prim',String(pTR(v))],function(){
+    toast('Prim oranı kaydedildi'); verileriYukle(false);
+  },function(e){ toast('Kaydedilemedi: '+((e&&e.message)||''),false); });
+}
+
 /* ═══════════ LOGO ═══════════ */
 function logoKartiCiz(){
   var el=document.getElementById('logoOnizleme'); if(!el)return;
@@ -492,7 +624,8 @@ function ayarlarCiz(){
     document.getElementById('hesabimEmail').textContent=KULLANICI.email||'—';
     document.getElementById('hesabimRol').textContent=ROL_ETIKET[r]||r;
   }
-  ['cardPersonel','cardMarka','cardHedefAyar','cardTekrar','cardOranlar','cardMesaj'].forEach(function(id){
+  ['cardPersonel','cardMarka','cardHedefAyar','cardTekrar','cardOranlar','cardMesaj',
+   'cardKdv','cardKomisyon'].forEach(function(id){
     var e=document.getElementById(id); if(e)e.style.display=finansMi()?'':'none';
   });
   /* İşletme, şube ve kullanıcı yönetimi: sahip + yönetici */
@@ -500,13 +633,21 @@ function ayarlarCiz(){
     var e=document.getElementById(id); if(e)e.style.display=yoneticiMi()?'':'none';
   });
   if(yoneticiMi()){ isletmeKartiCiz(); subeListesiCiz(); logoKartiCiz(); kullanicilariYukle(); }
-  if(finansMi())mesajAyarlariCiz();
+  if(finansMi()){ mesajAyarlariCiz(); kdvKartiCiz(); komisyonKartiCiz(); }
   if(!finansMi())return;
 
   /* Personel */
+  var primVars=pTR((DATA.ayar&&DATA.ayar.personelPrim)||0);
+  var po=document.getElementById('ayarPrimOran');
+  if(po&&!po.dataset.kirli)po.value=primVars?fTR2(primVars):'';
   document.getElementById('personelListe').innerHTML=(DATA.personel||[]).map(function(p,i){
-    return '<div class="split-row"><span class="split-name">'+esc(p.ad)+(p.primMuaf?' <span style="color:var(--gray-400);font-size:11px">prim muaf</span>':'')+(p.aktif===false?' <span style="color:var(--red);font-size:11px">pasif</span>':'')+'</span>'
-      +'<span style="display:flex;gap:6px"><button class="icon-btn" title="Prim muafiyeti" onclick="personelPrimDegistir('+i+')">💰</button>'
+    var oranEtiket=p.primMuaf
+      ? ' <span style="color:var(--gray-400);font-size:11px">prim muaf</span>'
+      : ' <span style="color:var(--gray-400);font-size:11px">prim %'
+        +fTR2(personelPrimOrani(p.ad))+(p.primOrani===null||p.primOrani===undefined||p.primOrani===''?' (varsayılan)':'')+'</span>';
+    return '<div class="split-row"><span class="split-name">'+esc(p.ad)+oranEtiket+(p.aktif===false?' <span style="color:var(--red);font-size:11px">pasif</span>':'')+'</span>'
+      +'<span style="display:flex;gap:6px"><button class="icon-btn" title="Prim oranı" onclick="personelPrimOraniDegistir('+i+')">💰</button>'
+      +'<button class="icon-btn" title="Prim muafiyeti" onclick="personelPrimDegistir('+i+')">🚫</button>'
       +'<button class="icon-btn" title="Aktif/pasif" onclick="personelAktifDegistir('+i+')">'+(p.aktif===false?'✅':'⛔')+'</button>'
       +'<button class="icon-btn" onclick="personelSilTikla('+i+')">🗑</button></span></div>';
   }).join('')||'<div class="mini-note">Personel eklenmemiş.</div>';
@@ -571,6 +712,21 @@ function personelAktifDegistir(i){
 function personelPrimDegistir(i){
   var liste=(DATA.personel||[]).slice();
   liste[i]=Object.assign({},liste[i],{primMuaf:!liste[i].primMuaf});
+  personelListesiKaydet(liste);
+}
+
+/** Kişiye özel prim oranı; boş bırakılırsa işletme varsayılanı kullanılır. */
+function personelPrimOraniDegistir(i){
+  var liste=(DATA.personel||[]).slice();
+  var p=liste[i];
+  var mevcut=(p.primOrani===null||p.primOrani===undefined||p.primOrani==='')?'':String(p.primOrani);
+  var yeni=prompt(p.ad+' için prim oranı (%) — boş bırakırsan varsayılan ('
+    +fTR2(pTR((DATA.ayar&&DATA.ayar.personelPrim)||0))+') kullanılır:', mevcut);
+  if(yeni===null)return;
+  liste[i]=Object.assign({},p,{
+    primOrani: String(yeni).trim()===''?'':pTR(yeni),
+    primMuaf:false
+  });
   personelListesiKaydet(liste);
 }
 function personelSilTikla(i){

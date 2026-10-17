@@ -161,19 +161,50 @@ function olcuSecici(i,alan){
 
 /* ═══════════ TOPLAM / İNDİRİM ═══════════ */
 function formAraToplam(){ var t=0; formUrunler.forEach(function(p){ t+=pTR(p.fiyat)*(parseInt(p.adet,10)||1); }); return t; }
+/** Formdaki ürünlerden KDV tutarı (işletmenin KDV moduna göre). */
+function formKdv(){
+  return siparisKdv({ urunler: formUrunler, tutar: pTR(document.getElementById('spTutar').value) });
+}
+
 function toplamlariGuncelle(){
   var ara=formAraToplam();
+  var dahil=kdvDahilMi();
+  var kdv=0;
+  formUrunler.forEach(function(p){
+    var line=urunSatirToplam(p); if(line<=0)return;
+    var oran=kategoriKdv(p.kategori); if(!oran)return;
+    kdv+=dahil?(line-line/(1+oran/100)):(line*oran/100);
+  });
+  var beklenen=ara+(dahil?0:kdv);
+
   document.getElementById('lblAraToplam').textContent=fTR(ara)+' ₺';
+  var kdvSatir=document.getElementById('lblKdv');
+  if(kdvSatir){
+    kdvSatir.textContent=(dahil?'KDV (dahil): ':'KDV: +')+fTR(kdv)+' ₺';
+    kdvSatir.style.display=kdv>0?'':'none';
+  }
   var te=document.getElementById('spTutar');
-  if(te.dataset.elle!=='true'||te.value==='')te.value=ara>0?fTR2(ara):'';
+  if(te.dataset.elle!=='true'||te.value==='')te.value=beklenen>0?fTR2(beklenen):'';
   indirimGuncelle(); tahsilatKutulariGuncelle();
 }
 function genelToplamGirildi(el){ paraFormatla(el); el.dataset.elle=(el.value!=='')?'true':'false'; if(el.value==='')toplamlariGuncelle(); indirimGuncelle(); tahsilatKutulariGuncelle(); formKirliYap(); }
 function indirimGuncelle(){
-  var ara=pTR(document.getElementById('lblAraToplam').textContent), tut=pTR(document.getElementById('spTutar').value);
+  var ara=pTR(document.getElementById('lblAraToplam').textContent);
+  var tut=pTR(document.getElementById('spTutar').value);
+  /* KDV hariç modda indirim, KDV'li beklenen tutara göre hesaplanır */
+  var beklenen=ara;
+  if(!kdvDahilMi()){
+    formUrunler.forEach(function(p){
+      var line=urunSatirToplam(p), oran=kategoriKdv(p.kategori);
+      if(line>0&&oran)beklenen+=line*oran/100;
+    });
+  }
   var lbl=document.getElementById('lblIndirim');
-  if(ara>0&&tut>0&&tut<ara){ var fark=ara-tut; lbl.textContent='İNDİRİM: '+fTR(fark)+' ₺ (%'+Math.round(fark/ara*100)+')'; lbl.style.display='inline'; }
-  else lbl.style.display='none';
+  if(beklenen>0&&tut>0&&tut<beklenen-0.005){
+    var fark=beklenen-tut;
+    lbl.textContent='İNDİRİM: '+fTR(fark)+' ₺ (%'+Math.round(fark/beklenen*100)+')';
+    lbl.style.display='inline';
+  } else lbl.style.display='none';
 }
 function tahsilatKutulariGuncelle(){
   var toplam=0,nakit=false,kk=false,kkDetay='';
@@ -244,7 +275,7 @@ function kkGridleriCiz(){
     return '<div class="pick-opt'+(kkCtx.banka===b?' active':'')+'" onclick="kkBankaSec(\''+q(b)+'\')">'+esc(b)+'</div>';
   }).join('');
   document.getElementById('taksitGrid').innerHTML=taksitler.map(function(t){
-    var oran=komisyonOrani(t);
+    var oran=komisyonOrani(kkCtx.banka,t);
     return '<div class="pick-opt'+(kkCtx.taksit===t?' active':'')+'" onclick="kkTaksitSec(\''+q(t)+'\')"><span>'+esc(t)+'</span><span class="cnt">%'+oran+'</span></div>';
   }).join('');
 }
@@ -364,6 +395,7 @@ function siparisKaydetTikla(){
     eposta:document.getElementById('spEposta').value.trim(),
     tcVergi:document.getElementById('spTcVergi').value.trim(),
     urunler:urunler, recete:receteTopla(), tutar:tutar,
+    tutarElle:document.getElementById('spTutar').dataset.elle==='true',
     odemeler:formOdemeler, durum:formDurum, erp:formErp
   };
   personelSor(siparis.personel,function(personel){
@@ -521,7 +553,8 @@ function siparisDetayAc(id){
   if(finansMi()){
     var akis=siparisNakitAkis(s,'');
     if(akis.kasa>0){
-      tutarSatir+='<div style="font-size:11px;color:var(--gray-600);margin-top:4px;font-family:var(--mono)">KDV: '+fTR(akis.kdv)+' ₺</div>'
+      tutarSatir+='<div style="font-size:11px;color:var(--gray-600);margin-top:4px;font-family:var(--mono)">KDV ('
+        +(kdvDahilMi()?'dahil':'hariç')+'): '+fTR(akis.kdv)+' ₺</div>'
         +'<div style="font-size:11px;color:var(--gray-600);font-family:var(--mono)">Komisyon+prim: '+fTR(akis.komisyon)+' ₺</div>'
         +'<div style="font-size:12px;color:var(--green);margin-top:3px;padding-top:3px;border-top:1px dashed var(--gray-200);font-family:var(--mono);font-weight:700">Net: '+fTR(akis.net)+' ₺</div>';
     }

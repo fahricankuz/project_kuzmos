@@ -482,3 +482,14 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
   border:1px dashed var(--gray-200); border-radius:10px; background:var(--gray-50);
   color:var(--gray-400); font-size:12px; }
 .logo-onizleme img { max-height:60px; max-width:200px; object-fit:contain; }
+
+/* Geniş tabloların kart içinde yatay kayması (komisyon matrisi) */
+.tablo-kaydir { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.oran-tablo { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.oran-tablo th, .oran-tablo td { padding: 6px 8px; text-align: left; white-space: nowrap; }
+.oran-tablo th { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--gray-600); border-bottom: 1px solid var(--gray-200); font-weight: 600; }
+.oran-tablo td { border-bottom: 1px solid var(--gray-100); }
+.oran-tablo input { width: 72px; padding: 5px 7px; font-family: var(--mono); font-size: 12.5px;
+  border: 1px solid var(--gray-200); border-radius: var(--radius-sm); text-align: right; }
+.oran-tablo .satir-ad { font-weight: 500; }

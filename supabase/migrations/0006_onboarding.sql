@@ -67,10 +67,11 @@ begin
 
   insert into urun_kategorileri (isletme_id, ad, kdv, ikon, sira)
   select p_isletme, k.ad, k.kdv, k.ikon, k.sira from (values
+    /* Optik çerçeve ve cam %10, diğer kalemler %20; Ayarlar'dan değişir */
     ('Optik Çerçeve', 10, '👓', 1), ('Optik Cam', 10, '⭕', 2),
-    ('Güneş Gözlüğü', 20, '🕶️', 3), ('Lens', 10, '👁️', 4),
-    ('Solüsyon', 10, '💧', 5), ('Tamir/Aksesuar', 20, '🔧', 6),
-    ('Optik Yedek Parça', 10, '⚙️', 7), ('Güneş Yedek Parça', 20, '🛠️', 8)
+    ('Güneş Gözlüğü', 20, '🕶️', 3), ('Lens', 20, '👁️', 4),
+    ('Solüsyon', 20, '💧', 5), ('Tamir/Aksesuar', 20, '🔧', 6),
+    ('Optik Yedek Parça', 20, '⚙️', 7), ('Güneş Yedek Parça', 20, '🛠️', 8)
   ) as k(ad, kdv, ikon, sira)
   on conflict (isletme_id, ad) do nothing;
 

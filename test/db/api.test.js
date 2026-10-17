@@ -267,8 +267,9 @@ describe('tum_veri rol filtresi', () => {
     const v = await tumVeri();
     /* Yeni işletme kimsenin prim oranını devralmaz: varsayılan 0 */
     expect(v.ayar.personelPrim).toBe(0);
-    expect(v.ayar.kkKomisyon['Tek çekim']).toBe(3.5);
-    expect(v.ayar.kkKomisyon['3 Taksit']).toBe(9);
+    /* Komisyon artık banka × taksit matrisi; '' satırı varsayılan */
+    expect(v.ayar.kkKomisyon['']['Tek çekim']).toBe(0);
+    expect(v.ayar.kdvModu).toBe('dahil');
     expect(v.ayar.bankalar).toContain('Garanti');
     expect(v.ayar.taksitler[0]).toBe('Tek çekim');
     expect(v.ayar.siparisNoOnEk).toBe('KUZ');
@@ -348,14 +349,15 @@ describe('kasa yazma uçları', () => {
     expect(v.hedefler['2026-10']).toMatchObject({ hedef: 500000, notu: 'Ekim hedefi' });
   });
 
-  test('ayar yalnızca yöneticide değişir (finans bile değiştiremez)', async () => {
+  test('oran ayarlarını finans değiştirir, şube rolü değiştiremez', async () => {
     await db.oturumAc(muhasebeUid);
-    expect(await hataBekle(() => db.calistir(`select ayar_guncelle('personel_prim', '6')`))).toMatch(
-      /row-level security/i
-    );
-    await db.oturumAc(yoneticiUid);
     expect((await db.tek(`select ayar_guncelle('personel_prim', '6') as ok`)).ok).toBe(true);
     expect((await tumVeri()).ayar.personelPrim).toBe(6);
+
+    await db.oturumAc(magazaUid);
+    expect(await hataBekle(() => db.calistir(`select ayar_guncelle('personel_prim', '0')`))).toMatch(
+      /row-level security/i
+    );
   });
 
   test('günlüğü yalnızca finans görür', async () => {

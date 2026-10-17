@@ -513,7 +513,8 @@ begin
     'ayar', ayar_paketi(),
     'personel', (
       select coalesce(jsonb_agg(jsonb_build_object(
-        'ad', ad, 'aktif', aktif, 'primMuaf', prim_muaf, 'notu', ''
+        'ad', ad, 'aktif', aktif, 'primMuaf', prim_muaf,
+        'primOrani', prim_orani, 'notu', ''
       ) order by sira, ad), '[]'::jsonb)
       from personel where isletme_id = v_isletme and (v_finans or aktif)),
     'urunKategorileri', (

@@ -124,6 +124,7 @@
           <div class="payment-group" style="background:var(--white)">
             <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:500;color:var(--gray-600)">
               <span>ARA TOPLAM: <b id="lblAraToplam" style="font-family:var(--mono);color:var(--black)">0 ₺</b></span>
+              <span id="lblKdv" style="color:var(--gray-600);display:none;font-family:var(--mono)"></span>
               <span id="lblIndirim" style="color:var(--red);font-weight:600;display:none"></span>
             </div>
             <span class="payment-label">Genel Toplam</span>
@@ -415,7 +416,39 @@
         <div class="field"><input type="text" id="yeniPersonelAd" placeholder="Ad Soyad"></div>
         <button class="btn btn-yellow" style="justify-content:center" onclick="personelEkleTikla()">＋ Personel ekle</button>
       </div>
-      <div class="mini-note">Bunlar giriş hesabı değildir; sadece satışı/işlemi kimin yaptığını seçmek içindir.</div>
+      <div class="form-row cols-2" style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--gray-200)">
+        <div class="field"><label>Varsayılan prim oranı (%)</label>
+          <input type="text" id="ayarPrimOran" inputmode="decimal" placeholder="0">
+        </div>
+        <button class="btn btn-outline" style="justify-content:center" onclick="primKaydetTikla()">Prim oranını kaydet</button>
+      </div>
+      <div class="mini-note">Kişiye özel oran girilmemişse bu oran kullanılır. Listede her personelin yanındaki 💰 ile kişiye özel oran verilir, ⛔ ile prim muafiyeti açılır.</div>
+    </div></div>
+
+    <div class="card" id="cardKdv"><div class="card-header"><h3>KDV</h3><span class="sub">kategori başına oran</span></div><div class="card-body">
+      <div class="form-row cols-2">
+        <div class="field"><label>Fiyatlar nasıl giriliyor?</label>
+          <select id="ayarKdvModu">
+            <option value="dahil">KDV dahil (etiket fiyatı)</option>
+            <option value="haric">KDV hariç (toplama eklenir)</option>
+          </select>
+        </div>
+        <div class="field"><label>&nbsp;</label>
+          <div class="mini-note" id="kdvModuNot"></div>
+        </div>
+      </div>
+      <div id="kdvListe"></div>
+      <button class="btn btn-yellow" style="width:100%;justify-content:center;margin-top:10px" onclick="kdvKaydetTikla()">KDV ayarlarını kaydet</button>
+    </div></div>
+
+    <div class="card" id="cardKomisyon"><div class="card-header"><h3>Kredi Kartı Komisyonu</h3><span class="sub">banka ve taksite göre</span></div><div class="card-body">
+      <div class="tablo-kaydir"><div id="komisyonTablo"></div></div>
+      <div class="form-row cols-2" style="margin-top:10px">
+        <div class="field"><select id="komisyonYeniBanka"></select></div>
+        <button class="btn btn-outline" style="justify-content:center" onclick="komisyonBankaEkle()">＋ Banka satırı ekle</button>
+      </div>
+      <button class="btn btn-yellow" style="width:100%;justify-content:center;margin-top:10px" onclick="komisyonKaydetTikla()">Komisyon oranlarını kaydet</button>
+      <div class="mini-note">İlk satır varsayılandır: bankası ayrı girilmemiş tahsilatlarda bu oranlar kullanılır.</div>
     </div></div>
 
     <div class="card" id="cardMarka"><div class="card-header"><h3>Markalar</h3><span class="sub">kategori → marka</span></div><div class="card-body">

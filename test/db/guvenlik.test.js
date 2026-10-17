@@ -232,9 +232,21 @@ describe('finans rolü', () => {
     expect(r.affectedRows).toBe(0);
   });
 
-  test('ayar değiştiremez', async () => {
-    const r = await db.calistir(`update ayarlar set deger = '0' where anahtar = 'personel_prim'`);
-    expect(r.affectedRows).toBe(0);
+  test('oran ayarlarını değiştirebilir (KDV, prim, komisyon)', async () => {
+    expect((await db.tek(`select ayar_guncelle('personel_prim', '5') as ok`)).ok).toBe(true);
+    expect(
+      (await db.tek(`select kk_komisyon_kaydet('[{"banka":"","taksit":"Tek çekim","oran":3}]'::jsonb) as ok`))
+        .ok
+    ).toBe(true);
+  });
+
+  test('işletme bilgisi ve logo yönetici işidir', async () => {
+    expect(await hataBekle(() => db.calistir(`select logo_kaydet('https://cdn/x.png')`))).toMatch(
+      /yetkiniz yok/i
+    );
+    expect(await hataBekle(() => db.calistir(`select isletme_guncelle('{"ad":"Yeni"}'::jsonb)`))).toMatch(
+      /yetkiniz yok/i
+    );
   });
 
   test('siparişi kalıcı silebilir', async () => {

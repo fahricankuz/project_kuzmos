@@ -96,17 +96,19 @@ grant select, insert, update, delete on
   urun_kategorileri, markalar, hesaplar, kasa_kategorileri, ayarlar, personel
   to authenticated;
 
+/* Ürün kategorileri KDV oranını taşır; markalar da ürün listesinin
+   parçasıdır. İkisini de finans rolü yönetir (Ayarlar → KDV / Markalar). */
 create policy oku_isletme on urun_kategorileri for select to authenticated
   using (isletme_erisimi(isletme_id));
-create policy yaz_yonetici on urun_kategorileri for all to authenticated
-  using (isletme_erisimi(isletme_id) and yonetici_mi())
-  with check (isletme_erisimi(isletme_id) and yonetici_mi() and yazma_izni());
+create policy yaz_finans on urun_kategorileri for all to authenticated
+  using (isletme_erisimi(isletme_id) and finans_mi())
+  with check (isletme_erisimi(isletme_id) and finans_mi() and yazma_izni());
 
 create policy oku_isletme on markalar for select to authenticated
   using (isletme_erisimi(isletme_id));
-create policy yaz_yonetici on markalar for all to authenticated
-  using (isletme_erisimi(isletme_id) and yonetici_mi())
-  with check (isletme_erisimi(isletme_id) and yonetici_mi() and yazma_izni());
+create policy yaz_finans on markalar for all to authenticated
+  using (isletme_erisimi(isletme_id) and finans_mi())
+  with check (isletme_erisimi(isletme_id) and finans_mi() and yazma_izni());
 
 create policy oku_isletme on hesaplar for select to authenticated
   using (isletme_erisimi(isletme_id));
@@ -122,9 +124,12 @@ create policy yaz_finans on kasa_kategorileri for all to authenticated
 
 create policy oku_isletme on ayarlar for select to authenticated
   using (isletme_erisimi(isletme_id));
-create policy yaz_yonetici on ayarlar for all to authenticated
-  using (isletme_erisimi(isletme_id) and yonetici_mi())
-  with check (isletme_erisimi(isletme_id) and yonetici_mi() and yazma_izni());
+/* Ayarların çoğu finansal (KDV modu, prim, masraf kalemleri, hesaplar);
+   finans rolü bunları yönetir. Markalaşma (logo, işletme bilgisi) kendi
+   uçlarında yöneticiyle sınırlıdır. */
+create policy yaz_finans on ayarlar for all to authenticated
+  using (isletme_erisimi(isletme_id) and finans_mi())
+  with check (isletme_erisimi(isletme_id) and finans_mi() and yazma_izni());
 
 create policy oku_magaza on personel for select to authenticated
   using (magaza_erisimi(magaza_id));

@@ -437,14 +437,33 @@ function kategoriKdv(ad){
   var k=(DATA.urunKategorileri||[]).filter(function(x){return x.ad===ad;})[0];
   return k?k.kdv:null;
 }
-function komisyonOrani(taksit){
-  var m=(DATA.ayar&&DATA.ayar.kkKomisyon)||{};
+/** Fiyatlar KDV dahil mi girilir? (işletme ayarı) */
+function kdvDahilMi(){ return !(DATA.ayar&&DATA.ayar.kdvModu==='haric'); }
+
+/**
+ * Kredi kartı komisyonu: önce bankanın kendi oranı, yoksa o taksit için
+ * varsayılan oran, o da yoksa "Diğer". Oranlar işletmeye özeldir.
+ */
+function komisyonOrani(banka,taksit){
   if(!taksit)return 0;
-  return m[taksit]!==undefined?m[taksit]:(m['Diğer']||0);
+  var m=(DATA.ayar&&DATA.ayar.kkKomisyon)||{};
+  var b=m[banka||'']||{};
+  if(b[taksit]!==undefined)return pTR(b[taksit]);
+  var v=m['']||{};
+  if(v[taksit]!==undefined)return pTR(v[taksit]);
+  return pTR(v['Diğer']||0);
 }
-function personelPrimMuaf(ad){
-  var p=(DATA.personel||[]).filter(function(x){return x.ad===ad;})[0];
-  return p?!!p.primMuaf:false;
+
+function personelKaydi(ad){
+  return (DATA.personel||[]).filter(function(x){return x.ad===ad;})[0]||null;
+}
+function personelPrimMuaf(ad){ var p=personelKaydi(ad); return p?!!p.primMuaf:false; }
+/** Kişiye özel oran varsa o, yoksa işletme varsayılanı; muafsa 0. */
+function personelPrimOrani(ad){
+  var p=personelKaydi(ad);
+  if(p&&p.primMuaf)return 0;
+  if(p&&p.primOrani!==null&&p.primOrani!==undefined&&p.primOrani!=='')return pTR(p.primOrani);
+  return pTR((DATA.ayar&&DATA.ayar.personelPrim)||0);
 }
 function urunSatirToplam(p){ return pTR(p.fiyat)*(parseInt(p.adet,10)||1); }
 function siparisAraToplam(s){ var t=0; (s.urunler||[]).forEach(function(p){t+=urunSatirToplam(p);}); return t; }
@@ -452,21 +471,41 @@ function siparisTahsilat(s){ var t=0; (s.odemeler||[]).forEach(function(o){ t+=(
 function siparisKalan(s){ return pTR(s.tutar)-siparisTahsilat(s); }
 function siparisOdendiMi(s){ return pTR(s.tutar)>0&&siparisKalan(s)<=0.005; }
 
-/** KDV hariç oran: indirim dağıtılmış olarak. Kategorisi olmayan ürün varsa eksik kalır. */
+/**
+ * Tahsilatın KDV hariç kalan oranı (indirim dağıtılmış olarak).
+ *   KDV dahil modu : fiyatın içinden ayrışır  → net = brüt/(1+oran)
+ *   KDV hariç modu : fiyatın üstüne eklenir   → net = brüt
+ * Kategorisi girilmemiş ürün varsa o satırın KDV'si hesaplanamaz.
+ */
 function siparisNetOran(s){
   var ara=siparisAraToplam(s), tutar=pTR(s.tutar);
   if(ara<=0||tutar<=0)return 1;
-  var iskonto=tutar/ara, net=0, brut=0;
+  var dahil=kdvDahilMi(), net=0, brut=0;
   (s.urunler||[]).forEach(function(p){
     var line=urunSatirToplam(p); if(line<=0)return;
     var kdv=kategoriKdv(p.kategori);
-    var brutEtkin=line*iskonto;
-    brut+=brutEtkin;
-    if(kdv===null||kdv===undefined)return;
-    net+=brutEtkin/(1+kdv/100);
+    var satirBrut=dahil?line:line*(1+((kdv||0)/100));
+    brut+=satirBrut;
+    if(kdv===null||kdv===undefined){ net+=satirBrut; return; }
+    net+=dahil?(line/(1+kdv/100)):line;
   });
   if(brut<=0)return 1;
   return net/brut;
+}
+
+/** Siparişin KDV tutarı (form ve detayda gösterilir). */
+function siparisKdv(s){
+  var dahil=kdvDahilMi(), kdv=0;
+  (s.urunler||[]).forEach(function(p){
+    var line=urunSatirToplam(p); if(line<=0)return;
+    var oran=kategoriKdv(p.kategori); if(!oran)return;
+    kdv+=dahil?(line-line/(1+oran/100)):(line*oran/100);
+  });
+  var beklenen=siparisAraToplam(s)+(dahil?0:kdv);
+  var tutar=pTR(s.tutar);
+  /* Elle indirim varsa KDV de orantılı düşer */
+  if(beklenen>0&&tutar>0&&Math.abs(tutar-beklenen)>0.005)kdv=kdv*tutar/beklenen;
+  return kdv;
 }
 
 /**
@@ -475,14 +514,14 @@ function siparisNetOran(s){
  */
 function siparisNakitAkis(s,donem){
   var netOran=siparisNetOran(s);
-  var primOran=personelPrimMuaf(s.personel)?0:((DATA.ayar&&DATA.ayar.personelPrim)||0);
+  var primOran=personelPrimOrani(s.personel);
   var kasa=0,komisyon=0;
   (s.odemeler||[]).forEach(function(o){
     if(donem&&String(o.tarih).indexOf(donem)!==0)return;
     var isaret=o.tip==='iade'?-1:1;
     var tutar=pTR(o.tutar)*isaret;
     kasa+=tutar;
-    if(o.yontem==='kk')komisyon+=tutar*(komisyonOrani(o.taksit)/100);
+    if(o.yontem==='kk')komisyon+=tutar*(komisyonOrani(o.banka,o.taksit)/100);
     if(primOran>0)komisyon+=tutar*(primOran/100);
   });
   var kdv=kasa*(1-netOran); if(kdv<0&&kasa>0)kdv=0;
