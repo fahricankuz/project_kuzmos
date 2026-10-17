@@ -8,7 +8,12 @@ var AYLAR=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos'
 var ROL_ETIKET={yonetici:'Yönetici',finans:'Finans',magaza_muduru:'Mağaza Müdürü',personel:'Personel'};
 var DURUMLAR=['Satış Yapıldı','Cam Siparişi Verildi','Montaj Yapıldı','Teslim Edildi'];
 var DURUM_KISA=['Satış','Cam Sip.','Montaj','Teslim'];
-var DURUM_RENK=['#378ADD','#BA7517','#639922','#639922'];
+var DURUM_RENK=['var(--bilgi)','var(--uyari)','var(--basarili)','var(--basarili)'];
+/* Renkler app.css'teki tema token'larından okunur; palet değişince grafikler de döner. */
+function tokenRenk(ad,yedek){
+  try{ var v=getComputedStyle(document.documentElement).getPropertyValue(ad).trim(); return v||yedek; }
+  catch(e){ return yedek; }
+}
 var GECIKME_LIMIT={'Satış Yapıldı':1,'Cam Siparişi Verildi':7,'Montaj Yapıldı':1};
 
 /*

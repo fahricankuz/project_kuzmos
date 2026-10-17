@@ -217,11 +217,14 @@ function gunlukGrafikCiz(gunluk){
     panelChartInst.update();
     return;
   }
-  Chart.defaults.font.family="'DM Sans',sans-serif"; Chart.defaults.color='#999';
+  var vurgu=tokenRenk('--vurgu','#1F56E3');
+  Chart.defaults.font.family="'DM Sans',sans-serif";
+  Chart.defaults.color=tokenRenk('--metin-silik','#8A95A8');
   panelChartInst=new Chart(cv,{type:'line',data:{labels:gunler,datasets:[{label:'Tahsilat (₺)',data:degerler,
-    borderColor:'#F5C800',backgroundColor:'rgba(245,200,0,0.1)',borderWidth:3,fill:true,tension:0.4,pointBackgroundColor:'#111'}]},
+    borderColor:vurgu,backgroundColor:'rgba('+tokenRenk('--vurgu-rgb','31,86,227')+',0.12)',
+    borderWidth:3,fill:true,tension:0.4,pointBackgroundColor:vurgu}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-      scales:{y:{beginAtZero:true,grid:{color:'#f0f0f0'}},x:{grid:{display:false}}}}});
+      scales:{y:{beginAtZero:true,grid:{color:tokenRenk('--cizgi','#E2E8F3')}},x:{grid:{display:false}}}}});
 }
 
 /* ═══════════ KASA ÖZET MODALI (bugün / bu ay) ═══════════ */

@@ -491,8 +491,8 @@ function kayitListesiCiz(){
   var h='';
   liste.slice(0,kayitLimit).forEach(function(s){
     var odendi=siparisOdendiMi(s), kalan=siparisKalan(s);
-    var rozet=odendi?'<span class="rec-status" style="background:#e8f5e9;color:#2e7d32">✅ Ödendi</span>'
-      :'<span class="rec-status" style="background:#ffe8e8;color:#c0392b">⏳ Kalan '+fTR(kalan)+' ₺</span>';
+    var rozet=odendi?'<span class="rec-status rs-ok">✅ Ödendi</span>'
+      :'<span class="rec-status rs-bekleyen">⏳ Kalan '+fTR(kalan)+' ₺</span>';
     var teslim=s.durum==='Teslim Edildi';
     h+='<div class="rec" onclick="siparisDetayAc(\''+q(s.id)+'\')">'
       +'<div class="rec-info"><div class="rec-cat">'+esc(s.adSoyad||'—')+'</div>'

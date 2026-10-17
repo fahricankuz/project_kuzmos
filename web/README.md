@@ -14,13 +14,14 @@ node tools/demo-olustur.js        # kuzmos-demo.html üretir
 ```
 
 Gerçek arayüz + örnek veri, tek dosyada. Alt bandındaki rol değiştirici ile
-Yönetici / Finans / Mağaza Müdürü / Personel görünümleri karşılaştırılır.
-Yazma işlemleri bellekte kalır, sayfa yenilenince başa döner.
+Yönetici / Finans / Mağaza Müdürü / Personel görünümleri, palet değiştirici ile
+de marka renkleri karşılaştırılır. Yazma işlemleri bellekte kalır, sayfa
+yenilenince başa döner.
 
 | Dosya | Ne |
 |---|---|
 | `index.html` | Tüm ekranlar ve modallar (tek sayfa) |
-| `app.css` | Tasarım + A4 yazdırma stilleri |
+| `app.css` | Renk sistemi (token), tasarım + A4 yazdırma stilleri |
 | `js/config.js` | Supabase URL + anon anahtar (**doldurulacak**) |
 | `js/api.js` | Veri katmanı: `gcall(...)` → Supabase RPC |
 | `js/core.js` | Durum, giriş, navigasyon, KDV/komisyon/prim hesapları |
@@ -30,6 +31,32 @@ Yazma işlemleri bellekte kalır, sayfa yenilenince başa döner.
 
 Ekran kodları Apps Script sürümüyle neredeyse aynıdır: sunucu çağrısı köprüsü
 (`gcall`) aynı imzayı koruduğu için ekranlar değişmeden taşındı.
+
+## Renk sistemi / marka kimliği
+
+Hiçbir bileşen doğrudan renk kullanmaz; hepsi `app.css` başındaki anlamsal
+token'lardan gelir. Paleti değiştirmek = tek bir blokta değer düzenlemek.
+
+| Token ailesi | Nerede |
+|---|---|
+| `--vurgu`, `--vurgu-koyu`, `--vurgu-silik`, `--vurgu-ust`, `--vurgu-rgb` | Marka rengi: düğme, aktif sekme, seçili çip, ilerleme çubuğu, grafik |
+| `--zemin`, `--yuzey`, `--yuzey-2`, `--cizgi`, `--metin*` | Yüzeyler ve tipografi |
+| `--ust-*`, `--baslik-*` | Üst bar ve kart başlıkları |
+| `--basarili`, `--tehlike`, `--uyari`, `--bilgi` (+ `-silik` / `-cizgi`) | Durum renkleri — paletten bağımsız |
+| `--koyu-zemin`, `--koyu-metin`, `--koyu-vurgu` | Giriş ekranı, gün sonu kasa kutusu, onay animasyonu |
+
+Hazır paletler (`:root[data-tema="..."]`):
+
+| Tema | Vurgu | Karakter |
+|---|---|---|
+| *(öntanımlı)* **Gece Mavisi** | `#1F56E3` | Banka/fintek mavisi; güven ve "para" çağrışımı |
+| `berrak` | `#0E7C86` | Teal; optik/sağlık tarafına yakın, daha yumuşak |
+| `kasa` | `#0B8A52` | Zümrüt; "kasa/nakit" vurgusu |
+| `mevcut` | `#F5C800` | Eski siyah + sarı görünüm (geri dönüş için) |
+
+Paleti değiştirmek: `document.documentElement.setAttribute('data-tema','berrak')`.
+Öntanımlıya dönmek için özniteliği kaldırmak yeterli. Grafik renkleri de
+`tokenRenk()` ile aynı token'lardan okunur, ayrıca elden geçirmek gerekmez.
 
 ## Abone akışı
 

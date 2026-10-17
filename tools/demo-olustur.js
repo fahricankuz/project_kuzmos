@@ -43,28 +43,29 @@ ${css}
   padding: 8px max(16px, env(safe-area-inset-left, 0px))
            calc(8px + env(safe-area-inset-bottom, 0px))
            max(16px, env(safe-area-inset-right, 0px));
-  background: var(--black); border-top: 2px solid var(--yellow);
+  background: var(--koyu-zemin); border-top: 2px solid var(--vurgu);
 }
 .demo-etiket {
   font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--yellow); font-weight: 600; margin-right: 4px;
+  color: var(--koyu-vurgu); font-weight: 600; margin-right: 4px;
 }
+.demo-etiket-2 { width: 100%; margin: 4px 0 0; }
 .demo-chip {
   font-family: var(--font); font-size: 12px; font-weight: 500;
   padding: 6px 11px; border-radius: 999px; cursor: pointer;
-  background: transparent; color: var(--white);
+  background: transparent; color: var(--koyu-metin);
   border: 1px solid rgba(255,255,255,.28);
 }
-.demo-chip:hover { border-color: var(--yellow); }
-.demo-chip.on { background: var(--yellow); color: var(--black); border-color: var(--yellow); }
-.demo-chip:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
-/* Demo kabuğu ve abonelik bandı için alt boşluk */
-.scroll { padding-bottom: 96px; }
-.abonelik-bant { bottom: 46px; }
+.demo-chip:hover { border-color: var(--koyu-vurgu); }
+.demo-chip.on { background: var(--vurgu); color: var(--vurgu-ust); border-color: var(--vurgu); }
+.demo-chip:focus-visible { outline: 2px solid var(--koyu-vurgu); outline-offset: 2px; }
+/* Demo kabuğu ve abonelik bandı için alt boşluk (kabuk iki satır) */
+.scroll { padding-bottom: 170px; }
+.abonelik-bant { bottom: 110px; }
 @media (max-width: 520px) {
   .demo-etiket { width: 100%; margin-bottom: 2px; }
-  .scroll { padding-bottom: 136px; }
-  .abonelik-bant { bottom: 76px; }
+  .scroll { padding-bottom: 250px; }
+  .abonelik-bant { bottom: 192px; }
 }
 </style>
 

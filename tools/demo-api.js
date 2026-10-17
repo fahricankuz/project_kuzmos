@@ -631,7 +631,28 @@ function gcall(fn, args, ok, fail) {
   }, 60);
 }
 
-/* ── Demo kabuğu: rol değiştirici ── */
+/* ── Demo kabuğu: rol ve palet değiştirici ── */
+var DEMO_TEMALAR = [
+  ['', 'Gece Mavisi'],
+  ['berrak', 'Berrak'],
+  ['kasa', 'Kasa Yeşili'],
+  ['mevcut', 'Mevcut (siyah/sarı)']
+];
+var DEMO_TEMA = '';
+
+/* Palet app.css'teki token bloklarından gelir; grafik renklerini de yeniler. */
+function demoTemaDegistir(t) {
+  DEMO_TEMA = t;
+  if (t) document.documentElement.setAttribute('data-tema', t);
+  else document.documentElement.removeAttribute('data-tema');
+  if (typeof panelChartInst !== 'undefined' && panelChartInst) {
+    panelChartInst.destroy();
+    panelChartInst = null;
+  }
+  verileriYukle(false);
+  demoKabukCiz();
+}
+
 function demoRolDegistir(r) {
   DEMO_ROL = r;
   KULLANICI = demoTumVeri().kullanici;
@@ -675,7 +696,19 @@ function demoKabukCiz() {
     (DEMO.isletme.yazabilir ? '' : ' on') +
     '" onclick="demoAboneligiBitir()">' +
     (DEMO.isletme.yazabilir ? 'Aboneliği bitir' : 'Aboneliği aç') +
-    '</button>';
+    '</button>' +
+    '<span class="demo-etiket demo-etiket-2">DEMO · paleti değiştir</span>' +
+    DEMO_TEMALAR.map(function (t) {
+      return (
+        '<button class="demo-chip' +
+        (DEMO_TEMA === t[0] ? ' on' : '') +
+        '" onclick="demoTemaDegistir(\'' +
+        t[0] +
+        '\')">' +
+        t[1] +
+        '</button>'
+      );
+    }).join('');
 }
 
 /* Demo ortamında dosya indirme, diyalog ve yazdırma devre dışı */

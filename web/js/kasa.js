@@ -278,7 +278,7 @@ function hareketListesiCiz(){
       +'<div class="rec-meta"><span>'+tarihGoster(h.tarih)+'</span><span>'+esc(h.ana)+'</span>'
       +(h.hesap?'<span>'+esc(h.hesap)+'</span>':'')+(h.aciklama?'<span>'+esc(h.aciklama)+'</span>':'')
       +(h.kaydeden?'<span>👤 '+esc(h.kaydeden)+'</span>':'')
-      +(otomatik?'<span style="color:var(--yellow-dark)">⚙️ otomatik</span>':'')+'</div></div>'
+      +(otomatik?'<span style="color:var(--metin-silik)">⚙️ otomatik</span>':'')+'</div></div>'
       +'<div class="rec-amt" style="color:'+(gelir?'var(--green)':'var(--red)')+'">'+(gelir?'+':'−')+fTR2(h.tutar)+'</div>'
       +'<div class="rec-actions">'
       +(otomatik?'':'<button class="icon-btn" onclick="hareketDuzenle(\''+q(h.id)+'\')">✏️</button><button class="icon-btn" onclick="hareketSilTikla(\''+q(h.id)+'\')">🗑</button>')
