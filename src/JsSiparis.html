@@ -275,8 +275,10 @@ function tahsilatiIsle(bilgi){
   personelSor(sip?sip.personel:'',function(personel){
     modalKapat(null,'tahsilatOverlay');
     toast('Kaydediliyor...');
-    gcall('siparisOdemeEkle',[TOKEN,tahsilatCtx.siparisId,odeme,personel],function(){
-      toast('Tahsilat kaydedildi'); modalKapat(null,'detayOverlay'); verileriYukle(false);
+    gcall('siparisOdemeEkle',[TOKEN,tahsilatCtx.siparisId,odeme,personel],function(r){
+      toast(odeme.tip==='iade'?'İade kaydedildi':'Tahsilat kaydedildi');
+      modalKapat(null,'detayOverlay');
+      siparisYamala(r&&r.kayit);
     },function(e){ toast('Kaydedilemedi: '+((e&&e.message)||''),false); });
   });
 }
@@ -365,15 +367,19 @@ function siparisKaydetTikla(){
     odemeler:formOdemeler, durum:formDurum, nebim:formNebim
   };
   personelSor(siparis.personel,function(personel){
-    toast('Kaydediliyor...');
+    var guncelleme=!!formId;
+    var kisi=personel||siparis.personel;
+    /* Beklerken de onay ekranı görünür (dönen halka), cevap gelince onaya döner */
+    basariGoster(kisi,guncelleme?'Sipariş Güncelleniyor...':'Sipariş Kaydediliyor...',true);
     var anahtar='siparis_'+(formId||('yeni_'+Date.now()));
-    gcall('siparisKaydet',[TOKEN,siparis,personel],function(){
+    gcall('siparisKaydet',[TOKEN,siparis,personel],function(r){
       kuyruktanCikar(anahtar);
-      basariGoster(personel||siparis.personel,formId?'Sipariş Güncellendi':'Sipariş Kaydedildi!');
       formKirli=false;
-      verileriYukle(false);
+      siparisYamala(r&&r.kayit);
+      basariGoster(kisi,guncelleme?'Sipariş Güncellendi':'Sipariş Kaydedildi!');
       setTimeout(function(){ siparisFormTemizle(false); },300);
     },function(e){
+      basariKapat();
       kuyrugaAl({anahtar:anahtar,fn:'siparisKaydet',args:[TOKEN,siparis,personel]});
       toast('⚠️ Sunucuya gitmedi, kuyrukta',false);
     });
@@ -486,11 +492,12 @@ function durumGuncelle(id,durum){
   var s=(DATA.siparis||[]).filter(function(x){return x.id===id;})[0];
   if(!s||s.durum===durum)return;
   personelSor(s.personel,function(personel){
-    gcall('siparisDurumGuncelle',[TOKEN,id,durum,personel],function(){
+    gcall('siparisDurumGuncelle',[TOKEN,id,durum,personel],function(r){
       if(durum==='Teslim Edildi')basariGoster(personel||s.personel,'Sipariş Teslim Edildi!');
       else toast('Durum: '+durum);
       modalKapat(null,'detayOverlay');
-      verileriYukle(false);
+      siparisAlanYamala(id,{durum:(r&&r.durum)||durum,durumTarihi:(r&&r.durumTarihi)||bugunStr(),
+        teslimTarihi:r?r.teslimTarihi:s.teslimTarihi});
     },function(e){ toast('Güncellenemedi: '+((e&&e.message)||''),false); });
   });
 }
@@ -553,8 +560,10 @@ function siparisCopeAt(id){
   if(!confirm('Bu sipariş çöp kutusuna taşınsın mı?'))return;
   var s=(DATA.siparis||[]).filter(function(x){return x.id===id;})[0];
   personelSor(s?s.personel:'',function(personel){
-    gcall('siparisSil',[TOKEN,id,personel],function(){ modalKapat(null,'detayOverlay'); toast('Çöp kutusuna taşındı'); verileriYukle(false); },
-      function(e){ toast('Silinemedi: '+((e&&e.message)||''),false); });
+    gcall('siparisSil',[TOKEN,id,personel],function(){
+      modalKapat(null,'detayOverlay'); toast('Çöp kutusuna taşındı');
+      siparisAlanYamala(id,{silindi:true,silinmeTarihi:bugunStr()});
+    },function(e){ toast('Silinemedi: '+((e&&e.message)||''),false); });
   });
 }
 function whatsappGonder(tel,ad,no){
@@ -583,14 +592,18 @@ function copListesiCiz(){
 function siparisGeriAlTikla(id){
   var s=(DATA.siparis||[]).filter(function(x){return x.id===id;})[0];
   personelSor(s?s.personel:'',function(personel){
-    gcall('siparisGeriAl',[TOKEN,id,personel],function(){ toast('Geri alındı'); verileriYukle(false); },
-      function(e){ toast('Başarısız: '+((e&&e.message)||''),false); });
+    gcall('siparisGeriAl',[TOKEN,id,personel],function(){
+      toast('Geri alındı');
+      siparisAlanYamala(id,{silindi:false,silinmeTarihi:''});
+    },function(e){ toast('Başarısız: '+((e&&e.message)||''),false); });
   });
 }
 function siparisKaliciSilTikla(id){
   if(!confirm('Bu sipariş KALICI olarak silinecek. Emin misiniz?'))return;
-  gcall('siparisKaliciSil',[TOKEN,id],function(){ toast('Kalıcı silindi'); verileriYukle(false); },
-    function(e){ toast('Silinemedi: '+((e&&e.message)||''),false); });
+  gcall('siparisKaliciSil',[TOKEN,id],function(){
+    toast('Kalıcı silindi');
+    siparisYerelKaldir(id);
+  },function(e){ toast('Silinemedi: '+((e&&e.message)||''),false); });
 }
 
 /* ═══════════ MÜŞTERİLER ═══════════ */

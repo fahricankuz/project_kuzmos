@@ -3,6 +3,8 @@
 var TOKEN=null, KULLANICI=null;
 var DATA={ayar:{},personel:[],urunKategorileri:[],markalar:{},siparis:[],musteriler:[],hedefler:{},masraflar:[],hareketler:[],cari:[],banka:[],tekrar:[],kasaKategorileri:[]};
 var donemOfset=0, gunleriGoster=false, kayitLimit=100;
+/* Her veri değişiminde artar; ağır hesapların önbelleğini geçersiz kılar. */
+var DATA_SURUM=0;
 var AYLAR=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 var ROL_ETIKET={yonetici:'Yönetici',muhasebe:'Muhasebe',magaza:'Mağaza'};
 var DURUMLAR=['Satış Yapıldı','Cam Siparişi Verildi','Montaj Yapıldı','Teslim Edildi'];
@@ -100,6 +102,7 @@ function verileriYukle(ilk){
   gcall('tumVeriGetir',[TOKEN],function(d){
     if(!d)return;
     DATA=d; KULLANICI=d.kullanici||KULLANICI;
+    DATA_SURUM++;
     basliklariKur(); hepsiniCiz(); kuyrukRozetiGuncelle();
     if(ilk!==false) goster(rol()==='magaza'?'viewSiparis':'viewOzet',true);
     /* Form sadece hiç kurulmamışsa hazırlanır; doldurulmuş form asla silinmez. */
@@ -132,6 +135,48 @@ function basliklariKur(){
   kasaRozetleriGuncelle();
 }
 
+/* ═══════════ TEMBEL ÇİZİM ═══════════
+   Her ekran ancak (a) görünürken ve (b) verisi değiştiyse yeniden çizilir.
+   Eskiden her yenilemede 13 ekran birden çiziliyordu; panel ve yıllık özet
+   gibi ağır hesaplar ekran kapalıyken de çalışıyordu. */
+var EKRAN_CIZ={
+  viewRecords:function(){kayitListesiCiz();},
+  viewCustomers:function(){musteriListesiCiz();},
+  viewPipeline:function(){pipelineCiz();},
+  viewTrash:function(){copListesiCiz();},
+  viewPanel:function(){panelCiz();},
+  viewMasraf:function(){masrafListesiCiz();},
+  viewOzet:function(){ozetCiz();},
+  viewRapor:function(){raporCiz();},
+  viewHareket:function(){hareketListesiCiz();},
+  viewCari:function(){cariCiz();},
+  viewBanka:function(){bankaCiz();},
+  viewYillik:function(){yillikCiz();},
+  viewAyar:function(){ayarlarCiz();}
+};
+var ekranKirli={};
+
+function aktifEkran(){ var el=document.querySelector('.view.active'); return el?el.id:''; }
+function ekranYetkiliMi(v){
+  var nav=null; NAVS.forEach(function(n){ if(n[0]===v)nav=n; });
+  return !nav||nav[2].indexOf(rol())>-1;
+}
+function ekranCiz(v){
+  var f=EKRAN_CIZ[v];
+  if(!f||!ekranKirli[v]||!ekranYetkiliMi(v))return;
+  ekranKirli[v]=false;
+  f();
+}
+function aktifEkraniCiz(){ ekranCiz(aktifEkran()); }
+
+/** Veri değişti: tüm ekranlar bayat, görünen ekran hemen çizilir. */
+function ekranlariKirlet(){
+  Object.keys(EKRAN_CIZ).forEach(function(k){ ekranKirli[k]=true; });
+  donemEtiketleriGuncelle();
+  kasaRozetleriGuncelle();
+  aktifEkraniCiz();
+}
+
 function goster(v,zorla){
   var r=rol();
   var nav=null; NAVS.forEach(function(n){ if(n[0]===v)nav=n; });
@@ -139,26 +184,89 @@ function goster(v,zorla){
   if(!zorla&&v!=='viewSiparis'&&!formTerkEt())return;
   document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active');});
   var el=document.getElementById(v); if(el)el.classList.add('active');
-  if(v==='viewRecords')kayitListesiCiz();
-  if(v==='viewCustomers')musteriListesiCiz();
-  if(v==='viewPipeline')pipelineCiz();
-  if(v==='viewTrash')copListesiCiz();
-  if(v==='viewPanel')panelCiz();
-  if(v==='viewMasraf')masrafListesiCiz();
-  if(v==='viewOzet')ozetCiz();
-  if(v==='viewRapor')raporCiz();
-  if(v==='viewHareket')hareketListesiCiz();
-  if(v==='viewCari')cariCiz();
-  if(v==='viewBanka')bankaCiz();
-  if(v==='viewYillik')yillikCiz();
-  if(v==='viewAyar')ayarlarCiz();
+  ekranCiz(v);
 }
 
-function hepsiniCiz(){
-  donemEtiketleriGuncelle();
-  kasaRozetleriGuncelle();
-  kayitListesiCiz(); musteriListesiCiz(); pipelineCiz(); masrafListesiCiz(); panelCiz(); ayarlarCiz();
-  if(finansMi()){ ozetCiz(); raporCiz(); hareketListesiCiz(); cariCiz(); bankaCiz(); yillikCiz(); }
+function hepsiniCiz(){ ekranlariKirlet(); }
+
+/* ═══════════ YEREL VERİ YAMASI ═══════════
+   Kayıttan sonra tüm veriyi sunucudan yeniden çekmek yerine (14 sayfa
+   okuması + tüm siparişlerin aktarımı) sadece değişen kaydı günceller. */
+function veriDegisti(){ DATA_SURUM++; ekranlariKirlet(); }
+
+/**
+ * Sipariş tahsilatı ve mağaza masrafı kasaya otomatik hareket yazar.
+ * Mağaza rolü kasa hareketlerini görmediği için ek çağrı yapmaz; finans
+ * rollerinde kasa ekranları bayat kalmasın diye hareketler tek sayfa
+ * okumasıyla arka planda yenilenir.
+ */
+function hareketleriYenile(){
+  if(!finansMi())return;
+  gcall('hareketleriGetir',[TOKEN],function(h){ if(h){ DATA.hareketler=h; veriDegisti(); } });
+}
+
+function siparisYamala(kayit){
+  if(!kayit||!kayit.id){ verileriYukle(false); return; }
+  DATA.siparis=DATA.siparis||[];
+  var i,bulundu=false;
+  for(i=0;i<DATA.siparis.length;i++){
+    if(DATA.siparis[i].id===kayit.id){ DATA.siparis[i]=kayit; bulundu=true; break; }
+  }
+  if(!bulundu)DATA.siparis.push(kayit);
+  /* Müşteri yeni oluşmuş olabilir: listede yoksa yerel kartı da ekle. */
+  if(kayit.musteriId){
+    DATA.musteriler=DATA.musteriler||[];
+    var m=null;
+    for(i=0;i<DATA.musteriler.length;i++){ if(DATA.musteriler[i].id===kayit.musteriId)m=DATA.musteriler[i]; }
+    if(!m)DATA.musteriler.push({id:kayit.musteriId,adSoyad:kayit.adSoyad,telefon:kayit.telefon,
+      eposta:kayit.eposta,tcVergi:kayit.tcVergi,sonRecete:kayit.recete||{},notu:''});
+    else { m.adSoyad=kayit.adSoyad||m.adSoyad; m.telefon=kayit.telefon||m.telefon; }
+  }
+  veriDegisti();
+  hareketleriYenile();
+}
+function siparisAlanYamala(id,alanlar){
+  var s=(DATA.siparis||[]).filter(function(x){return x.id===id;})[0];
+  if(!s){ verileriYukle(false); return; }
+  Object.keys(alanlar||{}).forEach(function(k){ s[k]=alanlar[k]; });
+  veriDegisti();
+  hareketleriYenile();
+}
+function siparisYerelKaldir(id){
+  DATA.siparis=(DATA.siparis||[]).filter(function(x){return x.id!==id;});
+  veriDegisti();
+  hareketleriYenile();
+}
+function hareketYamala(kayit){
+  if(!kayit||!kayit.id){ verileriYukle(false); return; }
+  DATA.hareketler=DATA.hareketler||[];
+  var i,bulundu=false;
+  for(i=0;i<DATA.hareketler.length;i++){
+    if(DATA.hareketler[i].id===kayit.id){ DATA.hareketler[i]=kayit; bulundu=true; break; }
+  }
+  if(!bulundu)DATA.hareketler.push(kayit);
+  veriDegisti();
+}
+function hareketYerelKaldir(id){
+  DATA.hareketler=(DATA.hareketler||[]).filter(function(x){return x.id!==id;});
+  veriDegisti();
+}
+function hedefYamala(ay,hedef,notu){
+  DATA.hedefler=DATA.hedefler||{};
+  DATA.hedefler[ay]={hedef:hedef,notu:notu};
+  veriDegisti();
+}
+function masrafYamala(kayit){
+  if(!kayit||!kayit.id){ verileriYukle(false); return; }
+  DATA.masraflar=DATA.masraflar||[];
+  DATA.masraflar.unshift(kayit);
+  veriDegisti();
+  hareketleriYenile();
+}
+function masrafYerelKaldir(id){
+  DATA.masraflar=(DATA.masraflar||[]).filter(function(x){return x.id!==id;});
+  veriDegisti();
+  hareketleriYenile();
 }
 
 /* ═══════════ MODAL / SEÇİCİ ═══════════ */
@@ -309,13 +417,28 @@ function kuyrugaTekrarDene(){
 }
 
 /* ═══════════ BAŞARI ANİMASYONU ═══════════ */
-function basariGoster(kisi,baslik){
+/**
+ * Onay ekranı. `bekliyor` true ise sunucu cevabı beklenirken gösterilir
+ * (dönen halka); cevap gelince aynı ekran onay animasyonuna geçer. Böylece
+ * kullanıcı anında geri bildirim alır ama "kaydedildi" yazısı sunucu
+ * onaylamadan gösterilmez.
+ */
+var basariZaman=null;
+function basariGoster(kisi,baslik,bekliyor){
   var o=document.getElementById('successOverlay');
   document.getElementById('successTitle').textContent=baslik||'Harika İş Çıkardın!';
   document.getElementById('successRep').textContent=kisi?('Tebrikler '+kisi+'!'):'';
   o.classList.add('show');
+  if(bekliyor)o.classList.add('bekliyor'); else o.classList.remove('bekliyor');
+  if(basariZaman){ clearTimeout(basariZaman); basariZaman=null; }
+  if(bekliyor)return;
   var svg=o.querySelector('.checkmark'); if(svg){ var y=svg.cloneNode(true); svg.parentNode.replaceChild(y,svg); }
-  setTimeout(function(){o.classList.remove('show');},3000);
+  basariZaman=setTimeout(function(){o.classList.remove('show');},3000);
+}
+function basariKapat(){
+  var o=document.getElementById('successOverlay');
+  o.classList.remove('show'); o.classList.remove('bekliyor');
+  if(basariZaman){ clearTimeout(basariZaman); basariZaman=null; }
 }
 
 /* ═══════════ BAŞLANGIÇ ═══════════ */

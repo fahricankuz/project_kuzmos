@@ -203,11 +203,41 @@ da düzenlenebilir.
 - **ESLint `no-undef: off`** — Apps Script'te tüm dosyalar tek global scope
   paylaşır; gerçek "tanımsız fonksiyon" hataları test suite'i ile yakalanır.
 
+## Hız (Sheets çağrı bütçesi)
+
+Apps Script'te darboğaz hesaplama değil, Sheets'e atılan çağrı sayısıdır:
+her `getDataRange()` / `appendRow()` / `openById()` ayrı bir ağ turudur
+(~100-300 ms). Bu yüzden kod "aynı sayfayı bir işlemde iki kez okumaz"
+kuralıyla yazılmıştır:
+
+- `sheet_()` ve `ss_()` çağrı ömürlü önbellek kullanır (`src/SheetService.js`).
+  GAS'ta global'ler her istekte sıfırlandığından önbellek kendiliğinden istek
+  kapsamındadır; testler `onbellekSifirla_()` ile boşaltır.
+- `ayarOku_()` önbelleklidir, her yazma önbelleği boşaltır.
+- Sipariş listesi bir kez okunur; sipariş numarası üretimi ve kasa senkronu
+  bu listeyi parametre olarak alır.
+- Toplu yardımcılar: `satirlariEkle_`, `markalariSagla_`,
+  `kasaKategorileriSagla_`, `hesaplariSagla_` — ürün/ödeme başına değil
+  işlem başına bir okuma + bir yazma.
+- Yazma uçları (`siparisKaydet`, `siparisOdemeEkle`, `hareketKaydet`,
+  `magazaMasrafEkle`) güncel kaydı döner; istemci `DATA`'yı yerinde yamalar,
+  `tumVeriGetir`'i yeniden çağırmaz (`siparisYamala` vb., `src/JsCore.html`).
+- Arayüz tembel çizer: bir ekran ancak görünürken ve verisi değiştiyse
+  yeniden çizilir (`EKRAN_CIZ`, `ekranlariKirlet`). Yıllık özet veri sürümü
+  bazında önbelleğe alınır, günlük grafik yıkılmak yerine güncellenir.
+- `test/performans.test.js` çağrı sayısını sabitler: sahte Sheets katmanı
+  okuma/yazma/açılış sayar, testler üst sınırları doğrular. Yeni bir sayfa
+  okuması eklenirse test kırmızıya döner.
+- Ölçüm için Apps Script editöründen `hizTesti()` çalıştırılabilir; aşama
+  başına milisaniye değerlerini "Yürütme günlüğü"ne yazar.
+
 ## Bilinen sınırlamalar
 
 - Eski sipariş/kasa sistemlerinden veri taşınmadı; sistem sıfırdan başlar.
   Yıl sonu veri göçü ayrı planlanacaktır.
 - `tumVeriGetir` tüm siparişleri istemciye gönderir; kayıt sayısı çok
-  büyüdüğünde sunucu tarafı sayfalama gerekecektir.
+  büyüdüğünde sunucu tarafı sayfalama gerekecektir. Panel ve yıllık özet
+  12 aylık nakit akışını istemcide hesapladığı için sayfalama bu ekranların
+  birlikte ele alınmasını gerektirir.
 - Başlangıçtaki kategori ve marka listeleri örnektir; gerçek kullanımda
   Ayarlar'dan düzenlenmelidir.

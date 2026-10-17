@@ -58,9 +58,23 @@ function hareketDogrula_(h) {
   if (!cln_(h.ana)) throw new Error('Ana kategori gerekli.');
 }
 
+/** Hareketi kaydeder ve kaydın kendisini döner (istemci yerel günceller). */
 function hareketKaydet(token, h) {
   var session = guardMuhasebe_(token);
-  return hareketYaz_(h, session.ad, '', '');
+  var id = hareketYaz_(h, session.ad, '', '');
+  return {
+    id: id,
+    tarih: dstr_(h.tarih),
+    yon: cln_(h.yon),
+    ana: cln_(h.ana),
+    alt: cln_(h.alt),
+    tutar: num_(h.tutar),
+    hesap: cln_(h.hesap),
+    aciklama: cln_(h.aciklama),
+    kaydeden: session.ad,
+    kaynak: '',
+    kaynakId: ''
+  };
 }
 
 /** Hareket satırını (13 kolon) üretir; yazma yapmaz. */

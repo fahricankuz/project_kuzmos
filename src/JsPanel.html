@@ -157,32 +157,40 @@ function hedefKartiCiz(ay,gerceklesen){
     +(h.notu?'<div class="mini-note">'+esc(h.notu)+'</div>':'');
 }
 
+/**
+ * Yıllık özet. Eskiden 12 ay × tüm siparişler döngüsü çeviriyordu; artık
+ * her sipariş bir kez taranıp ödemesi olan aylara dağıtılır. Sonuç veri
+ * sürümü ve yıl bazında önbelleğe alınır, aynı tablo tekrar hesaplanmaz.
+ */
+var yillikOnbellek={surum:-1,yil:'',html:''};
 function yillikOzetCiz(yil,siparisler){
-  var aylik={};
-  siparisler.forEach(function(s){
-    (s.odemeler||[]).forEach(function(o){
-      if(String(o.tarih).substring(0,4)!==yil)return;
-      var ay=String(o.tarih).substring(0,7);
-      if(!aylik[ay])aylik[ay]={kasa:0,kdv:0,komisyon:0,net:0,siparis:0};
-      var akis=siparisNakitAkis(s,ay);
-      aylik[ay].kasa=aylik[ay].kasa; /* aşağıda tek seferde hesaplanacak */
-    });
-  });
-  /* Ay bazında tek geçişte hesapla (çift saymayı önlemek için) */
-  aylik={};
-  for(var m=1;m<=12;m++){
-    var ayStr=yil+'-'+String(m).padStart(2,'0');
-    var v={kasa:0,kdv:0,komisyon:0,net:0,siparis:0};
-    siparisler.forEach(function(s){
-      var a=siparisNakitAkis(s,ayStr);
-      v.kasa+=a.kasa; v.kdv+=a.kdv; v.komisyon+=a.komisyon; v.net+=a.net;
-      if(String(s.siparisTarihi).indexOf(ayStr)===0)v.siparis++;
-    });
-    if(Math.abs(v.kasa)>0.005||v.siparis>0)aylik[ayStr]=v;
+  var hedef=document.getElementById('panelYillikTablo'); if(!hedef)return;
+  if(yillikOnbellek.surum===DATA_SURUM&&yillikOnbellek.yil===yil){
+    hedef.innerHTML=yillikOnbellek.html; return;
   }
+  var aylik={};
+  function ayNesnesi(ay){
+    if(!aylik[ay])aylik[ay]={kasa:0,kdv:0,komisyon:0,net:0,siparis:0};
+    return aylik[ay];
+  }
+  siparisler.forEach(function(s){
+    var aylar={};
+    (s.odemeler||[]).forEach(function(o){
+      var t=String(o.tarih||'');
+      if(t.substring(0,4)===yil)aylar[t.substring(0,7)]=true;
+    });
+    Object.keys(aylar).forEach(function(ay){
+      var a=siparisNakitAkis(s,ay), v=ayNesnesi(ay);
+      v.kasa+=a.kasa; v.kdv+=a.kdv; v.komisyon+=a.komisyon; v.net+=a.net;
+    });
+    var st=String(s.siparisTarihi||'');
+    if(st.substring(0,4)===yil)ayNesnesi(st.substring(0,7)).siparis++;
+  });
+
   var gövde='',t={kasa:0,kdv:0,komisyon:0,net:0,siparis:0};
   Object.keys(aylik).sort().forEach(function(ay){
     var v=aylik[ay];
+    if(Math.abs(v.kasa)<=0.005&&!v.siparis)return;
     t.kasa+=v.kasa; t.kdv+=v.kdv; t.komisyon+=v.komisyon; t.net+=v.net; t.siparis+=v.siparis;
     gövde+='<tr><td style="font-weight:600">'+AYLAR[parseInt(ay.substring(5,7),10)-1]+'</td>'
       +'<td class="num">'+v.siparis+'</td><td class="num" style="color:var(--green)">'+fTR(v.kasa)+'</td>'
@@ -191,18 +199,25 @@ function yillikOzetCiz(yil,siparisler){
       +'<td class="num" style="font-weight:700">'+fTR(v.net)+'</td></tr>';
   });
   if(!gövde)gövde='<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:26px">Bu yıl için veri yok.</td></tr>';
-  document.getElementById('panelYillikTablo').innerHTML=
-    '<table class="tbl"><thead><tr><th>Ay</th><th class="num">Sipariş</th><th class="num">Kasa</th><th class="num">KDV</th><th class="num">Kom.+Prim</th><th class="num">Net</th></tr></thead>'
+  var html='<table class="tbl"><thead><tr><th>Ay</th><th class="num">Sipariş</th><th class="num">Kasa</th><th class="num">KDV</th><th class="num">Kom.+Prim</th><th class="num">Net</th></tr></thead>'
     +'<tbody>'+gövde+'</tbody><tfoot><tr><td>Toplam '+yil+'</td><td class="num">'+t.siparis+'</td>'
     +'<td class="num" style="color:var(--green)">'+fTR(t.kasa)+'</td><td class="num">'+fTR(t.kdv)+'</td>'
     +'<td class="num">'+fTR(t.komisyon)+'</td><td class="num">'+fTR(t.net)+'</td></tr></tfoot></table>';
+  yillikOnbellek={surum:DATA_SURUM,yil:yil,html:html};
+  hedef.innerHTML=html;
 }
 
 function gunlukGrafikCiz(gunluk){
   var cv=document.getElementById('panelChart'); if(!cv||typeof Chart==='undefined')return;
-  if(panelChartInst)panelChartInst.destroy();
   var gunler=[],degerler=[];
   for(var i=1;i<=31;i++){ if(gunluk[i]){ gunler.push(i); degerler.push(Math.round(gunluk[i])); } }
+  /* Grafiği yıkıp yeniden kurmak pahalı: varsa yerinde güncellenir. */
+  if(panelChartInst){
+    panelChartInst.data.labels=gunler;
+    panelChartInst.data.datasets[0].data=degerler;
+    panelChartInst.update();
+    return;
+  }
   Chart.defaults.font.family="'DM Sans',sans-serif"; Chart.defaults.color='#999';
   panelChartInst=new Chart(cv,{type:'line',data:{labels:gunler,datasets:[{label:'Tahsilat (₺)',data:degerler,
     borderColor:'#F5C800',backgroundColor:'rgba(245,200,0,0.1)',borderWidth:3,fill:true,tension:0.4,pointBackgroundColor:'#111'}]},
@@ -299,15 +314,15 @@ function masrafKaydetTikla(){
   };
   if(masraf.tutar<=0){ toast('Tutar girin',false); return; }
   personelSor('',function(personel){
-    gcall('magazaMasrafEkle',[TOKEN,masraf,personel],function(){
-      modalKapat(null,'masrafOverlay'); toast('Masraf kaydedildi'); verileriYukle(false);
+    gcall('magazaMasrafEkle',[TOKEN,masraf,personel],function(r){
+      modalKapat(null,'masrafOverlay'); toast('Masraf kaydedildi'); masrafYamala(r);
     },function(e){ toast('Kaydedilemedi: '+((e&&e.message)||''),false); });
   });
 }
 function masrafSilTikla(id){
   if(!confirm('Bu masraf kaydı silinsin mi?'))return;
   personelSor('',function(personel){
-    gcall('magazaMasrafSil',[TOKEN,id,personel],function(){ toast('Silindi'); verileriYukle(false); },
+    gcall('magazaMasrafSil',[TOKEN,id,personel],function(){ toast('Silindi'); masrafYerelKaldir(id); },
       function(e){ toast('Silinemedi: '+((e&&e.message)||''),false); });
   });
 }
@@ -325,8 +340,10 @@ function hedefModaliAc(ay){
 function hedefKaydetTikla(){
   var ay=document.getElementById('hedefAy').value;
   if(!/^\d{4}-\d{2}$/.test(ay)){ toast('Ay seçin',false); return; }
-  gcall('hedefKaydet',[TOKEN,ay,pTR(document.getElementById('hedefTutar').value),document.getElementById('hedefNot').value.trim()],
-    function(){ modalKapat(null,'hedefOverlay'); toast('Hedef kaydedildi'); verileriYukle(false); },
+  var tutar=pTR(document.getElementById('hedefTutar').value);
+  var notu=document.getElementById('hedefNot').value.trim();
+  gcall('hedefKaydet',[TOKEN,ay,tutar,notu],
+    function(){ modalKapat(null,'hedefOverlay'); toast('Hedef kaydedildi'); hedefYamala(ay,tutar,notu); },
     function(e){ toast('Kaydedilemedi: '+((e&&e.message)||''),false); });
 }
 

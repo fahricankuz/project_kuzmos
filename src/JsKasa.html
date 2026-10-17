@@ -325,12 +325,12 @@ function hareketKaydetTikla(){
   modalKapat(null,'hareketOverlay');
   toast('Kaydediliyor...');
   var anahtar='hareket_'+h.id;
-  gcall('hareketKaydet',[TOKEN,h],function(){ kuyruktanCikar(anahtar); toast('Kaydedildi'); verileriYukle(false); },
+  gcall('hareketKaydet',[TOKEN,h],function(r){ kuyruktanCikar(anahtar); toast('Kaydedildi'); hareketYamala(r); },
     function(){ kuyrugaAl({anahtar:anahtar,fn:'hareketKaydet',args:[TOKEN,h]}); toast('⚠️ Sunucuya gitmedi, kuyrukta',false); });
 }
 function hareketSilTikla(id){
   if(!confirm('Bu hareket silinsin mi?'))return;
-  gcall('hareketSil',[TOKEN,id],function(){ toast('Silindi'); verileriYukle(false); },
+  gcall('hareketSil',[TOKEN,id],function(){ toast('Silindi'); hareketYerelKaldir(id); },
     function(){ toast('Silinemedi',false); });
 }
 function hareketCsvIndir(){
