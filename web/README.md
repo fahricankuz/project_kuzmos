@@ -39,7 +39,8 @@ token'lardan gelir. Paleti değiştirmek = tek bir blokta değer düzenlemek.
 
 | Token ailesi | Nerede |
 |---|---|
-| `--vurgu`, `--vurgu-koyu`, `--vurgu-silik`, `--vurgu-ust`, `--vurgu-metin`, `--vurgu-rgb` | Marka rengi: düğme, aktif sekme, seçili çip, ilerleme çubuğu, grafik. `--vurgu-metin` yalnızca `--vurgu-silik` zemini üstündeki yazı içindir |
+| `--vurgu`, `--vurgu-koyu`, `--vurgu-ust` | **Marka rengi — yalnızca iki yerde:** logodaki ikinci hece ve birincil eylem düğmesi (`+ Yeni`, `Kaydet`, `Giriş yap`). Hatırlanma için; gezinme için değil |
+| `--secim`, `--secim-koyu`, `--secim-silik`, `--secim-metin`, `--secim-ust`, `--secim-rgb` | Etkileşim rengi: aktif sekme, seçili çip, odak halkası, ilerleme çubuğu, durum izleyici, grafik. Minimal paletlerde nötr mürekkep |
 | `--zemin`, `--yuzey`, `--yuzey-2`, `--cizgi`, `--metin*` | Yüzeyler ve tipografi |
 | `--ust-*`, `--baslik-*` | Üst bar ve kart başlıkları |
 | `--basarili`, `--tehlike`, `--uyari`, `--bilgi` (+ `-silik` / `-cizgi`) | Durum renkleri — paletten bağımsız |
@@ -50,9 +51,9 @@ grafit yüzeydir; palet yalnızca vurgu rengini değiştirir.
 
 | Tema | Vurgu | Karakter |
 |---|---|---|
-| *(öntanımlı)* **Lens** | `#6B2BE8` | Grafit yüzey + tek canlı renk. Mor; bankaların mavisinden ve rakiplerin yeşilinden ayrışır, üstelik durum renklerinin (yeşil/kırmızı/amber) hiçbiriyle karışmaz |
-| `grafit` | `#1C1C1F` | Saf tek renk; vurgu da nötr, renk yalnızca paranın yönünde |
-| `kasa` | `#0B8A52` | Zümrüt; "kasa/nakit" vurgusu |
+| *(öntanımlı)* **Lens** | `#6B2BE8` | Grafit arayüz; mor yalnızca logoda ve birincil düğmede. Durum renklerinin (yeşil/kırmızı/amber) hiçbiriyle karışmaz |
+| `grafit` | `#1C1C1F` | Marka rengi de nötr: tamamen tek renk |
+| `kasa` | `#0B8A52` | Zümrüt; marka rengi etkileşimde de kullanılır |
 | `mevcut` | `#F5C800` | Eski siyah + sarı görünüm (geri dönüş için) |
 
 Paleti değiştirmek: `document.documentElement.setAttribute('data-tema','berrak')`.

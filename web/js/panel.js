@@ -217,12 +217,14 @@ function gunlukGrafikCiz(gunluk){
     panelChartInst.update();
     return;
   }
-  var vurgu=tokenRenk('--vurgu','#1F56E3');
+  /* Grafik markayla değil etkileşim rengiyle çizilir: marka rengi yalnızca
+     logoda ve birincil düğmede kalsın diye. */
+  var cizgi=tokenRenk('--secim','#18181B');
   Chart.defaults.font.family="'DM Sans',sans-serif";
   Chart.defaults.color=tokenRenk('--metin-silik','#8A95A8');
   panelChartInst=new Chart(cv,{type:'line',data:{labels:gunler,datasets:[{label:'Tahsilat (₺)',data:degerler,
-    borderColor:vurgu,backgroundColor:'rgba('+tokenRenk('--vurgu-rgb','31,86,227')+',0.12)',
-    borderWidth:3,fill:true,tension:0.4,pointBackgroundColor:vurgu}]},
+    borderColor:cizgi,backgroundColor:'rgba('+tokenRenk('--secim-rgb','24,24,27')+',0.10)',
+    borderWidth:3,fill:true,tension:0.4,pointBackgroundColor:cizgi}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
       scales:{y:{beginAtZero:true,grid:{color:tokenRenk('--cizgi','#E2E8F3')}},x:{grid:{display:false}}}}});
 }
