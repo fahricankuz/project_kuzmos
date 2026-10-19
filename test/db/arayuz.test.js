@@ -676,3 +676,56 @@ describe('oran ayarları (arayüz)', () => {
     expect(w.pTR(d.getElementById('spTutar').value)).toBe(2300);
   });
 });
+
+describe('üst üste açılan modallar', () => {
+  beforeEach(async () => {
+    await db.oturumAc(kiraci.uid.finans);
+    await arayuzuKur();
+    await girisYap('w-finans@ornek.com', 'dogruSifre1');
+  });
+
+  test('hareket formunun içinden açılan seçici formun üstünde kalır', () => {
+    w.hareketModaliAc();
+    d.getElementById('hKategori').click();
+
+    const form = d.getElementById('hareketOverlay');
+    const secici = d.getElementById('pickOverlay');
+    expect(secici.classList.contains('open')).toBe(true);
+    expect(Number(secici.style.zIndex)).toBeGreaterThan(Number(form.style.zIndex));
+  });
+
+  test('seçici kapanınca z-index temizlenir, form olduğu yerde kalır', () => {
+    w.hareketModaliAc();
+    d.getElementById('hKategori').click();
+    const formZ = d.getElementById('hareketOverlay').style.zIndex;
+
+    w.modalKapat(null, 'pickOverlay');
+
+    expect(d.getElementById('pickOverlay').style.zIndex).toBe('');
+    expect(d.getElementById('hareketOverlay').classList.contains('open')).toBe(true);
+    expect(d.getElementById('hareketOverlay').style.zIndex).toBe(formZ);
+  });
+
+  test('aynı seçici tekrar tekrar açılınca z-index sonsuza tırmanmaz', () => {
+    w.hareketModaliAc();
+    for (let i = 0; i < 20; i++) {
+      d.getElementById('hKategori').click();
+      w.modalKapat(null, 'pickOverlay');
+    }
+    d.getElementById('hKategori').click();
+
+    expect(Number(d.getElementById('pickOverlay').style.zIndex)).toBeLessThan(1010);
+  });
+
+  test('Esc en üstteki modalı kapatır, altındaki açık kalır', () => {
+    w.hareketModaliAc();
+    d.getElementById('hKategori').click();
+
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(d.getElementById('pickOverlay').classList.contains('open')).toBe(false);
+    expect(d.getElementById('hareketOverlay').classList.contains('open')).toBe(true);
+
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(d.getElementById('hareketOverlay').classList.contains('open')).toBe(false);
+  });
+});

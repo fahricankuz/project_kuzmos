@@ -374,8 +374,44 @@ function masrafYerelKaldir(id){
 }
 
 /* ═══════════ MODAL / SEÇİCİ ═══════════ */
-function modalKapat(e,id){ if(!e||e.target===document.getElementById(id))document.getElementById(id).classList.remove('open'); }
-function modalAc(id){ document.getElementById(id).classList.add('open'); }
+/*
+ * Modallar üst üste açılabiliyor (örn. hareket formunun içinden kategori
+ * seçici). Hepsi aynı z-index'te olduğu için sıralamayı HTML'deki yer
+ * belirliyordu: seçici belgede önce geldiğinden formun ARKASINDA kalıyor,
+ * tıklanamıyordu. Açılan modal, o an açık olanların en üstündekinin bir
+ * üstüne yerleşir. Sırayı ayrı bir listede değil doğrudan DOM'da tuttuğumuz
+ * için modal başka bir yoldan kapatılsa da z-index şişmiyor; en fazla
+ * iç içe modal sayısı kadar yükselir (toast 2000'de, çakışma olmaz).
+ */
+function modalKapat(e,id){
+  var el=document.getElementById(id);
+  if(!el||(e&&e.target!==el))return;
+  el.classList.remove('open');
+  el.style.zIndex='';
+}
+function modalAc(id){
+  var el=document.getElementById(id); if(!el)return;
+  var enUst=1000;
+  var acik=document.querySelectorAll('.overlay.open');
+  for(var i=0;i<acik.length;i++){
+    if(acik[i]===el)continue;
+    enUst=Math.max(enUst,parseInt(acik[i].style.zIndex,10)||1000);
+  }
+  el.style.zIndex=enUst+1;
+  el.classList.add('open');
+}
+
+/* Esc: yalnızca en üstteki modalı kapatır; altındaki form açık kalır. */
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Escape')return;
+  var ustteki=null,enUst=-1;
+  var acik=document.querySelectorAll('.overlay.open');
+  for(var i=0;i<acik.length;i++){
+    var z=parseInt(acik[i].style.zIndex,10)||1000;
+    if(z>=enUst){ enUst=z; ustteki=acik[i]; }
+  }
+  if(ustteki)modalKapat(null,ustteki.id);
+});
 
 var pickCtx=null;
 /**
