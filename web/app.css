@@ -6,6 +6,7 @@
    şey bir tema bloğundaki token değerlerini düzenlemektir:
 
      --vurgu*      marka rengi (düğme, aktif sekme, vurgulu rakam)
+                   --vurgu-metin, --vurgu-silik zemini üstünde okunur
      --zemin/--yuzey/--cizgi/--metin*   yüzeyler ve tipografi
      --ust-*       üst bar ve koyu alanlar
      --baslik-*    kart başlıkları
@@ -14,24 +15,24 @@
    data-tema özniteliği ile palet değişir (bkz. aşağıdaki bloklar).
    ═══════════════════════════════════════════════════════════════ */
 :root {
-  /* Marka: Gece Mavisi (varsayılan) */
-  --vurgu:#1F56E3; --vurgu-koyu:#1844BC; --vurgu-silik:#EAF0FE; --vurgu-ust:#FFFFFF;
-  --vurgu-rgb:31,86,227;
+  /* Marka: Lens (varsayılan) — nötr grafit yüzey, tek vurgu rengi */
+  --vurgu:#6B2BE8; --vurgu-koyu:#5620C2; --vurgu-silik:#F1EBFE; --vurgu-ust:#FFFFFF;
+  --vurgu-metin:#5620C2; --vurgu-rgb:107,43,232;
 
   /* Yüzeyler */
-  --zemin:#F4F7FC; --yuzey:#FFFFFF; --yuzey-2:#F7F9FD; --cizgi:#E2E8F3;
-  --metin:#0F1B33; --metin-soluk:#5B6880; --metin-silik:#8A95A8;
+  --zemin:#F6F6F7; --yuzey:#FFFFFF; --yuzey-2:#FAFAFA; --cizgi:#E3E3E7;
+  --metin:#18181B; --metin-soluk:#5C5C66; --metin-silik:#8E8E98;
 
   /* Üst bar ve koyu alanlar */
-  --ust-zemin:#FFFFFF; --ust-metin:#0F1B33; --ust-metin-soluk:#6B7686;
-  --ust-cizgi:#E2E8F3; --ust-kutu:#F4F7FC; --ust-kutu-cizgi:#E2E8F3;
+  --ust-zemin:#FFFFFF; --ust-metin:#18181B; --ust-metin-soluk:#71717A;
+  --ust-cizgi:#E3E3E7; --ust-kutu:#F6F6F7; --ust-kutu-cizgi:#E3E3E7;
 
   /* Kart başlığı */
-  --baslik-zemin:#FFFFFF; --baslik-metin:#0F1B33; --baslik-alt:#8A95A8;
-  --baslik-cizgi:#EDF1F8;
+  --baslik-zemin:#FFFFFF; --baslik-metin:#18181B; --baslik-alt:#8E8E98;
+  --baslik-cizgi:#EFEFF1;
 
-  /* Durum */
-  --basarili:#117A4B; --tehlike:#C62828; --uyari:#B26A00; --bilgi:#1F56E3;
+  /* Durum — markadan bağımsız: yalnızca paranın yönünü ve aciliyeti anlatır */
+  --basarili:#117A4B; --tehlike:#C62828; --uyari:#B26A00; --bilgi:#1565C0;
   --basarili-silik:#E8F5EE; --basarili-cizgi:#B7DFC8;
   --tehlike-silik:#FDECEC; --tehlike-cizgi:#F6CBCB;
   --uyari-silik:#FFF6E3; --uyari-cizgi:#F3DCB0;
@@ -39,9 +40,9 @@
   --uyari-rgb:178,106,0;
 
   /* Koyu panel (gün sonu kasa kutusu, onay ekranı) */
-  --koyu-zemin:#0F1B33; --koyu-metin:#FFFFFF; --koyu-vurgu:#7FA3FF;
+  --koyu-zemin:#121214; --koyu-metin:#FFFFFF; --koyu-vurgu:#B9A2FD;
 
-  --golge:0 1px 2px rgba(15,27,51,.06), 0 1px 3px rgba(15,27,51,.04);
+  --golge:0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.04);
   --radius:12px; --radius-sm:8px;
   --font:'DM Sans',sans-serif; --mono:'DM Mono',monospace;
 
@@ -52,23 +53,10 @@
   --white:var(--yuzey); --red:var(--tehlike); --green:var(--basarili); --blue:var(--bilgi);
 }
 
-/* ── Tema: Berrak (teal) ── */
-:root[data-tema="berrak"] {
-  --vurgu:#0E7C86; --vurgu-koyu:#0A5F67; --vurgu-silik:#E4F2F3; --vurgu-ust:#FFFFFF;
-  --vurgu-rgb:14,124,134;
-  --zemin:#F3F7F7; --yuzey:#FFFFFF; --yuzey-2:#F7FAFA; --cizgi:#DCE7E8;
-  --metin:#0B2027; --metin-soluk:#53696F; --metin-silik:#86999E;
-  --ust-zemin:#FFFFFF; --ust-metin:#0B2027; --ust-metin-soluk:#53696F; --ust-cizgi:#DCE7E8;
-  --ust-kutu:#F3F7F7; --ust-kutu-cizgi:#DCE7E8;
-  --baslik-zemin:#FFFFFF; --baslik-metin:#0B2027; --baslik-alt:#86999E; --baslik-cizgi:#EAF1F2;
-  --basarili:#0E7C53; --tehlike:#C0392B; --uyari:#B9770E; --bilgi:#0E7C86;
-  --koyu-zemin:#0B2027; --koyu-metin:#FFFFFF; --koyu-vurgu:#58C5CE;
-}
-
 /* ── Tema: Kasa Yeşili ── */
 :root[data-tema="kasa"] {
   --vurgu:#0B8A52; --vurgu-koyu:#086B3F; --vurgu-silik:#E6F4EC; --vurgu-ust:#FFFFFF;
-  --vurgu-rgb:11,138,82;
+  --vurgu-metin:#086B3F; --vurgu-rgb:11,138,82;
   --zemin:#F5F8F6; --yuzey:#FFFFFF; --yuzey-2:#F8FBF9; --cizgi:#E1EAE4;
   --metin:#11221A; --metin-soluk:#566A5F; --metin-silik:#889A90;
   --ust-zemin:#FFFFFF; --ust-metin:#11221A; --ust-metin-soluk:#566A5F; --ust-cizgi:#E1EAE4;
@@ -78,27 +66,23 @@
   --koyu-zemin:#11221A; --koyu-metin:#FFFFFF; --koyu-vurgu:#5FD19B;
 }
 
-/* ── Tema: Grafit (siyah / gri, tek renk) ──
-   Vurgu da nötr olduğu için "bilgi" tonu griye çekilir; para yönünü
-   gösteren yeşil/kırmızı korunur, yoksa gelir-gider ayırt edilemez. */
+/* ── Tema: Grafit (saf tek renk) ──
+   Yüzeyler zaten köktekiyle aynı; burada yalnızca vurgu nötre iner.
+   "Bilgi" tonu da griye çekilir, yoksa tek renk şemanın içinde tek başına
+   mavi bir çip kalıyor. Para yönünü gösteren yeşil/kırmızı korunur:
+   onlar da griye inseydi gelir-gider rakamdan ayırt edilemezdi. */
 :root[data-tema="grafit"] {
   --vurgu:#1C1C1F; --vurgu-koyu:#000000; --vurgu-silik:#ECECEE; --vurgu-ust:#FFFFFF;
-  --vurgu-rgb:28,28,31;
-  --zemin:#F6F6F7; --yuzey:#FFFFFF; --yuzey-2:#FAFAFA; --cizgi:#E3E3E7;
-  --metin:#18181B; --metin-soluk:#5C5C66; --metin-silik:#8E8E98;
-  --ust-zemin:#FFFFFF; --ust-metin:#18181B; --ust-metin-soluk:#71717A; --ust-cizgi:#E3E3E7;
-  --ust-kutu:#F6F6F7; --ust-kutu-cizgi:#E3E3E7;
-  --baslik-zemin:#FFFFFF; --baslik-metin:#18181B; --baslik-alt:#8E8E98; --baslik-cizgi:#EFEFF1;
+  --vurgu-metin:#000000; --vurgu-rgb:28,28,31;
   --bilgi:#3F3F46; --bilgi-silik:#F0F0F2; --bilgi-cizgi:#D7D7DC;
-  --koyu-zemin:#121214; --koyu-metin:#FFFFFF; --koyu-vurgu:#D4D4D8;
-  --golge:0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.04);
+  --koyu-vurgu:#D4D4D8;
 }
 :root[data-tema="grafit"] .brand span { color:var(--metin-silik); }
 
 /* ── Tema: Mevcut (siyah + sarı) ── */
 :root[data-tema="mevcut"] {
-  --vurgu:#F5C800; --vurgu-koyu:#D4A800; --vurgu-silik:rgba(245,200,0,.15); --vurgu-ust:#111111;
-  --vurgu-rgb:245,200,0;
+  --vurgu:#F5C800; --vurgu-koyu:#D4A800; --vurgu-silik:#FFF6D1; --vurgu-ust:#111111;
+  --vurgu-metin:#6E5600; --vurgu-rgb:245,200,0;
   --zemin:#F4F4F4; --yuzey:#FFFFFF; --yuzey-2:#F4F4F4; --cizgi:#E8E8E8;
   --metin:#111111; --metin-soluk:#555555; --metin-silik:#999999;
   --ust-zemin:#111111; --ust-metin:#FFFFFF; --ust-metin-soluk:#999999; --ust-cizgi:rgba(255,255,255,.12);
@@ -191,7 +175,7 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
 .select-mock { cursor:pointer; caret-color:transparent; user-select:none; }
 .select-mock:active { background:var(--gray-200) !important; }
 .amount-input { font-family:var(--mono) !important; font-size:19px !important; text-align:right; font-weight:500; }
-.no-input { background:var(--vurgu-silik) !important; color:var(--vurgu-koyu) !important; font-family:var(--mono) !important; font-size:18px !important; font-weight:600; text-align:center; letter-spacing:.05em; border-style:dashed !important; border-color:var(--vurgu) !important; }
+.no-input { background:var(--vurgu-silik) !important; color:var(--vurgu-metin) !important; font-family:var(--mono) !important; font-size:18px !important; font-weight:600; text-align:center; letter-spacing:.05em; border-style:dashed !important; border-color:var(--vurgu) !important; }
 .yon-toggle { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
 .yon-opt { text-align:center; padding:12px; border-radius:var(--radius-sm); font-size:14px; font-weight:500; cursor:pointer; border:1.5px solid var(--gray-200); background:var(--white); color:var(--gray-600); user-select:none; }
 .yon-opt.sel-gider { background:var(--tehlike-silik); border-color:var(--tehlike); color:var(--tehlike); font-weight:600; }
@@ -264,7 +248,7 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
 .pay-status-over { background:var(--tehlike-silik); color:var(--tehlike); border:1px solid var(--tehlike-cizgi); }
 .rec-chip { flex:1; display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; border-radius:var(--radius-sm); font-size:13px; font-weight:600; cursor:pointer; border:1.5px solid var(--gray-200); background:var(--white); color:var(--gray-600); user-select:none; }
 .rec-chip input { display:none; }
-.rec-chip.sel-chk { background:var(--vurgu-silik); border-color:var(--vurgu); color:var(--vurgu-koyu); }
+.rec-chip.sel-chk { background:var(--vurgu-silik); border-color:var(--vurgu); color:var(--vurgu-metin); }
 .rec-chip-action { font-family:var(--font); background:var(--vurgu); border-color:var(--vurgu); color:var(--vurgu-ust); font-weight:600; }
 .rec-chip-action:active { background:var(--vurgu-koyu); transform:scale(.98); }
 
@@ -435,7 +419,7 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
 .kasa-net-sub { font-size:11px; color:rgba(255,255,255,.6); margin-top:6px; font-family:var(--mono); }
 .chip-row { display:flex; gap:6px; flex-wrap:wrap; }
 .chip { padding:7px 12px; border-radius:99px; border:1.5px solid var(--gray-200); background:var(--white); font-size:12px; font-weight:500; color:var(--gray-600); cursor:pointer; user-select:none; }
-.chip.on { background:var(--vurgu-silik); border-color:var(--vurgu); color:var(--vurgu-koyu); font-weight:600; }
+.chip.on { background:var(--vurgu-silik); border-color:var(--vurgu); color:var(--vurgu-metin); font-weight:600; }
 .mini-note { font-size:11px; color:var(--gray-400); margin-top:6px; line-height:1.5; }
 
 /* ═══ MODAL ═══ */
@@ -454,7 +438,7 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
 .pick-grid { display:grid; grid-template-columns:1fr; gap:7px; }
 .pick-opt { padding:14px 15px; border:1.5px solid var(--gray-200); border-radius:var(--radius-sm); font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px; user-select:none; background:var(--white); }
 .pick-opt:active { background:var(--gray-100); }
-.pick-opt.active { border-color:var(--vurgu); background:var(--vurgu-silik); font-weight:600; color:var(--vurgu-koyu); }
+.pick-opt.active { border-color:var(--vurgu); background:var(--vurgu-silik); font-weight:600; color:var(--vurgu-metin); }
 .pick-opt .chev { color:var(--gray-400); font-size:16px; }
 .pick-opt .cnt { font-size:11px; color:var(--gray-400); font-family:var(--mono); }
 .pick-back { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--gray-600); cursor:pointer; padding:8px 0; margin-bottom:6px; user-select:none; font-weight:500; }

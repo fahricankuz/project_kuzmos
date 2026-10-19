@@ -633,10 +633,9 @@ function gcall(fn, args, ok, fail) {
 
 /* ── Demo kabuğu: rol ve palet değiştirici ── */
 var DEMO_TEMALAR = [
-  ['', 'Gece Mavisi'],
-  ['berrak', 'Berrak'],
-  ['kasa', 'Kasa Yeşili'],
+  ['', 'Lens'],
   ['grafit', 'Grafit'],
+  ['kasa', 'Kasa Yeşili'],
   ['mevcut', 'Mevcut (siyah/sarı)']
 ];
 var DEMO_TEMA = '';

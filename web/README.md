@@ -39,20 +39,20 @@ token'lardan gelir. Paleti değiştirmek = tek bir blokta değer düzenlemek.
 
 | Token ailesi | Nerede |
 |---|---|
-| `--vurgu`, `--vurgu-koyu`, `--vurgu-silik`, `--vurgu-ust`, `--vurgu-rgb` | Marka rengi: düğme, aktif sekme, seçili çip, ilerleme çubuğu, grafik |
+| `--vurgu`, `--vurgu-koyu`, `--vurgu-silik`, `--vurgu-ust`, `--vurgu-metin`, `--vurgu-rgb` | Marka rengi: düğme, aktif sekme, seçili çip, ilerleme çubuğu, grafik. `--vurgu-metin` yalnızca `--vurgu-silik` zemini üstündeki yazı içindir |
 | `--zemin`, `--yuzey`, `--yuzey-2`, `--cizgi`, `--metin*` | Yüzeyler ve tipografi |
 | `--ust-*`, `--baslik-*` | Üst bar ve kart başlıkları |
 | `--basarili`, `--tehlike`, `--uyari`, `--bilgi` (+ `-silik` / `-cizgi`) | Durum renkleri — paletten bağımsız |
 | `--koyu-zemin`, `--koyu-metin`, `--koyu-vurgu` | Giriş ekranı, gün sonu kasa kutusu, onay animasyonu |
 
-Hazır paletler (`:root[data-tema="..."]`):
+Hazır paletler (`:root[data-tema="..."]`). Hepsinin ortak zemini aynı nötr
+grafit yüzeydir; palet yalnızca vurgu rengini değiştirir.
 
 | Tema | Vurgu | Karakter |
 |---|---|---|
-| *(öntanımlı)* **Gece Mavisi** | `#1F56E3` | Banka/fintek mavisi; güven ve "para" çağrışımı |
-| `berrak` | `#0E7C86` | Teal; optik/sağlık tarafına yakın, daha yumuşak |
+| *(öntanımlı)* **Lens** | `#6B2BE8` | Grafit yüzey + tek canlı renk. Mor; bankaların mavisinden ve rakiplerin yeşilinden ayrışır, üstelik durum renklerinin (yeşil/kırmızı/amber) hiçbiriyle karışmaz |
+| `grafit` | `#1C1C1F` | Saf tek renk; vurgu da nötr, renk yalnızca paranın yönünde |
 | `kasa` | `#0B8A52` | Zümrüt; "kasa/nakit" vurgusu |
-| `grafit` | `#1C1C1F` | Siyah/gri tek renk; renk yalnızca para yönünde |
 | `mevcut` | `#F5C800` | Eski siyah + sarı görünüm (geri dönüş için) |
 
 Paleti değiştirmek: `document.documentElement.setAttribute('data-tema','berrak')`.
