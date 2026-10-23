@@ -68,7 +68,7 @@
         <div class="form-row cols-4">
           <div class="field"><label>Sipariş No</label><input class="no-input" type="text" id="spNo" readonly placeholder="Kaydedince atanır"></div>
           <div class="field"><label>Sipariş Tarihi</label><input type="date" id="spTarih"></div>
-          <div class="field"><label>Teslim Tarihi</label><input type="text" id="spTeslim" readonly placeholder="Otomatik"></div>
+          <div class="field"><label>Teslim Tarihi</label><input type="text" class="turetilmis" id="spTeslim" readonly placeholder="Otomatik"></div>
           <div class="field"><label>Satış Personeli</label><select id="spPersonel"></select></div>
         </div>
       </div>
@@ -133,13 +133,14 @@
           </div>
           <div class="payment-group">
             <span class="payment-label">Tahsil Edilen</span>
-            <input class="payment-amount" type="text" id="spTahsil" readonly placeholder="0">
+            <input class="payment-amount turetilmis tiklanir" type="text" id="spTahsil" readonly placeholder="＋ ekle"
+              title="Tahsilat eklemek için tıklayın" onclick="tahsilatModaliAc('form','tahsilat')">
             <div class="pay-method"><span class="pay-chip pay-chip-ro" id="chipNakit">💵 Nakit</span><span class="pay-chip pay-chip-ro" id="chipKK">💳 K.Kartı</span></div>
             <div id="spOdemeListe" class="pay-list"></div>
           </div>
           <div class="payment-group">
             <span class="payment-label">Kalan</span>
-            <input class="payment-amount" type="text" id="spKalan" readonly placeholder="0">
+            <input class="payment-amount turetilmis" type="text" id="spKalan" readonly placeholder="0">
             <div class="pay-status-wrap"><span class="pay-status pay-status-wait" id="spKalanRozet">⏳ Tahsilat yok</span></div>
           </div>
         </div>

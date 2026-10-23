@@ -42,3 +42,36 @@ describe('renk sözleşmesi', () => {
     tonlar.forEach((t) => expect(kontrast(t, '#FFFFFF')).toBeGreaterThanOrEqual(4.5));
   });
 });
+
+describe('salt okunur alanlar', () => {
+  /* Yazı kabul etmeyen bir kutu, girilebilir gibi görünmemeli: kullanıcı
+     tıklayıp yazmayı deniyor, imleç yanıp sönüyor, hiçbir şey olmuyor.
+     Böyle bir alan ya tıklanınca doğru yeri açmalı (select-mock / tiklanir)
+     ya da kutu olmaktan çıkmalı (turetilmis / no-input). */
+  const okunurEtiketler = (kaynak) =>
+    Array.from(kaynak.matchAll(/<input\b[^>]*\breadonly\b[^>]*>/g)).map((m) => m[0]);
+
+  test('index.html: her salt okunur alan ya tıklanır ya türetilmiş', () => {
+    const acikta = okunurEtiketler(html).filter(
+      (t) => !/onclick=/.test(t) && !/class="[^"]*\b(turetilmis|no-input|select-mock)\b/.test(t)
+    );
+    expect(acikta).toEqual([]);
+  });
+
+  test('ekranda üretilen salt okunur alanlar seçici açar', () => {
+    const js = ['siparis.js', 'kasa.js', 'panel.js', 'core.js']
+      .map((f) => fs.readFileSync(path.join(__dirname, '..', 'web', 'js', f), 'utf8'))
+      .join('\n');
+    const acikta = okunurEtiketler(js).filter(
+      (t) => !/onclick=/.test(t) && !/select-mock|turetilmis|no-input/.test(t)
+    );
+    expect(acikta).toEqual([]);
+  });
+
+  test('türetilmiş alanlarda metin imleci sözü verilmez', () => {
+    const kural = css.match(/\.turetilmis\s*\{([^}]*)\}/);
+    expect(kural).not.toBeNull();
+    expect(kural[1]).toMatch(/caret-color:\s*transparent/);
+    expect(kural[1]).toMatch(/cursor:\s*default/);
+  });
+});
