@@ -53,7 +53,7 @@ grafit yüzeydir; palet yalnızca vurgu rengini değiştirir.
 |---|---|---|
 | *(öntanımlı)* **Lens** | `#6B2BE8` | Grafit arayüz; mor yalnızca logoda ve birincil düğmede. Durum renklerinin (yeşil/kırmızı/amber) hiçbiriyle karışmaz |
 | `grafit` | `#1C1C1F` | Marka rengi de nötr: tamamen tek renk |
-| `kasa` | `#0B8A52` | Zümrüt; marka rengi etkileşimde de kullanılır |
+| `kasa` | `#0A7546` | Zümrüt; marka rengi etkileşimde de kullanılır |
 | `mevcut` | `#F5C800` | Eski siyah + sarı görünüm (geri dönüş için) |
 
 Paleti değiştirmek: `document.documentElement.setAttribute('data-tema','berrak')`.

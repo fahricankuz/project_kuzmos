@@ -27,23 +27,23 @@
 
   /* Yüzeyler */
   --zemin:#F6F6F7; --yuzey:#FFFFFF; --yuzey-2:#FAFAFA; --cizgi:#E3E3E7;
-  --metin:#18181B; --metin-soluk:#5C5C66; --metin-silik:#8E8E98;
+  --metin:#18181B; --metin-soluk:#5C5C66; --metin-silik:#6C6C76;
 
   /* Üst bar ve koyu alanlar */
-  --ust-zemin:#FFFFFF; --ust-metin:#18181B; --ust-metin-soluk:#71717A;
+  --ust-zemin:#FFFFFF; --ust-metin:#18181B; --ust-metin-soluk:#63636C;
   --ust-cizgi:#E3E3E7; --ust-kutu:#F6F6F7; --ust-kutu-cizgi:#E3E3E7;
 
   /* Kart başlığı */
-  --baslik-zemin:#FFFFFF; --baslik-metin:#18181B; --baslik-alt:#8E8E98;
+  --baslik-zemin:#FFFFFF; --baslik-metin:#18181B; --baslik-alt:#6C6C76;
   --baslik-cizgi:#EFEFF1;
 
   /* Durum — markadan bağımsız: yalnızca paranın yönünü ve aciliyeti anlatır */
-  --basarili:#117A4B; --tehlike:#C62828; --uyari:#B26A00; --bilgi:#1565C0;
+  --basarili:#117A4B; --tehlike:#C62828; --uyari:#9A5B00; --bilgi:#1565C0;
   --basarili-silik:#E8F5EE; --basarili-cizgi:#B7DFC8;
   --tehlike-silik:#FDECEC; --tehlike-cizgi:#F6CBCB;
   --uyari-silik:#FFF6E3; --uyari-cizgi:#F3DCB0;
   --bilgi-silik:#E9F1FD; --bilgi-cizgi:#C3D8F7;
-  --uyari-rgb:178,106,0;
+  --uyari-rgb:154,91,0;
 
   /* Koyu panel (gün sonu kasa kutusu, onay ekranı) */
   --koyu-zemin:#121214; --koyu-metin:#FFFFFF; --koyu-vurgu:#B9A2FD;
@@ -61,15 +61,15 @@
 
 /* ── Tema: Kasa Yeşili ── */
 :root[data-tema="kasa"] {
-  --vurgu:#0B8A52; --vurgu-koyu:#086B3F; --vurgu-ust:#FFFFFF;
-  --secim:#0B8A52; --secim-koyu:#086B3F; --secim-silik:#E6F4EC;
-  --secim-metin:#086B3F; --secim-ust:#FFFFFF; --secim-rgb:11,138,82;
+  --vurgu:#0A7546; --vurgu-koyu:#085C37; --vurgu-ust:#FFFFFF;
+  --secim:#0A7546; --secim-koyu:#085C37; --secim-silik:#E6F4EC;
+  --secim-metin:#085C37; --secim-ust:#FFFFFF; --secim-rgb:10,117,70;
   --zemin:#F5F8F6; --yuzey:#FFFFFF; --yuzey-2:#F8FBF9; --cizgi:#E1EAE4;
-  --metin:#11221A; --metin-soluk:#566A5F; --metin-silik:#889A90;
-  --ust-zemin:#FFFFFF; --ust-metin:#11221A; --ust-metin-soluk:#566A5F; --ust-cizgi:#E1EAE4;
+  --metin:#11221A; --metin-soluk:#566A5F; --metin-silik:#5F7166;
+  --ust-zemin:#FFFFFF; --ust-metin:#11221A; --ust-metin-soluk:#4C5E54; --ust-cizgi:#E1EAE4;
   --ust-kutu:#F5F8F6; --ust-kutu-cizgi:#E1EAE4;
-  --baslik-zemin:#FFFFFF; --baslik-metin:#11221A; --baslik-alt:#889A90; --baslik-cizgi:#EDF3EF;
-  --basarili:#0B8A52; --tehlike:#C62828; --uyari:#B26A00; --bilgi:#1565C0;
+  --baslik-zemin:#FFFFFF; --baslik-metin:#11221A; --baslik-alt:#5F7166; --baslik-cizgi:#EDF3EF;
+  --basarili:#0A7546; --tehlike:#C62828; --uyari:#9A5B00; --bilgi:#1565C0;
   --koyu-zemin:#11221A; --koyu-metin:#FFFFFF; --koyu-vurgu:#5FD19B;
 }
 
@@ -91,16 +91,29 @@
   --secim:#F5C800; --secim-koyu:#D4A800; --secim-silik:#FFF6D1;
   --secim-metin:#6E5600; --secim-ust:#111111; --secim-rgb:245,200,0;
   --zemin:#F4F4F4; --yuzey:#FFFFFF; --yuzey-2:#F4F4F4; --cizgi:#E8E8E8;
-  --metin:#111111; --metin-soluk:#555555; --metin-silik:#999999;
+  --metin:#111111; --metin-soluk:#555555; --metin-silik:#6C6C6C;
   --ust-zemin:#111111; --ust-metin:#FFFFFF; --ust-metin-soluk:#999999; --ust-cizgi:rgba(255,255,255,.12);
   --ust-kutu:rgba(255,255,255,.05); --ust-kutu-cizgi:rgba(255,255,255,.1);
-  --baslik-zemin:#1a1a1a; --baslik-metin:#F5C800; --baslik-alt:#999999; --baslik-cizgi:#1a1a1a;
-  --basarili:#2E7D32; --tehlike:#E53935; --uyari:#BA7517; --bilgi:#1565C0;
+  --baslik-zemin:#1a1a1a; --baslik-metin:#F5C800; --baslik-alt:#9A9A9A; --baslik-cizgi:#1a1a1a;
+  --basarili:#2E7D32; --tehlike:#CB2B27; --uyari:#9C6212; --bilgi:#1565C0;
   --koyu-zemin:#111111; --koyu-metin:#FFFFFF; --koyu-vurgu:#F5C800;
   --radius:10px; --radius-sm:6px;
 }
 * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
 html, body { height:100%; font-family:var(--font); background:var(--gray-100); color:var(--black); }
+
+/*
+ * Arayüzün dört paleti de açık zeminli. Bunu söylemezsek telefon koyu
+ * moddayken tarayıcı form denetimlerini kendi koyu temasına göre boyuyor:
+ * zemini biz verdiğimiz için açık kalıyor ama YAZIYI beyaza çeviriyor,
+ * reçete ve tutar alanları yazarken görünmez oluyordu. color-scheme bunu
+ * kapatır; alttaki kurallar da color vermeyen denetimler için yedek.
+ */
+:root { color-scheme:light; }
+input, select, textarea { color:var(--metin); background-color:var(--zemin); }
+button { color:var(--metin); }
+input::placeholder, textarea::placeholder { color:var(--metin-silik); opacity:1; }
+option { color:var(--metin); background:var(--yuzey); }
 .view { display:none; flex-direction:column; height:100%; overflow:hidden; }
 .view.active { display:flex; }
 
@@ -596,5 +609,6 @@ html, body { height:100%; font-family:var(--font); background:var(--gray-100); c
   color: var(--gray-600); border-bottom: 1px solid var(--gray-200); font-weight: 600; }
 .oran-tablo td { border-bottom: 1px solid var(--gray-100); }
 .oran-tablo input { width: 72px; padding: 5px 7px; font-family: var(--mono); font-size: 12.5px;
-  border: 1px solid var(--gray-200); border-radius: var(--radius-sm); text-align: right; }
+  border: 1px solid var(--gray-200); border-radius: var(--radius-sm); text-align: right;
+  background: var(--zemin); }
 .oran-tablo .satir-ad { font-weight: 500; }
