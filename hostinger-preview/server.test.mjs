@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {handler} from './server.mjs';
+function request(url,method='GET'){const r={headers:{},setHeader(k,v){this.headers[k]=v},writeHead(status,headers){this.status=status;Object.assign(this.headers,headers)},end(body){this.body=body}};handler({url,method},r);return r;}
+test('root serves the actual editable payment preview',()=>{const r=request('/');assert.equal(r.status,200);const s=r.body.toString();assert.match(s,/<!doctype html>/);assert.match(s,/catalogSeed/);assert.match(s,/Listeyi düzenle/);assert.match(s,/kuzmos-add-product/);assert.match(s,/readInventoryXlsx/);assert.match(s,/sayfa yenilendiğinde sıfırlanır/);assert.equal(r.headers['Content-Length'],r.body.length)});
+test('HEAD and health are usable without exposing files',()=>{assert.equal(request('/','HEAD').body,undefined);assert.equal(request('/health').body,'ok');assert.equal(request('/server.mjs').status,404);assert.equal(request('/../package.json').status,404);assert.equal(request('/?preview=1').status,200);assert.equal(request('/','POST').status,405)});
