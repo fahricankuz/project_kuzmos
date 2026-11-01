@@ -68,7 +68,10 @@ Kaynaklar:
 - https://www.ifrs.org/issued-standards/list-of-standards/ias-2-inventories/
 
 ## Envanter ve barkod: ilk faz
-- Ürün / marka / model / renk / ekartman / köprü / kol / kategori varyantları.
+- Gözlük varyantı: marka → model → renk → ölçü (ekartman, burun, kol boyu).
+- Cam varyantı: marka → model → numara.
+- Lens varyantı: marka → model → renk.
+- Üretici barkodu ve iç SKU ayrı alanlardır. Lot/son kullanma, reçete ve diğer takip alanları bu kimlik kurallarından ayrı modellenir. Numaranın hangi optik bileşenleri kapsadığı stok ürün tipine göre açık tanımlanır; farklı fiziksel stoklar yanlışlıkla birleştirilmez.
 - Üretici barkodu ve iç SKU ayrı; aynı varyanta birden fazla barkod.
 - Barkodlar metindir; baştaki sıfırlar korunur. EAN/GTIN türünde kontrol basamağı doğrulanır; iç Code 128 ayrı türdür.
 - Şube/depo bazında fiziksel, rezerve, satılabilir ve yoldaki stok.
@@ -126,3 +129,27 @@ Next.js + TypeScript uygulaması, PostgreSQL/Supabase Auth/özel Storage, GitHub
 - Belirsiz farklar görünür, kapanış kontrolünde incelenmiş.
 - Gerçek muhasebeci ve mağaza personeli kabul testi tamamlandı.
 
+
+
+## v0.3: hizmet firmaları, vergi ve ödeme türleri
+Finans modeli yalnızca tedarikçi ve kart ekstresi ödemesinden oluşmaz. Belge, tahakkuk, yükümlülük, ödeme ve eşleştirme ayrı kaynak kayıtlardır.
+- Hizmet firması bir cari karttır; muhasebe/danışmanlık, reklam, yazılım, kargo, bakım ve sigorta gider türleridir. Firma adı kategori yerine kullanılmaz.
+- Belge türü, belge no, satır matrahı, belge üzerindeki vergi tutarı, vergi kodu/oranı, hizmet dönemi, vade, şube/masraf merkezi ve ek dosya tutulur.
+- KDV, KDV tevkifatı ve gelir vergisi stopajı farklı hesaplar ve yükümlülüklerdir. Uygulanabilirlik/istisna, oran ve yürürlük tarihi muhasebeci onaylı kurallara dayanır.
+- Hizmet belgesinin net gideri, vergi inceleme tutarı, satıcıya ödenecek ve vergi dairesine borç ayrı hesaplanır. KDV indirimi her durumda otomatik kabul edilmez; indirim hakkı ve zamanı ayrıca doğrulanır.
+- Tevkifatlı örnekte satıcı ve kamu ödemeleri farklı borçları kapatır. Vergi borcunun ödenmesi aynı hizmeti yeniden giderleştirmez.
+- Bankadan tedarikçi ödemesi nakit çıkışıdır; şirket kartıyla tedarikçi ödemesi kart borcu yaratır. Kart ekstresi ödemesi ayrı olaydır.
+- Kira/aidat, personel, SGK, KDV tahakkuku, stopaj, geçici/kurumlar/damga vergisi, kredi, masraf, demirbaş, ortak carisi ve iç transfer ayrı işlem tipleriyle desteklenecektir.
+- Maaş ve SGK ödemeleri bordro/tahakkuklara bağlıdır; her ödeme yeniden bordro gideri yaratmaz.
+- Net/brüt anlaşmalı kira ve serbest meslek belgesi farklı hesaplama şablonları gerektirir. Aynı varsayım bütün firmalara uygulanmaz.
+- Dönemsellik, peşin gider ve amortisman, nakit ödeme tarihinden ayrıdır.
+- Vergi takvimi elle tahmin edilen sabit tarihlerle kodlanmaz. Dönem/tahakkuk/vade bilgisi kaynaktan veya muhasebeci onayından alınır.
+- Kamu borcu, vergi gideri, ceza/gecikme ve ödeme farkı ayrı tutulur.
+- Yeni prototip, manuel belge tutarlarıyla hizmet/KDV/tevkifat/stopaj dağılımını ve borç kapatma aritmetiğini doğrular. Üretim vergi motoru veya mevzuat uyumu tamamlanmış değildir.
+- Önizlemeler bağımsız sentetik senaryolardır. Oranlar gerçek bir işletmeye uygulanacak mevzuat tavsiyesi değildir.
+- İletilen XLSB yönetim dosyasının hücre içeriği teknik aktarım sorunu nedeniyle henüz okunamamıştır. Gerçek Excel başlıkları, formülleri ve hesap eşlemesi incelenmiş sayılmamalıdır. Bunun için okunabilir XLSX/CSV veya erişilebilir dosya gereklidir.
+- Yönetim Excel'i ve gerçek müşteri/finans kayıtları kaynak kod deposuna konulmaz.
+
+Referanslar (uygulama kapsamı ve güncel oranlar ayrıca doğrulanır):
+- https://gib.gov.tr/mevzuat/kanun/436/teblig/9108
+- https://dijital.gib.gov.tr/hesaplamalar/SmmMeslekMakbuzuHesaplama

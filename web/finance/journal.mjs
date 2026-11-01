@@ -1,6 +1,6 @@
 // Prototype accounting kernel. Not a Supabase migration or production posting service.
-export const ACC={BANK:'bank',SUPPLIER:'supplier',CARD:'company_card',INVENTORY:'inventory',OPENING:'opening',UNALLOCATED:'unallocated',FEES:'finance_fees'};
-const debitBalance=new Set([ACC.BANK,ACC.INVENTORY,ACC.UNALLOCATED,ACC.FEES]);
+export const ACC={BANK:'bank',SUPPLIER:'supplier',CARD:'company_card',INVENTORY:'inventory',OPENING:'opening',UNALLOCATED:'unallocated',FEES:'finance_fees',SERVICE:'service_expense',INPUT_VAT:'input_vat_pending',VAT_WITHHELD:'vat_withheld',INCOME_WITHHELD:'income_withheld',TAX_DUE:'tax_due'};
+const debitBalance=new Set([ACC.BANK,ACC.INVENTORY,ACC.UNALLOCATED,ACC.FEES,ACC.SERVICE,ACC.INPUT_VAT]);
 const canonical=x=>JSON.stringify(x,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v);
 export function createLedger(tenant='demo-optik'){return {tenant,entries:[],keys:new Map()};}
 export function post(ledger,entry){
