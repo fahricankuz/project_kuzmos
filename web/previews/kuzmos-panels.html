@@ -93,6 +93,18 @@
  #kuzmos-product-preview .kp-error{color:var(--kz-red);padding:14px 0;font-size:13px}
  #kuzmos-product-preview details summary{font-size:12px;color:var(--kz-soft);padding:10px 0}
  #kuzmos-product-preview button:disabled{opacity:.5}
+
+ #kuzmos-product-preview button{color:var(--kz-text)}
+ #kuzmos-product-preview button:hover,#kuzmos-product-preview button:active{background:var(--kz-tint);color:var(--kz-text);border-color:var(--kz-line)}
+ #kuzmos-product-preview button[aria-pressed=true],#kuzmos-product-preview button[aria-pressed=true]:hover,#kuzmos-product-preview button[aria-pressed=true]:active{background:var(--kz-text);color:var(--kz-panel);border-color:var(--kz-text)}
+ #kuzmos-product-preview button.kp-primary,#kuzmos-product-preview button.kp-primary:hover,#kuzmos-product-preview button.kp-primary:active{background:var(--kz-yellow);color:#222;border-color:var(--kz-yellow)}
+ #kuzmos-product-preview button:disabled,#kuzmos-product-preview button:disabled:hover{background:var(--kz-bg);color:var(--kz-soft);border-color:var(--kz-line);cursor:not-allowed}
+ #kuzmos-product-preview button span,#kuzmos-product-preview button strong{color:inherit}
+ #kuzmos-product-preview .kp-managed{display:flex;flex-direction:column;gap:6px;min-width:0}
+ #kuzmos-product-preview .kp-managed label{display:flex;flex-direction:column;gap:8px}
+ #kuzmos-product-preview .kp-managed button{align-self:flex-start;padding:5px 10px;min-height:30px;font-size:12px}
+ #kuzmos-product-preview select,#kuzmos-product-preview select option{background:var(--kz-panel);color:var(--kz-text);min-width:0;max-width:100%}
+
 </style>
  <div class="kp-shell">
   <header class="kp-top"><div class="kp-brand">kuzmos<span>●</span></div><div class="kp-company"><strong>Damla Kuz Optik</strong>Atrium · Pilot işletme</div><span class="kp-demo">ÜRÜN ÖNİZLEMESİ</span></header>
@@ -132,16 +144,16 @@ function issueInstrument(store,id,date){
  if(p.issued)return false;if(p.settlements.length)throw Error('ALREADY_SETTLED');
  p.issued=true;p.issueDate=date;store.events.push({type:'instrument-issued',id,date,amount:p.amount});store.revision++;return true;
 }
-function confirmPayment(store,id,{key,amount,date,account,asOf}){
+function confirmPayment(store,id,{key,amount,date,account,asOf,receipt='',accountLabel=''}){
  const p=store.records.find(x=>x.id===id);
  if(!p||p.cancelled||!key||!isoDate(date)||asOf&&date>asOf||!Number.isSafeInteger(amount)||amount<=0)throw Error('INVALID_CONFIRMATION');
- const signature=JSON.stringify([id,amount,date,account]);
+ const signature=JSON.stringify([id,amount,date,account,receipt]);
  if(store.keys[key]){if(store.keys[key]!==signature)throw Error('IDEMPOTENCY_CONFLICT');return false;}
  if(amount>paymentRemaining(p))throw Error('EXCEEDS_PAYMENT');
  if(['Çek','Senet'].includes(p.method)&&amount!==paymentRemaining(p))throw Error('INSTRUMENT_FULL_REDEMPTION_REQUIRED');
  if(p.method==='Kredi kartı'){if(account!==p.cardAccount)throw Error('WRONG_CARD_ACCOUNT');}
  else if(!account||account.startsWith('card-'))throw Error('CASH_ACCOUNT_REQUIRED');
- const settlement={key,amount,date,account};p.settlements.push(settlement);
+ const settlement={key,amount,date,account,receipt:String(receipt).trim().slice(0,100),accountLabel};p.settlements.push(settlement);
  store.keys[key]=signature;store.events.push({type:p.method==='Kredi kartı'?'card-charge':'cash-out',id,date,amount,account,group:p.group,cardAccount:p.cardAccount||''});
  store.revision++;return true;
 }
@@ -320,22 +332,72 @@ function rowsFromXlsxParts(parts){
 async function readInventoryXlsx(bytes){return rowsFromXlsxParts(await unzipXlsx(bytes));}
 
 
+// Stable IDs and immutable payment snapshots; labels are editable, accounting behavior is not.
+const methodKinds=['Havale / EFT','Nakit','Kredi kartı','Çek','Senet'];
+const clean=s=>String(s??'').normalize('NFKC').trim().replace(/\s+/g,' ');
+const key=s=>clean(s).toLocaleLowerCase('tr-TR');
+function catalogSeed(){return {
+ payees:[['lux','Luxottica'],['seiko','Seiko Optical'],['agency','Örnek reklam ajansı'],['tax','Vergi dairesi'],['insurance','Örnek sigorta firması'],['vendor','Örnek cam tedarikçisi'],['garanti','Garanti şirket kredi kartı']].map(([id,label])=>({id,label,active:true})),
+ methods:methodKinds.map((kind,i)=>({id:'method-'+i,label:kind,kind,active:true})),
+ accounts:[{id:'bank-garanti',label:'Garanti şirket banka hesabı',kind:'bank',opening:100000000},{id:'cash-store',label:'Mağaza nakit kasası',kind:'cash',opening:5000000},{id:'card-garanti',label:'Garanti şirket kredi kartı',kind:'card',opening:400000}].map(a=>({...a,active:true}))
+};}
+function saveCatalog(catalog,collection,input){
+ const rows=catalog[collection];if(!['payees','methods','accounts'].includes(collection)||!Array.isArray(rows))throw Error('Geçersiz tanım listesi.');
+ const label=clean(input.label);if(!label||label.length>100)throw Error('Ad 1–100 karakter olmalı.');
+ if(rows.some(x=>x.id!==input.id&&key(x.label)===key(label)))throw Error('Bu ad zaten kayıtlı.');
+ const existing=rows.find(x=>x.id===input.id);if(input.id&&!existing)throw Error('Tanım bulunamadı.');
+ const kind=existing?.kind||input.kind;
+ if(collection==='methods'&&!methodKinds.includes(kind))throw Error('Ödeme davranışını seçin.');
+ if(collection==='accounts'&&!['bank','cash','card'].includes(kind))throw Error('Hesap türünü seçin.');
+ if(existing){existing.label=label;return existing;}
+ const prefix=collection==='accounts'?kind:collection;
+ let n=1;while(rows.some(x=>x.id===prefix+'-custom-'+n))n++;
+ const row={id:prefix+'-custom-'+n,label,active:true,...(kind?{kind}:{}),...(collection==='accounts'?{opening:0}:{})};rows.push(row);return row;
+}
+function toggleCatalog(catalog,collection,id){const row=catalog[collection]?.find(x=>x.id===id);if(!row)throw Error('Tanım bulunamadı.');row.active=!row.active;return row;}
+function activeCatalog(catalog,collection){return catalog[collection].filter(x=>x.active);}
+function paymentAccounts(catalog,method){if(!methodKinds.includes(method))return [];const kinds=method==='Nakit'?['cash']:method==='Havale / EFT'?['bank']:method==='Kredi kartı'?['card']:['bank','cash'];return activeCatalog(catalog,'accounts').filter(a=>kinds.includes(a.kind));}
+function resolvePaymentSelection(catalog,input){
+ const payee=activeCatalog(catalog,'payees').find(x=>x.id===input.payeeId),m=activeCatalog(catalog,'methods').find(x=>x.id===input.methodId);
+ if(!payee||!m)throw Error('Aktif firma ve ödeme şekli seçin.');
+ if(input.group==='Kredi kartı ekstresi'&&!['Havale / EFT','Nakit'].includes(m.kind))throw Error('Ekstre banka veya nakit hesabından ödenmeli.');
+ const source=paymentAccounts(catalog,m.kind).find(a=>a.id===input.plannedAccount);
+ if(!source)throw Error('Ödeme şekline uygun aktif hesap seçin.');
+ const card=(input.group==='Kredi kartı ekstresi'?activeCatalog(catalog,'accounts').find(a=>a.kind==='card'&&a.id===input.cardAccount):m.kind==='Kredi kartı'?source:null);
+ if((input.group==='Kredi kartı ekstresi'||m.kind==='Kredi kartı')&&!card)throw Error('Aktif şirket kartını seçin.');
+ return {...input,payee:payee.label,method:m.kind,methodLabel:m.label,plannedAccount:source.id,plannedAccountLabel:source.label,cardAccount:card?.id||'',cardAccountLabel:card?.label||''};
+}
+function validateSettlementAccount(catalog,p,account){
+ const a=paymentAccounts(catalog,p.method).find(x=>x.id===account);
+ if(!a||p.method==='Kredi kartı'&&account!==p.cardAccount)throw Error('Ödeme şekline uygun aktif hesap seçin.');return a;
+}
+function accountBalances(catalog,store,asOf){return catalog.accounts.map(a=>({...a,balance:store.events.filter(e=>e.date<=asOf).reduce((n,e)=>{
+ if(a.kind==='card'){if(e.type==='card-charge'&&e.account===a.id)return n+e.amount;if(e.type==='cash-out'&&e.group==='Kredi kartı ekstresi'&&e.cardAccount===a.id)return n-e.amount;}
+ else if(e.type==='cash-out'&&e.account===a.id)return n-e.amount;
+ return n;
+ },a.opening)}));}
+
 
 let active='finance',financeView='new',inventoryView='eyewear',message='',detailId='',importPlan=null,staffBarcode='8680000001041',staffProduct=null,staffFrame=null,staffReady=false,pendingStaff=null,bridgeNonce='';
 const demoDay='2026-11-20';
-let paymentStore=paymentSeed(),stock=inventorySeed();
+let paymentStore=paymentSeed(),stock=inventorySeed(),catalog=catalogSeed();
+let catalogView='payees',editCatalogId='';
 paymentStore.records=paymentStore.records.filter(p=>p.id!=='OD-1001');paymentStore.events=paymentStore.events.filter(e=>e.id!=='OD-1001');
-let draft={group:'Tedarikçi',payee:'Luxottica',amount:'250.000',due:'2026-11-20',method:'Çek',instrumentRef:'CK-2026-018',source:'Fatura LUX-2048',note:'Kasım çerçeve alımı',beneficiary:'',personalCategory:'Şahsi sağlık sigortası',cardAccount:'card-garanti'},paymentMode='plan';
+let draft={group:'Tedarikçi',payeeId:'lux',methodId:'method-3',plannedAccount:'bank-garanti',actualDate:demoDay,amount:'250.000',due:'2026-11-20',method:'Çek',instrumentRef:'CK-2026-018',source:'Fatura LUX-2048',note:'Kasım çerçeve alımı',beneficiary:'',personalCategory:'Şahsi sağlık sigortası',cardAccount:'card-garanti'},paymentMode='plan';
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(n/100);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const date=s=>s?new Date(s+'T12:00:00').toLocaleDateString('tr-TR',{day:'numeric',month:'long'}):'—';
-const accountName=x=>({'bank-garanti':'Garanti şirket banka hesabı','cash-store':'Mağaza nakit kasası','card-garanti':'Garanti şirket kredi kartı'}[x]||x);
+const accountName=x=>catalog.accounts.find(a=>a.id===x)?.label||x;
+const methodName=p=>p.methodLabel||p.method;
+const options=rows=>rows.map(x=>[x.id,x.label]);
+function managedSel(label,name,rows,value,collection){return '<div class="kp-managed">'+sel(label,name,[['','Seçiniz…'],...options(rows)],value)+'<button type="button" data-manage="'+collection+'">Listeyi düzenle</button></div>'}
+function normalizeDraft(){const methods=activeCatalog(catalog,'methods').filter(m=>draft.group!=='Kredi kartı ekstresi'||['Havale / EFT','Nakit'].includes(m.kind));const m=methods.find(x=>x.id===draft.methodId);draft.method=m?.kind||'';const accounts=paymentAccounts(catalog,draft.method);if(draft.plannedAccount&&!accounts.some(x=>x.id===draft.plannedAccount))draft.plannedAccount='';}
 function tag(t,k=''){return '<span class="kp-tag '+k+'">'+esc(t)+'</span>'}
 function head(t,s,a=''){return '<div class="kp-intro"><div><h2>'+t+'</h2><p>'+s+'</p></div>'+a+'</div>'}
 function kpi(t,v,s){return '<article class="kp-kpi"><small>'+t+'</small><strong>'+v+'</strong><em>'+s+'</em></article>'}
 function panel(t,inside){return '<section class="kp-panel kp-foy"><div class="kp-panelhead"><h3>'+t+'</h3></div>'+inside+'</section>'}
 function inp(label,name,value='',type='text',extra=''){return '<label>'+label+'<input name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+extra+'></label>'}
-function sel(label,name,values,value){return '<label>'+label+'<select name="'+name+'">'+values.map(x=>{const [v,t]=Array.isArray(x)?x:[x,x];return '<option value="'+esc(v)+'" '+(v===value?'selected':'')+'>'+esc(t)+'</option>'}).join('')+'</select></label>'}
+function sel(label,name,values,value){return '<label>'+label+'<select name="'+name+'" required>'+values.map(x=>{const [v,t]=Array.isArray(x)?x:[x,x];return '<option value="'+esc(v)+'" '+(v===value?'selected':'')+'>'+esc(t)+'</option>'}).join('')+'</select></label>'}
 function parseTL(v){const s=String(v).trim();if(!/^\d+(?:\.\d{3})*(?:,\d{1,2})?$/.test(s))throw Error('Tutarı 250.000 veya 1.250,50 biçiminde girin.');const [whole,decimal='']=s.replace(/\./g,'').split(',');const n=Number(whole)*100+Number(decimal.padEnd(2,'0'));if(!Number.isSafeInteger(n)||n<=0)throw Error('Geçerli bir tutar girin.');return n}
 function flash(t){message=t}
 function manager(){
@@ -346,18 +408,21 @@ function manager(){
  panel('Stok ve satış', '<div class="kp-list"><div><span>Gözlük</span><small>Marka · model · renk · ekartman · burun · kol</small></div><div><span>Cam</span><small>Marka · model · numara</small></div><div><span>Lens</span><small>Marka · model · numara · renk</small></div></div>');
 }
 function finance(){
- const tabs=[['new','＋ Yeni ödeme'],['calendar','Ödeme takvimi'],['accounts','Hesaplar'],['personal','Şahsi / aile']];
+ const tabs=[['new','＋ Yeni ödeme'],['calendar','Ödeme takvimi'],['accounts','Hesaplar'],['personal','Şahsi / aile'],['catalogs','Tanımlar']];
  return '<div class="kp-subtabs">'+tabs.map(([v,t])=>'<button data-finance="'+v+'" aria-pressed="'+(financeView===v)+'">'+t+'</button>').join('')+'</div>'+
- ({new:newPayment,calendar:calendar,accounts:accounts,personal:personal,detail:paymentDetail}[financeView])();
+ ({new:newPayment,calendar:calendar,accounts:accounts,personal:personal,detail:paymentDetail,catalogs:catalogScreen}[financeView])();
 }
 function newPayment(){
+ normalizeDraft();
  const isInstrument=['Çek','Senet'].includes(draft.method),isPersonal=draft.group==='Şahsi / aile',isBill=draft.group==='Kredi kartı ekstresi';
- const methods=isBill?['Havale / EFT','Nakit']:PAYMENT_METHODS;
+ const methods=activeCatalog(catalog,'methods').filter(m=>!isBill||['Havale / EFT','Nakit'].includes(m.kind));
  return head('Yeni ödeme','Sipariş föyündeki gibi: kime, ne kadar, ne zaman ve nasıl?',tag('Örnek gün: 20 Kasım'))+
- '<form id="kp-payment-form">'+panel('1 · Ödeme bilgileri','<div class="kp-form">'+sel('Ödeme türü','group',PAYMENT_GROUPS,draft.group)+inp('Kime / hangi firmaya? *','payee',draft.payee,'text','required maxlength="100"')+
+ '<form id="kp-payment-form">'+panel('1 · Ödeme bilgileri','<div class="kp-form">'+sel('Ödeme türü','group',PAYMENT_GROUPS,draft.group)+managedSel('Kime / hangi firmaya? *','payeeId',activeCatalog(catalog,'payees'),draft.payeeId,'payees')+
  inp('Ödenecek tutar (TL) *','amount',draft.amount,'text','required inputmode="decimal"')+inp('Ödeme tarihi / vade *','due',draft.due,'date','required')+
- sel('Ödeme şekli','method',methods,draft.method)+
- (draft.method==='Kredi kartı'||isBill?sel('Hangi şirket kartı?','cardAccount',[['card-garanti','Garanti şirket kredi kartı']],draft.cardAccount):sel('Ödeme yapılacak hesap','plannedAccount',[['bank-garanti','Garanti şirket banka hesabı'],['cash-store','Mağaza nakit kasası']],draft.plannedAccount||'bank-garanti'))+
+ managedSel('Ödeme şekli *','methodId',methods,draft.methodId,'methods')+
+ managedSel(draft.method==='Kredi kartı'?'Kullanılacak şirket kartı *':'Ödeme yapılacak hesap *','plannedAccount',paymentAccounts(catalog,draft.method),draft.plannedAccount,'accounts')+
+ (isBill?managedSel('Ekstresi ödenecek şirket kartı *','cardAccount',activeCatalog(catalog,'accounts').filter(a=>a.kind==='card'),draft.cardAccount,'accounts'):'')+
+ (paymentMode==='now'?inp('Gerçek ödeme tarihi *','actualDate',draft.actualDate||demoDay,'date','required max="'+demoDay+'"'):'')+
  (isInstrument?inp(draft.method+' numarası *','instrumentRef',draft.instrumentRef,'text','required'):'')+
  (isBill?'<p class="kp-full">Bu ödeme kart ekstresini kapatır. Aynı tedarikçi gideri tekrar oluşturulmaz.</p>':'')+'</div>')+
  (isPersonal?panel('2 · Kimin için yapılıyor?','<div class="kp-form">'+inp('Lehtar / kişi *','beneficiary',draft.beneficiary,'text','required placeholder="Şirket sahibi / aile üyesi"')+sel('Şahsi ödeme konusu','personalCategory',['Şahsi sağlık sigortası','Aile sağlık gideri','Eğitim','Konut / şahsi fatura','Diğer şahsi ödeme'],draft.personalCategory)+'</div>'):'')+
@@ -369,7 +434,7 @@ function newPayment(){
 }
 function paymentTable(records){
  return '<div class="kp-table"><table><thead><tr><th>Firma / kişi</th><th>Tür</th><th>Vade</th><th>Ödeme şekli</th><th>Kalan</th><th>Durum</th><th></th></tr></thead><tbody>'+
- records.sort((a,b)=>a.due.localeCompare(b.due)).map(p=>'<tr><td><strong>'+esc(p.payee)+'</strong><small>'+esc(p.source||p.id)+(p.beneficiary?' · '+esc(p.beneficiary):'')+'</small></td><td>'+esc(p.group)+'</td><td>'+date(p.due)+'</td><td>'+esc(p.method)+(p.instrumentRef?'<small>'+esc(p.instrumentRef)+'</small>':'')+'</td><td class="kp-amount">'+money(paymentRemaining(p))+'</td><td>'+tag(paymentStatus(p,demoDay),paymentRemaining(p)?'warn':'green')+'</td><td><button data-payment="'+p.id+'">'+(paymentRemaining(p)?'Ödemeyi aç':'Detay')+'</button></td></tr>').join('')+'</tbody></table></div>'+(records.length?'':'<div class="kp-detail">Bu filtrede ödeme yok.</div>');
+ [...records].sort((a,b)=>a.due.localeCompare(b.due)).map(p=>'<tr><td><strong>'+esc(p.payee)+'</strong><small>'+esc(p.source||p.id)+(p.beneficiary?' · '+esc(p.beneficiary):'')+'</small></td><td>'+esc(p.group)+'</td><td>'+date(p.due)+'</td><td>'+esc(methodName(p))+(p.instrumentRef?'<small>'+esc(p.instrumentRef)+'</small>':'')+'</td><td class="kp-amount">'+money(paymentRemaining(p))+'</td><td>'+tag(paymentStatus(p,demoDay),paymentRemaining(p)?'warn':'green')+'</td><td><button data-payment="'+p.id+'">'+(paymentRemaining(p)?'Ödemeyi aç':'Detay')+'</button></td></tr>').join('')+'</tbody></table></div>'+(records.length?'':'<div class="kp-detail">Bu filtrede ödeme yok.</div>');
 }
 let paymentFilter='Bekleyen';
 function calendar(){
@@ -384,22 +449,20 @@ function calendar(){
 function paymentDetail(){
  const p=paymentStore.records.find(x=>x.id===detailId);if(!p)return calendar();
  const left=paymentRemaining(p),isInstrument=['Çek','Senet'].includes(p.method),isCard=p.method==='Kredi kartı';
- return head(esc(p.payee),esc(p.group)+' · '+date(p.due)+' · '+esc(p.method),'<button data-finance="calendar">← Takvime dön</button>')+
- '<div class="kp-kpis">'+kpi('Planlanan',money(p.amount),esc(p.source||p.id))+kpi('Ödenen',money(p.amount-left),'Onaylanan hareketler')+kpi('Kalan',money(left),paymentStatus(p,demoDay))+kpi(isCard?'Kart / hesap':'Ödeme yöntemi',esc(p.method),esc(isCard?accountName(p.cardAccount):p.instrumentRef||accountName(p.plannedAccount||'bank-garanti')))+'</div>'+
+ return head(esc(p.payee),esc(p.group)+' · '+date(p.due)+' · '+esc(methodName(p)),'<button data-finance="calendar">← Takvime dön</button>')+
+ '<div class="kp-kpis">'+kpi('Planlanan',money(p.amount),esc(p.source||p.id))+kpi('Ödenen',money(p.amount-left),'Onaylanan hareketler')+kpi('Kalan',money(left),paymentStatus(p,demoDay))+kpi(isCard?'Kart / hesap':'Ödeme yöntemi',esc(methodName(p)),esc(isCard?p.cardAccountLabel||accountName(p.cardAccount):p.instrumentRef||p.plannedAccountLabel||accountName(p.plannedAccount||'bank-garanti')))+'</div>'+
  (p.group==='Şahsi / aile'?'<div class="kp-strip"><strong>'+esc(p.beneficiary)+'</strong><span>'+esc(p.personalCategory)+' · İşletme giderlerinden ayrı izlenir.</span></div>':'')+
- (isInstrument?panel('Çek / senet takibi','<div class="kp-detail"><p>'+esc(p.method)+' no: '+esc(p.instrumentRef)+' · '+(p.issued?'Teslim edildi / düzenlendi':'Henüz teslim / düzenleme işaretlenmedi')+'</p>'+(!p.issued&&!p.settlements.length?'<button data-issue="'+p.id+'">Teslim edildi / düzenlendi olarak işaretle</button>':'')+'<p>Çek veya senedin teslimi nakit çıkışı değildir. Vadesinde bankadan / kasadan ödendiği ayrıca onaylanır.</p></div>'):'')+
+ (isInstrument?panel('Çek / senet takibi','<div class="kp-detail"><p>'+esc(methodName(p))+' no: '+esc(p.instrumentRef)+' · '+(p.issued?'Teslim edildi / düzenlendi':'Henüz teslim / düzenleme işaretlenmedi')+'</p>'+(!p.issued&&!p.settlements.length?'<button data-issue="'+p.id+'">Teslim edildi / düzenlendi olarak işaretle</button>':'')+'<p>Çek veya senedin teslimi nakit çıkışı değildir. Vadesinde bankadan / kasadan ödendiği ayrıca onaylanır.</p></div>'):'')+
  (left?'<form id="kp-confirm-form">'+panel('Ödemeyi onayla','<div class="kp-form">'+inp('Gerçek ödeme tarihi *','actualDate',demoDay,'date','required max="'+demoDay+'"')+
  inp('Ödenen tutar (TL) *','actualAmount',(left/100).toLocaleString('tr-TR',{maximumFractionDigits:2}),'text','required inputmode="decimal"')+
- sel(isCard?'Kullanılan kart':'Paranın çıktığı hesap','account',isCard?[[p.cardAccount,accountName(p.cardAccount)]]:[['bank-garanti','Garanti şirket banka hesabı'],['cash-store','Mağaza nakit kasası']],isCard?p.cardAccount:p.plannedAccount||'bank-garanti')+
+ sel(isCard?'Kullanılan kart':'Paranın çıktığı hesap','account',[['','Seçiniz…'],...options(paymentAccounts(catalog,p.method).filter(a=>!isCard||a.id===p.cardAccount))],isCard?p.cardAccount:p.plannedAccount||'bank-garanti')+
  inp('İşlem / dekont no','receipt','','text','maxlength="100"')+'</div>')+
  '<div class="kp-savebar"><span>'+(isCard?'Tedarikçiye ödeme kaydolur, kart borcu artar. Bankadan çıkış oluşmaz.':'Yalnızca bu onayla banka / kasa hareketi oluşur.')+'</span><button class="kp-primary" type="submit">Ödendi olarak onayla</button></div><div id="kp-form-error" class="kp-error" role="alert"></div></form>':'')+
- panel('Ödeme geçmişi',p.settlements.length?'<div class="kp-list">'+p.settlements.map(s=>'<div><span>'+date(s.date)+'<small>'+esc(accountName(s.account))+'</small></span><b>'+money(s.amount)+'</b></div>').join('')+'</div>':'<div class="kp-detail">Henüz gerçekleşen ödeme yok.</div>');
+ panel('Ödeme geçmişi',p.settlements.length?'<div class="kp-list">'+p.settlements.map(s=>'<div><span>'+date(s.date)+'<small>'+esc(s.accountLabel||accountName(s.account))+(s.receipt?' · '+esc(s.receipt):'')+'</small></span><b>'+money(s.amount)+'</b></div>').join('')+'</div>':'<div class="kp-detail">Henüz gerçekleşen ödeme yok.</div>');
 }
 function accounts(){
- const totals=paymentTotals(paymentStore,demoDay),cash=paymentStore.events.filter(e=>e.type==='cash-out'&&e.account==='cash-store').reduce((s,e)=>s+e.amount,0);
- const bank=100000000-(totals.cashOut-cash),card=400000+totals.cardCharges-totals.cardRepayments;
- return head('Hesaplar','Kart kullanımıyla bankadan kart ödemesi ayrı izlenir.',tag('Örnek açılış bakiyeleri'))+
- '<div class="kp-kpis">'+kpi('Garanti banka',money(bank),'Açılış: 1.000.000 TL')+kpi('Mağaza kasası',money(5000000-cash),'Açılış: 50.000 TL')+kpi('Garanti şirket kartı borcu',money(card),'4.000 TL devir + kart kullanımları − ekstre ödemeleri')+kpi('Şahsi / aile nakit çıkışı',money(totals.personalOut),'Şirket giderinden ayrı')+'</div>'+
+ return head('Hesaplar','Her banka, kasa ve şirket kartı kendi hareketleriyle izlenir.','<button data-manage="accounts">Hesapları düzenle</button>')+
+ '<div class="kp-kpis">'+accountBalances(catalog,paymentStore,demoDay).map(a=>kpi(esc(a.label),money(a.balance),(a.kind==='card'?'Kart borcu':'Bakiye')+(a.active?'':' · Pasif'))).join('')+'</div>'+
  panel('Çek ve senet vadeleri',paymentTable(paymentStore.records.filter(p=>['Çek','Senet'].includes(p.method)&&!p.cancelled)))+
  panel('Kart ekstresi ödemeleri',paymentTable(paymentStore.records.filter(p=>p.group==='Kredi kartı ekstresi'&&!p.cancelled)));
 }
@@ -444,6 +507,24 @@ function scanIntoStaff(barcode){
  else{active='staff';render()}
 }
 function downloadTemplate(){const bytes=Uint8Array.from(atob(templateBase64),c=>c.charCodeAt(0));const a=document.createElement('a');const url=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));a.href=url;a.download='Kuzmos_Stok_Aktarim_Sablonu.xlsx';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function catalogScreen(){
+ const titles={payees:'Firmalar / kişiler',methods:'Ödeme şekilleri',accounts:'Banka, kasa ve kartlar'},rows=catalog[catalogView],item=rows.find(x=>x.id===editCatalogId);
+ return head('Tanımlar','Seçenek ekleyin, adını düzenleyin veya yeni ödemeler için pasife alın.','<button data-finance="new">← Ödeme formuna dön</button>')+
+ '<div class="kp-subtabs">'+Object.entries(titles).map(([v,t])=>'<button data-catalog-view="'+v+'" aria-pressed="'+(v===catalogView)+'">'+t+'</button>').join('')+'</div>'+
+ panel(item?'Tanımı düzenle':'Yeni tanım ekle','<form id="kp-catalog-form"><div class="kp-form">'+inp('Görünecek ad *','label',item?.label||'','text','required maxlength="100"')+
+ (catalogView==='methods'?(item?'<div class="kp-detail">Muhasebe davranışı: '+esc(item.kind)+'</div>':sel('Muhasebe davranışı *','kind',PAYMENT_METHODS,'Havale / EFT')):catalogView==='accounts'?(item?'<div class="kp-detail">Hesap türü: '+esc({bank:'Banka',cash:'Nakit kasa',card:'Kredi kartı'}[item.kind])+'</div>':sel('Hesap türü *','kind',[['bank','Banka'],['cash','Nakit kasa'],['card','Kredi kartı']],'bank')):'')+
+ '</div><div class="kp-detail kp-actions"><button type="submit" class="kp-primary">'+(item?'Değişikliği kaydet':'Listeye ekle')+'</button>'+(item?'<button type="button" id="kp-cancel-edit">Vazgeç</button>':'')+'</div><div id="kp-form-error" class="kp-error" role="alert"></div></form>')+
+ panel(titles[catalogView],'<div class="kp-table"><table><thead><tr><th>Ad</th><th>Tür / davranış</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>'+rows.map(x=>'<tr><td>'+esc(x.label)+'</td><td>'+esc(catalogView==='accounts'?{bank:'Banka',cash:'Nakit kasa',card:'Kredi kartı'}[x.kind]:x.kind||'Firma / kişi')+'</td><td>'+tag(x.active?'Aktif':'Pasif',x.active?'green':'')+'</td><td><button data-catalog-edit="'+x.id+'">Düzenle</button> <button data-catalog-toggle="'+x.id+'">'+(x.active?'Pasife al':'Aktifleştir')+'</button></td></tr>').join('')+'</tbody></table></div>')+
+ '<p>Geçmiş ödeme adları ve tutarları korunur. Kullanılmış tanımlar silinmez. Yeni hesapların örnek açılışı 0 TL’dir; muhasebe davranışı ve hesap türü sonradan değiştirilemez.</p>';
+}
+function bindCatalog(safely){
+ body.querySelectorAll('[data-manage]').forEach(b=>b.onclick=()=>{takeDraft();catalogView=b.dataset.manage;editCatalogId='';financeView='catalogs';message='';render()});
+ body.querySelectorAll('[data-catalog-view]').forEach(b=>b.onclick=()=>{catalogView=b.dataset.catalogView;editCatalogId='';message='';render()});
+ body.querySelectorAll('[data-catalog-edit]').forEach(b=>b.onclick=()=>{editCatalogId=b.dataset.catalogEdit;message='';render()});
+ body.querySelectorAll('[data-catalog-toggle]').forEach(b=>b.onclick=()=>safely(()=>{toggleCatalog(catalog,catalogView,b.dataset.catalogToggle);message='Tanımın durumu güncellendi. Geçmiş kayıtlar korunuyor.';render()}));
+ body.querySelector('#kp-cancel-edit')?.addEventListener('click',()=>{editCatalogId='';render()});
+ body.querySelector('#kp-catalog-form')?.addEventListener('submit',e=>{e.preventDefault();safely(()=>{const f=new FormData(e.currentTarget);saveCatalog(catalog,catalogView,{id:editCatalogId||undefined,label:f.get('label'),kind:f.get('kind')});editCatalogId='';message='Tanım kaydedildi. Ödeme formundaki listeden seçebilirsiniz.';render()})});
+}
 function takeDraft(){const f=body.querySelector('#kp-payment-form');if(f)Object.assign(draft,Object.fromEntries(new FormData(f)))}
 function render(){
  staffFrame=null;staffReady=false;
@@ -455,17 +536,18 @@ function render(){
  body.querySelectorAll('[data-payment-filter]').forEach(b=>b.onclick=()=>{paymentFilter=b.dataset.paymentFilter;render()});
  body.querySelectorAll('[data-payment]').forEach(b=>b.onclick=()=>{active='finance';detailId=b.dataset.payment;financeView='detail';message='';render()});
  body.querySelectorAll('[data-stock-view]').forEach(b=>b.onclick=()=>{inventoryView=b.dataset.stockView;message='';render()});
+ bindCatalog(safely);
  body.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{takeDraft();paymentMode=b.dataset.mode;render()});
  const form=body.querySelector('#kp-payment-form');
  if(form){
- ['group','method'].forEach(name=>form.querySelector('[name="'+name+'"]').addEventListener('change',()=>{takeDraft();if(draft.group==='Kredi kartı ekstresi'&&!['Havale / EFT','Nakit'].includes(draft.method))draft.method='Havale / EFT';render()}));
+ ['group','methodId'].forEach(name=>form.querySelector('[name="'+name+'"]').addEventListener('change',()=>{takeDraft();if(draft.group==='Kredi kartı ekstresi'&&!['Havale / EFT','Nakit'].includes(catalog.methods.find(m=>m.id===draft.methodId)?.kind)){draft.methodId='';draft.plannedAccount='';}normalizeDraft();render()}));
  form.addEventListener('submit',e=>{e.preventDefault();safely(()=>{takeDraft();const next=structuredClone(paymentStore),id='OD-'+(Math.max(1007,...next.records.map(x=>Number(x.id.slice(3))))+1);const amount=parseTL(draft.amount);
- const p=addPayment(next,{...draft,id,amount});if(paymentMode==='now')confirmPayment(next,id,{key:id+'-instant',amount,date:draft.due,account:draft.method==='Kredi kartı'?draft.cardAccount:draft.plannedAccount||'bank-garanti',asOf:demoDay});
- paymentStore=next;detailId=id;financeView='calendar';message=paymentMode==='plan'?'Ödeme planlandı. Vadesinde açıp ödendi onayı verebilirsiniz.':'Ödeme kaydedildi. Hesap hareketi oluşturuldu.';draft={group:'Tedarikçi',payee:'',amount:'',due:demoDay,method:'Havale / EFT'};render();})});
+ const selection=resolvePaymentSelection(catalog,draft);const p=addPayment(next,{...selection,id,amount});if(paymentMode==='now')confirmPayment(next,id,{key:id+'-instant',amount,date:draft.actualDate||demoDay,account:selection.plannedAccount,accountLabel:selection.plannedAccountLabel,asOf:demoDay});
+ paymentStore=next;detailId=id;financeView='calendar';message=paymentMode==='plan'?'Ödeme planlandı. Vadesinde açıp ödendi onayı verebilirsiniz.':'Ödeme kaydedildi. Hesap hareketi oluşturuldu.';draft={group:'Tedarikçi',payeeId:'',methodId:'',plannedAccount:'',amount:'',due:demoDay,actualDate:demoDay};render();})});
  }
- body.querySelector('#kp-confirm-form')?.addEventListener('submit',e=>{e.preventDefault();safely(()=>{const f=new FormData(e.currentTarget),p=paymentStore.records.find(p=>p.id===detailId),next=structuredClone(paymentStore);confirmPayment(next,detailId,{key:detailId+'-pay-'+p.settlements.length,amount:parseTL(f.get('actualAmount')),date:String(f.get('actualDate')),account:String(f.get('account')),asOf:demoDay});paymentStore=next;message='Ödeme onaylandı. İşlem geçmişine ve hesaplara yansıdı.';render()})});
+ body.querySelector('#kp-confirm-form')?.addEventListener('submit',e=>{e.preventDefault();safely(()=>{const f=new FormData(e.currentTarget),p=paymentStore.records.find(p=>p.id===detailId),next=structuredClone(paymentStore);const selected=validateSettlementAccount(catalog,p,String(f.get('account')));confirmPayment(next,detailId,{receipt:String(f.get('receipt')||''),accountLabel:selected.label,key:detailId+'-pay-'+p.settlements.length,amount:parseTL(f.get('actualAmount')),date:String(f.get('actualDate')),account:String(f.get('account')),asOf:demoDay});paymentStore=next;message='Ödeme onaylandı. İşlem geçmişine ve hesaplara yansıdı.';render()})});
  body.querySelectorAll('[data-issue]').forEach(b=>b.onclick=()=>safely(()=>{issueInstrument(paymentStore,b.dataset.issue,demoDay);message='Teslim / düzenleme kaydı oluşturuldu. Nakit çıkışı yapılmadı.';render()}));
- body.querySelector('#kp-new-personal')?.addEventListener('click',()=>{draft={group:'Şahsi / aile',payee:'',amount:'',due:demoDay,method:'Havale / EFT',beneficiary:'',personalCategory:'Şahsi sağlık sigortası'};financeView='new';render()});
+ body.querySelector('#kp-new-personal')?.addEventListener('click',()=>{draft={group:'Şahsi / aile',payeeId:'',methodId:'',plannedAccount:'',amount:'',due:demoDay,actualDate:demoDay,beneficiary:'',personalCategory:'Şahsi sağlık sigortası'};financeView='new';render()});
  body.querySelector('#kp-download-template')?.addEventListener('click',downloadTemplate);
  body.querySelector('#kp-example-import')?.addEventListener('click',()=>{importPlan=importPreview(stock,templateRows());message='Örnek satırlar kontrol edildi. Stok henüz değişmedi.';render()});
  body.querySelector('#kp-upload-xlsx')?.addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const rows=await readInventoryXlsx(await file.arrayBuffer());importPlan=importPreview(stock,rows);message=file.name+' kontrol edildi. Stok henüz değişmedi.';render()}catch(err){message=err.message;render()}});

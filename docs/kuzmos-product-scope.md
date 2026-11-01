@@ -193,3 +193,11 @@ Referanslar (uygulama kapsamı ve güncel oranlar ayrıca doğrulanır):
 - XLSX okuyucu tarayıcının DecompressionStream deflate-raw desteğini gerektirir. Gerçek Chrome/Safari ve barkod cihazı kabul testi henüz yapılmamıştır.
 - Şablon Artifact Tool ile üretildi; gerçek dosya açılarak başlıklar, tipler, numara/barkod korunumu ve stok aktarımı test edildi.
 - Gerçek üretim aktarımı tenant/şube yetkisi, transaction, idempotency ve audit kontrollerini sunucuda da zorunlu kılmalıdır. Demo önizlemesindeki bellek kontrolleri bunların yerine geçmez.
+
+## v0.5: düzenlenebilir ödeme tanımları
+- Firma/kişi, ödeme şekli ve hesap, zorunlu seçilebilir listelerdir. Listeyi düzenle kısayolu ve Tanımlar ekranından ekleme, yeniden adlandırma, pasife alma/aktifleştirme yapılır.
+- Sabit kimlikler ve ödeme anındaki ad kopyaları geçmiş kayıtları korur; davranış ve hesap türü sonradan değişmez.
+- Havale yalnız banka, nakit yalnız kasa, kart yalnız ilgili şirket kartı; çek/senet itfası banka veya kasadan yapılır. Ekstre hedef kartı ile paranın çıktığı hesap ayrı seçilir.
+- Yeni hesaplar sıfır örnek açılışla başlar. Her hesabın hareketi ve borcu ayrı hesaplanır.
+- Şimdi öde için gerçek ödeme tarihi vadeden ayrıdır. Dekont no ve ödeme hesabının o andaki adı geçmişte saklanır.
+- Hover/seçili/pasif buton durumlarına açık metin/zemin çiftleri eklendi. Gerçek tarayıcı görsel kabul testi henüz yapılmadı.

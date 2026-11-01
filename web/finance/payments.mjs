@@ -21,16 +21,16 @@ export function issueInstrument(store,id,date){
  if(p.issued)return false;if(p.settlements.length)throw Error('ALREADY_SETTLED');
  p.issued=true;p.issueDate=date;store.events.push({type:'instrument-issued',id,date,amount:p.amount});store.revision++;return true;
 }
-export function confirmPayment(store,id,{key,amount,date,account,asOf}){
+export function confirmPayment(store,id,{key,amount,date,account,asOf,receipt='',accountLabel=''}){
  const p=store.records.find(x=>x.id===id);
  if(!p||p.cancelled||!key||!isoDate(date)||asOf&&date>asOf||!Number.isSafeInteger(amount)||amount<=0)throw Error('INVALID_CONFIRMATION');
- const signature=JSON.stringify([id,amount,date,account]);
+ const signature=JSON.stringify([id,amount,date,account,receipt]);
  if(store.keys[key]){if(store.keys[key]!==signature)throw Error('IDEMPOTENCY_CONFLICT');return false;}
  if(amount>paymentRemaining(p))throw Error('EXCEEDS_PAYMENT');
  if(['Çek','Senet'].includes(p.method)&&amount!==paymentRemaining(p))throw Error('INSTRUMENT_FULL_REDEMPTION_REQUIRED');
  if(p.method==='Kredi kartı'){if(account!==p.cardAccount)throw Error('WRONG_CARD_ACCOUNT');}
  else if(!account||account.startsWith('card-'))throw Error('CASH_ACCOUNT_REQUIRED');
- const settlement={key,amount,date,account};p.settlements.push(settlement);
+ const settlement={key,amount,date,account,receipt:String(receipt).trim().slice(0,100),accountLabel};p.settlements.push(settlement);
  store.keys[key]=signature;store.events.push({type:p.method==='Kredi kartı'?'card-charge':'cash-out',id,date,amount,account,group:p.group,cardAccount:p.cardAccount||''});
  store.revision++;return true;
 }

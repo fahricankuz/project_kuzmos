@@ -1,4 +1,4 @@
-# Kuzmos ERP prototype · v0.4
+# Kuzmos ERP prototype · v0.5
 
 Review `previews/kuzmos-panels.html`. This branch preserves the original Apps Script staff form in `reference/sales/Index.html`. The preview adds a narrow barcode adapter around that source.
 
@@ -22,3 +22,10 @@ Node 24: `node --test web/tests/*.test.mjs` from repository root. Tests cover pa
 
 ## Prototype boundary
 Preview data lives only in the current page session. No authentication, live database, bank payment, hardware scanner certification or production stock reservation is provided. Browser visual QA remains outstanding. Balanced-journal modules remain separate; the payment UI is not yet wired into a transactional production ledger. Production requires Supabase tenant/branch authorization, server-side validation and transactions, audit/reversal handling, and accountant-reviewed document/tax/account mappings.
+
+## Editable payment definitions (v0.5)
+Payee, payment method and source account are required selections. Each has a Listeyi düzenle shortcut to Tanımlar, which supports add, rename, deactivate and reactivate. IDs remain stable and new payments retain label snapshots; renaming does not rewrite old records. Duplicate names are rejected. Method accounting behavior and account type cannot be changed after creation. New accounts open at zero in the prototype.
+
+The source account list is constrained by method: transfer uses bank, cash uses cash, card uses the selected company card, cheque/note redemption uses bank/cash. Statement payment shows both the target card and the bank/cash source. Each account balance is calculated independently, including additional cards. Now-pay uses a separate actual date rather than assuming the planned due date. Settlement receipt and account-name snapshot are retained.
+
+Control foreground/background pairs are explicitly scoped for normal, hover, selected and disabled states in light/dark themes. These changes were checked through source/contrast checks and template-flow smoke tests; visual browser acceptance remains outstanding.
