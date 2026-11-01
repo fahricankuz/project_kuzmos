@@ -1,0 +1,23 @@
+name: Finance prototype
+on:
+  pull_request:
+    paths:
+      - 'web/finance/**'
+      - 'web/tests/**'
+      - '.github/workflows/finance-prototype.yml'
+  push:
+    branches: ['codex/kuzmos-erp-preview']
+    paths:
+      - 'web/finance/**'
+      - 'web/tests/**'
+jobs:
+  finance:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test web/tests/journal.test.mjs
