@@ -7,7 +7,7 @@ const normalize=x=>String(x??'').normalize('NFKC').trim().replace(/\s+/g,' ').to
 const normalizePower=x=>{const s=String(x??'').trim().replace(',','.');if(!/^[+-]?\d+(?:\.\d{1,2})?$/.test(s))throw Error('INVALID_POWER');const n=Number(s);return (n>0?'+':'')+n.toFixed(2);};
 export function variantKey(kind,attributes){
  const fields=IDENTITY_FIELDS[kind];if(!fields)throw Error('UNKNOWN_PRODUCT_KIND');
- return JSON.stringify([kind,...fields.map(f=>{const v=f==='power'?normalizePower(attributes[f]):normalize(attributes[f]);if(!v)throw Error('MISSING_'+f);return v;})]);
+ return JSON.stringify([kind,...(kind==='eyewear'?[...fields,'colorCode']:fields).map(f=>{const v=f==='power'?normalizePower(attributes[f]):normalize(attributes[f]);if(!v&&f!=='colorCode')throw Error('MISSING_'+f);return v;})]);
 }
 export function isValidEAN13(value){
  return /^\d{13}$/.test(value)&&(10-[...value.slice(0,12)].reduce((s,c,i)=>s+Number(c)*(i%2?3:1),0)%10)%10===Number(value[12]);

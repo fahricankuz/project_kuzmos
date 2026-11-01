@@ -20,7 +20,8 @@ export function importPreview(state,rows){
    const qty=Number(r.adet),price=Number(r.birim_fiyat_tl);
    if(r.adet===''||!Number.isSafeInteger(qty)||qty<0)throw Error('Adet sıfır veya pozitif tam sayı olmalı.');
    if(r.birim_fiyat_tl===''||!Number.isFinite(price)||price<0||Math.abs(price*100-Math.round(price*100))>1e-6)throw Error('Birim fiyat en fazla iki ondalıklı olmalı.');
-   const item={kind,brand:String(r.marka||'').trim(),model:String(r.model||'').trim(),color:String(r.renk||'').trim(),power:String(r.numara??'').trim(),eyeSize:String(r.ekartman??'').trim(),bridge:String(r.burun??'').trim(),temple:String(r.kol_boyu??'').trim(),category:String(r.kategori).trim(),sku,barcode,branch,price:Math.round(price*100)};
+   const previous=state.items.find(x=>x.sku===sku);
+   const item={kind,colorCode:String(r.renk_kodu??previous?.colorCode??'').trim(),brand:String(r.marka||'').trim(),model:String(r.model||'').trim(),color:String(r.renk||'').trim(),power:String(r.numara??'').trim(),eyeSize:String(r.ekartman??'').trim(),bridge:String(r.burun??'').trim(),temple:String(r.kol_boyu??'').trim(),category:String(r.kategori).trim(),sku,barcode,branch,price:Math.round(price*100)};
    const identity=variantKey(kind,item),existing=state.items.find(x=>x.sku===sku&&x.branch===branch),other=state.items.find(x=>x.sku===sku);
    if(other&&variantKey(other.kind,other)!==identity)throw Error('SKU başka bir varyanta ait.');
    if(barcodeOwners.has(barcode)&&barcodeOwners.get(barcode)!==sku)throw Error('Barkod başka SKU ile eşleşiyor.');barcodeOwners.set(barcode,sku);
@@ -48,10 +49,10 @@ export function orderProductFromBarcode(state,barcode,branch){
  if(typeof barcode!=='string')throw Error('BARCODE_MUST_BE_TEXT');
  const hits=state.items.filter(x=>x.barcode===barcode.trim()&&x.branch===branch);
  if(hits.length!==1)throw Error(hits.length?'AMBIGUOUS_BARCODE':'BARCODE_NOT_FOUND');
- const p=hits[0];return {urun:p.brand+' '+p.model+(p.color?' · '+p.color:'')+(p.power?' · '+p.power:''),adet:'1',ekartman:p.eyeSize||'',kopru:p.bridge||'',kol:p.temple||'',kategori:p.category,fiyat:(p.price/100).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}),sku:p.sku,available:p.qty-p.reserved};
+ const p=hits[0];return {urun:p.brand+' '+p.model+(p.color?' · '+p.color:'')+(p.colorCode?' ['+p.colorCode+']':'')+(p.power?' · '+p.power:''),adet:'1',ekartman:p.eyeSize||'',kopru:p.bridge||'',kol:p.temple||'',kategori:p.category,fiyat:(p.price/100).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}),sku:p.sku,available:p.qty-p.reserved};
 }
 export function inventorySeed(){return {revision:0,applied:[],operations:[],items:[
- {kind:'eyewear',brand:'Ray-Ban',model:'RX5154',color:'Siyah',eyeSize:'51',bridge:'21',temple:'145',category:'Optik Çerçeve',sku:'GOZ-001',barcode:'8680000001041',branch:'Atrium',qty:8,reserved:2,price:850000},
+ {kind:'eyewear',brand:'Ray-Ban',model:'RX5154',color:'Siyah',colorCode:'2000',eyeSize:'51',bridge:'21',temple:'145',category:'Optik Çerçeve',sku:'GOZ-001',barcode:'8680000001041',branch:'Atrium',qty:8,reserved:2,price:850000},
  {kind:'opticalLens',brand:'Seiko',model:'Örnek stok camı',power:'+1.00',color:'',eyeSize:'',bridge:'',temple:'',category:'Optik Cam',sku:'CAM-001',barcode:'8680000001065',branch:'Atrium',qty:20,reserved:4,price:225000},
  {kind:'contactLens',brand:'Demo Lens',model:'Color',power:'-1.00',color:'Ela',eyeSize:'',bridge:'',temple:'',category:'Lens',sku:'LEN-001',barcode:'8680000001089',branch:'Atrium',qty:6,reserved:1,price:125000}
 ]};}

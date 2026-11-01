@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {canPanel,monthDays,paymentRows} from '../finance/review.mjs';
+import {paymentSeed} from '../finance/payments.mjs';
+import {inventorySeed,templateRows,importPreview,applyImport,orderProductFromBarcode} from '../inventory/import.mjs';
+import {variantKey} from '../inventory/variants.mjs';
+test('demo rollerinin ekran sınırları belirli',()=>{assert.equal(canPanel('staff','finance'),false);assert.equal(canPanel('staff','manager'),false);assert.equal(canPanel('accountant','staff'),false);assert.equal(canPanel('admin','finance'),true);assert.equal(canPanel('invalid','finance'),false)});
+test('ay takvimi pazartesi başlangıcı ve artık yılı hesaplar',()=>{assert.equal(monthDays('2026-11').offset,6);assert.equal(monthDays('2026-11').days.length,30);assert.equal(monthDays('2028-02').days.length,29);assert.throws(()=>monthDays('2026-13'))});
+test('hareket dökümünde planlar nakit ve kart borcunu ikinci kez artırmaz',()=>{const s=paymentSeed(),rows=paymentRows(s);assert.equal(rows.filter(r=>r.kind==='Ödeme planı').length,s.records.length);assert.equal(rows.reduce((n,r)=>n+r.cardChange,0),5000000);assert.equal(rows.reduce((n,r)=>n+r.cashOut,0),0);assert.ok(rows.some(r=>r.kind==='Çek / senet teslimi'))});
+test('renk kodu baştaki sıfırı korur ve ayrı gözlük varyantıdır',()=>{const p=inventorySeed().items[0];assert.notEqual(variantKey('eyewear',{...p,colorCode:'001'}),variantKey('eyewear',{...p,colorCode:'002'}));const rows=templateRows();rows[0]={...rows[0],ic_sku:'NEW',uretici_barkodu:'0001',renk_kodu:'001'};const s=inventorySeed(),plan=importPreview(s,[rows[0]]);assert.deepEqual(plan.errors,[]);applyImport(s,plan);assert.equal(s.items.at(-1).colorCode,'001');assert.match(orderProductFromBarcode(s,'0001','Atrium').urun,/\[001\]/)});
+test('eski Excel dosyası stok artırırken mevcut renk kodunu kaybetmez',()=>{const s=inventorySeed(),plan=importPreview(s,templateRows());assert.deepEqual(plan.errors,[]);applyImport(s,plan);assert.equal(s.items[0].colorCode,'2000')});

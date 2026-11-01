@@ -47,9 +47,9 @@ export function rowsFromXlsxParts(parts){
  const shared=parts.has('xl/sharedStrings.xml')?[...xml('xl/sharedStrings.xml').matchAll(/<(?:\w+:)?si(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?si>/g)].map(m=>txt(m[1])):[];
  const grid=[];
  for(const m of sheetXml.matchAll(/<(?:\w+:)?row(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?row>/g)){
-  const values=Array(IMPORT_HEADERS.length).fill('');
+  const values=Array(IMPORT_HEADERS.length+1).fill('');
   for(const c of m[1].matchAll(/<(?:\w+:)?c\s([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?c>)/g)){
-   const a=attributes(c[1]);if(!a.r||!/^[A-Z]+\d+$/.test(a.r))throw Error('Geçersiz hücre adresi.');const index=col(a.r);if(index>=IMPORT_HEADERS.length)continue;
+   const a=attributes(c[1]);if(!a.r||!/^[A-Z]+\d+$/.test(a.r))throw Error('Geçersiz hücre adresi.');const index=col(a.r);if(index>IMPORT_HEADERS.length)continue;
    const body=c[2]||'',raw=body.match(/<(?:\w+:)?v(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?v>/)?.[1];
    values[index]=a.t==='s'?shared[Number(raw)]??'':a.t==='inlineStr'?txt(body):a.t==='str'?decodeXml(raw||''):raw===undefined?'':Number(raw);
   }
@@ -57,7 +57,8 @@ export function rowsFromXlsxParts(parts){
  }
  if(!grid.length||IMPORT_HEADERS.some((h,i)=>grid[0][i]!==h))throw Error('Kolon başlıkları şablonla aynı olmalı.');
  if(grid.length>2001)throw Error('En fazla 2000 veri satırı yüklenebilir.');
- return grid.slice(1).map(r=>Object.fromEntries(IMPORT_HEADERS.map((h,i)=>[h,r[i]])));
+ if(grid[0][16]&&grid[0][16]!=='renk_kodu')throw Error('Ek kolon renk_kodu olmalı.');
+ return grid.slice(1).map(r=>Object.fromEntries([...IMPORT_HEADERS,...(grid[0][16]?['renk_kodu']:[])].map((h,i)=>[h,r[i]])));
 }
 export async function readInventoryXlsx(bytes){return rowsFromXlsxParts(await unzipXlsx(bytes));}
 

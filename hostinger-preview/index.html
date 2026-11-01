@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="Kuzmos satış, finans ve envanter deneme ortamı"><title>Kuzmos · Deneme</title><style>body{margin:0;padding:12px;background:light-dark(#f5f5f7,#18191b);color-scheme:light dark}.demo-notice{font:13px/1.5 system-ui;color:light-dark(#444,#ddd);max-width:1200px;margin:0 auto 12px}#kuzmos-product-preview{max-width:1400px;margin:auto}</style></head><body><p class="demo-notice">Kuzmos deneme ortamı · Örnek veriler kullanılır. Değişiklikler sayfa yenilendiğinde sıfırlanır. Gerçek müşteri veya finans bilgisi girmeyin.</p>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="Kuzmos satış, finans ve envanter deneme ortamı"><title>Kuzmos · Deneme</title><style>body{margin:0;padding:12px;background:#f5f5f7;color-scheme:light}.demo-notice{font:13px/1.5 system-ui;color:#444;max-width:1200px;margin:0 auto 12px}#kuzmos-product-preview{max-width:1400px;margin:auto}</style></head><body><p class="demo-notice">Kuzmos deneme ortamı · Örnek veriler kullanılır. Değişiklikler sayfa yenilendiğinde sıfırlanır. Gerçek müşteri veya finans bilgisi girmeyin.</p>
 <div id="kuzmos-product-preview">
 <style>
- #kuzmos-product-preview{--kz-bg:light-dark(#f5f5f7,#18191b);--kz-panel:light-dark(#fff,#242528);--kz-text:light-dark(#1d1d1f,#f1f1f3);--kz-soft:light-dark(#6e6e73,#b7b7bd);--kz-line:light-dark(#e5e5e9,#3c3d41);--kz-yellow:#f5c800;--kz-tint:light-dark(#fff8d9,#3a341c);--kz-green:light-dark(#237047,#87ccaa);--kz-red:light-dark(#a2473d,#ecaaa2);color-scheme:light dark;color:var(--kz-text);font:14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+ #kuzmos-product-preview{--kz-bg:#f5f5f7;--kz-panel:#fff;--kz-text:#1d1d1f;--kz-soft:#6e6e73;--kz-line:#e5e5e9;--kz-yellow:#f5c800;--kz-tint:#fff8d9;--kz-green:#237047;--kz-red:#a2473d;color-scheme:light;color:var(--kz-text);font:14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
  #kuzmos-product-preview *{box-sizing:border-box}
  #kuzmos-product-preview button,#kuzmos-product-preview input,#kuzmos-product-preview select{font:inherit;color:inherit}
  #kuzmos-product-preview button{min-height:36px;border:1px solid var(--kz-line);border-radius:99px;background:var(--kz-panel);padding:8px 15px}
@@ -107,6 +107,16 @@
  #kuzmos-product-preview .kp-managed button{align-self:flex-start;padding:5px 10px;min-height:30px;font-size:12px}
  #kuzmos-product-preview select,#kuzmos-product-preview select option{background:var(--kz-panel);color:var(--kz-text);min-width:0;max-width:100%}
 
+
+#kuzmos-product-preview .kp-foy .kp-panelhead{background:#fff;color:#1d1d1f;border-bottom:1px solid #e5e5e9}
+#kuzmos-product-preview .kp-foy .kp-panelhead h3{color:#1d1d1f}
+#kuzmos-product-preview .kp-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;padding:12px}
+#kuzmos-product-preview .kp-calendar>strong{text-align:center;font-size:12px}
+#kuzmos-product-preview .kp-calendar button{border-radius:7px;min-width:0;min-height:76px;padding:7px;text-align:left;display:flex;flex-direction:column;gap:5px;overflow-wrap:anywhere}
+#kuzmos-product-preview .kp-calendar small{font-size:11px}
+#kuzmos-product-preview .kp-calendar span{font-size:11px}
+#kuzmos-product-preview .kp-demo-role{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 24px;background:#fff8d9;font-size:12px;color:#332b12}
+@media(max-width:540px){#kuzmos-product-preview .kp-calendar{padding:5px;gap:3px}#kuzmos-product-preview .kp-calendar button{padding:4px;min-height:65px}#kuzmos-product-preview .kp-calendar span{display:none}}
 </style>
  <div class="kp-shell">
   <header class="kp-top"><div class="kp-brand">kuzmos<span>●</span></div><div class="kp-company"><strong>Damla Kuz Optik</strong>Atrium · Pilot işletme</div><span class="kp-demo">ÜRÜN ÖNİZLEMESİ</span></header>
@@ -196,7 +206,7 @@ const normalize=x=>String(x??'').normalize('NFKC').trim().replace(/\s+/g,' ').to
 const normalizePower=x=>{const s=String(x??'').trim().replace(',','.');if(!/^[+-]?\d+(?:\.\d{1,2})?$/.test(s))throw Error('INVALID_POWER');const n=Number(s);return (n>0?'+':'')+n.toFixed(2);};
 function variantKey(kind,attributes){
  const fields=IDENTITY_FIELDS[kind];if(!fields)throw Error('UNKNOWN_PRODUCT_KIND');
- return JSON.stringify([kind,...fields.map(f=>{const v=f==='power'?normalizePower(attributes[f]):normalize(attributes[f]);if(!v)throw Error('MISSING_'+f);return v;})]);
+ return JSON.stringify([kind,...(kind==='eyewear'?[...fields,'colorCode']:fields).map(f=>{const v=f==='power'?normalizePower(attributes[f]):normalize(attributes[f]);if(!v&&f!=='colorCode')throw Error('MISSING_'+f);return v;})]);
 }
 function isValidEAN13(value){
  return /^\d{13}$/.test(value)&&(10-[...value.slice(0,12)].reduce((s,c,i)=>s+Number(c)*(i%2?3:1),0)%10)%10===Number(value[12]);
@@ -229,7 +239,8 @@ function importPreview(state,rows){
    const qty=Number(r.adet),price=Number(r.birim_fiyat_tl);
    if(r.adet===''||!Number.isSafeInteger(qty)||qty<0)throw Error('Adet sıfır veya pozitif tam sayı olmalı.');
    if(r.birim_fiyat_tl===''||!Number.isFinite(price)||price<0||Math.abs(price*100-Math.round(price*100))>1e-6)throw Error('Birim fiyat en fazla iki ondalıklı olmalı.');
-   const item={kind,brand:String(r.marka||'').trim(),model:String(r.model||'').trim(),color:String(r.renk||'').trim(),power:String(r.numara??'').trim(),eyeSize:String(r.ekartman??'').trim(),bridge:String(r.burun??'').trim(),temple:String(r.kol_boyu??'').trim(),category:String(r.kategori).trim(),sku,barcode,branch,price:Math.round(price*100)};
+   const previous=state.items.find(x=>x.sku===sku);
+   const item={kind,colorCode:String(r.renk_kodu??previous?.colorCode??'').trim(),brand:String(r.marka||'').trim(),model:String(r.model||'').trim(),color:String(r.renk||'').trim(),power:String(r.numara??'').trim(),eyeSize:String(r.ekartman??'').trim(),bridge:String(r.burun??'').trim(),temple:String(r.kol_boyu??'').trim(),category:String(r.kategori).trim(),sku,barcode,branch,price:Math.round(price*100)};
    const identity=variantKey(kind,item),existing=state.items.find(x=>x.sku===sku&&x.branch===branch),other=state.items.find(x=>x.sku===sku);
    if(other&&variantKey(other.kind,other)!==identity)throw Error('SKU başka bir varyanta ait.');
    if(barcodeOwners.has(barcode)&&barcodeOwners.get(barcode)!==sku)throw Error('Barkod başka SKU ile eşleşiyor.');barcodeOwners.set(barcode,sku);
@@ -257,10 +268,10 @@ function orderProductFromBarcode(state,barcode,branch){
  if(typeof barcode!=='string')throw Error('BARCODE_MUST_BE_TEXT');
  const hits=state.items.filter(x=>x.barcode===barcode.trim()&&x.branch===branch);
  if(hits.length!==1)throw Error(hits.length?'AMBIGUOUS_BARCODE':'BARCODE_NOT_FOUND');
- const p=hits[0];return {urun:p.brand+' '+p.model+(p.color?' · '+p.color:'')+(p.power?' · '+p.power:''),adet:'1',ekartman:p.eyeSize||'',kopru:p.bridge||'',kol:p.temple||'',kategori:p.category,fiyat:(p.price/100).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}),sku:p.sku,available:p.qty-p.reserved};
+ const p=hits[0];return {urun:p.brand+' '+p.model+(p.color?' · '+p.color:'')+(p.colorCode?' ['+p.colorCode+']':'')+(p.power?' · '+p.power:''),adet:'1',ekartman:p.eyeSize||'',kopru:p.bridge||'',kol:p.temple||'',kategori:p.category,fiyat:(p.price/100).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}),sku:p.sku,available:p.qty-p.reserved};
 }
 function inventorySeed(){return {revision:0,applied:[],operations:[],items:[
- {kind:'eyewear',brand:'Ray-Ban',model:'RX5154',color:'Siyah',eyeSize:'51',bridge:'21',temple:'145',category:'Optik Çerçeve',sku:'GOZ-001',barcode:'8680000001041',branch:'Atrium',qty:8,reserved:2,price:850000},
+ {kind:'eyewear',brand:'Ray-Ban',model:'RX5154',color:'Siyah',colorCode:'2000',eyeSize:'51',bridge:'21',temple:'145',category:'Optik Çerçeve',sku:'GOZ-001',barcode:'8680000001041',branch:'Atrium',qty:8,reserved:2,price:850000},
  {kind:'opticalLens',brand:'Seiko',model:'Örnek stok camı',power:'+1.00',color:'',eyeSize:'',bridge:'',temple:'',category:'Optik Cam',sku:'CAM-001',barcode:'8680000001065',branch:'Atrium',qty:20,reserved:4,price:225000},
  {kind:'contactLens',brand:'Demo Lens',model:'Color',power:'-1.00',color:'Ela',eyeSize:'',bridge:'',temple:'',category:'Lens',sku:'LEN-001',barcode:'8680000001089',branch:'Atrium',qty:6,reserved:1,price:125000}
 ]};}
@@ -319,9 +330,9 @@ function rowsFromXlsxParts(parts){
  const shared=parts.has('xl/sharedStrings.xml')?[...xml('xl/sharedStrings.xml').matchAll(/<(?:\w+:)?si(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?si>/g)].map(m=>txt(m[1])):[];
  const grid=[];
  for(const m of sheetXml.matchAll(/<(?:\w+:)?row(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?row>/g)){
-  const values=Array(IMPORT_HEADERS.length).fill('');
+  const values=Array(IMPORT_HEADERS.length+1).fill('');
   for(const c of m[1].matchAll(/<(?:\w+:)?c\s([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?c>)/g)){
-   const a=attributes(c[1]);if(!a.r||!/^[A-Z]+\d+$/.test(a.r))throw Error('Geçersiz hücre adresi.');const index=col(a.r);if(index>=IMPORT_HEADERS.length)continue;
+   const a=attributes(c[1]);if(!a.r||!/^[A-Z]+\d+$/.test(a.r))throw Error('Geçersiz hücre adresi.');const index=col(a.r);if(index>IMPORT_HEADERS.length)continue;
    const body=c[2]||'',raw=body.match(/<(?:\w+:)?v(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?v>/)?.[1];
    values[index]=a.t==='s'?shared[Number(raw)]??'':a.t==='inlineStr'?txt(body):a.t==='str'?decodeXml(raw||''):raw===undefined?'':Number(raw);
   }
@@ -329,7 +340,8 @@ function rowsFromXlsxParts(parts){
  }
  if(!grid.length||IMPORT_HEADERS.some((h,i)=>grid[0][i]!==h))throw Error('Kolon başlıkları şablonla aynı olmalı.');
  if(grid.length>2001)throw Error('En fazla 2000 veri satırı yüklenebilir.');
- return grid.slice(1).map(r=>Object.fromEntries(IMPORT_HEADERS.map((h,i)=>[h,r[i]])));
+ if(grid[0][16]&&grid[0][16]!=='renk_kodu')throw Error('Ek kolon renk_kodu olmalı.');
+ return grid.slice(1).map(r=>Object.fromEntries([...IMPORT_HEADERS,...(grid[0][16]?['renk_kodu']:[])].map((h,i)=>[h,r[i]])));
 }
 async function readInventoryXlsx(bytes){return rowsFromXlsxParts(await unzipXlsx(bytes));}
 
@@ -379,6 +391,14 @@ function accountBalances(catalog,store,asOf){return catalog.accounts.map(a=>({..
  return n;
  },a.opening)}));}
 
+const ROLE_PANELS={admin:['manager','staff','finance','inventory'],accountant:['finance'],staff:['staff','inventory']};
+function canPanel(role,panel){return ROLE_PANELS[role]?.includes(panel)||false;}
+function monthDays(month){if(!/^\d{4}-\d{2}$/.test(month))throw Error('INVALID_MONTH');const [y,m]=month.split('-').map(Number);if(m<1||m>12)throw Error('INVALID_MONTH');const n=new Date(Date.UTC(y,m,0)).getUTCDate(),offset=(new Date(Date.UTC(y,m-1,1)).getUTCDay()+6)%7;return {offset,days:Array.from({length:n},(_,i)=>month+'-'+String(i+1).padStart(2,'0'))};}
+function paymentRows(store){return store.records.flatMap(p=>[
+ {id:p.id,date:p.due,payee:p.payee,group:p.group,kind:p.cancelled?'İptal plan':'Ödeme planı',amount:p.amount,cashOut:0,cardChange:0,account:p.plannedAccount||p.cardAccount||'',source:p.source||''},
+ ...store.events.filter(e=>e.id===p.id).map(e=>({id:p.id,date:e.date,payee:p.payee,group:p.group,kind:e.type==='card-charge'?'Kartla ödeme':e.type==='cash-out'?(p.group==='Kredi kartı ekstresi'?'Ekstre ödemesi':'Nakit / banka ödemesi'):'Çek / senet teslimi',amount:e.amount,cashOut:e.type==='cash-out'?e.amount:0,cardChange:e.type==='card-charge'?e.amount:e.type==='cash-out'&&p.group==='Kredi kartı ekstresi'?-e.amount:0,account:e.account||'',source:p.source||''}))
+ ]).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));}
+
 
 let active='finance',financeView='new',inventoryView='eyewear',message='',detailId='',importPlan=null,staffBarcode='8680000001041',staffProduct=null,staffFrame=null,staffReady=false,pendingStaff=null,bridgeNonce='';
 const demoDay='2026-11-20';
@@ -406,13 +426,15 @@ function manager(){
  const totals=paymentTotals(paymentStore,demoDay),due=paymentStore.records.filter(p=>!p.cancelled&&paymentRemaining(p));
  return head('Mağazanın gündemi','Örnek çalışma günü: 20 Kasım 2026',tag('Yönetici'))+
  '<div class="kp-kpis">'+kpi('Planlanan ödemeler',money(due.reduce((s,p)=>s+paymentRemaining(p),0)),'Henüz kasadan çıkmamış')+kpi('Gerçek nakit çıkışı',money(totals.cashOut),'Yalnızca ödendi onayları')+kpi('Şahsi / aile ödemeleri',money(totals.personalOut),'İşletme giderinden ayrı')+kpi('Açık müşteri alacağı',money(3280000),'CRM örnek verisi')+'</div>'+
+ monthCalendar()+
+ '<button id="kp-users-open">Kullanıcılar & roller</button>'+
  panel('Yaklaşan ödemeler',paymentTable(due))+
  panel('Stok ve satış', '<div class="kp-list"><div><span>Gözlük</span><small>Marka · model · renk · ekartman · burun · kol</small></div><div><span>Cam</span><small>Marka · model · numara</small></div><div><span>Lens</span><small>Marka · model · numara · renk</small></div></div>');
 }
 function finance(){
- const tabs=[['new','＋ Yeni ödeme'],['calendar','Ödeme takvimi'],['accounts','Hesaplar'],['personal','Şahsi / aile'],['catalogs','Tanımlar']];
+ const tabs=[['new','＋ Yeni ödeme'],['calendar','Ödeme takvimi'],['accounts','Hesaplar'],['personal','Şahsi / aile'],['catalogs','Tanımlar'],['movements','Hareketler & hesap özeti']];
  return '<div class="kp-subtabs">'+tabs.map(([v,t])=>'<button data-finance="'+v+'" aria-pressed="'+(financeView===v)+'">'+t+'</button>').join('')+'</div>'+
- ({new:newPayment,calendar:calendar,accounts:accounts,personal:personal,detail:paymentDetail,catalogs:catalogScreen}[financeView])();
+ ({new:newPayment,calendar:calendar,accounts:accounts,personal:personal,detail:paymentDetail,catalogs:catalogScreen,movements:movementScreen}[financeView])();
 }
 function newPayment(){
  normalizeDraft();
@@ -446,7 +468,7 @@ function calendar(){
  if(paymentFilter==='Ödenen')rows=rows.filter(p=>!paymentRemaining(p));
  return head('Ödeme takvimi','Planlayın, vadesinde açıp ödendi onayını verin. Kısmi havale/nakit de desteklenir.','<button class="kp-primary" data-finance="new">＋ Yeni ödeme</button>')+
  '<div class="kp-subtabs">'+['Bekleyen','Bugün','Ödenen','Tümü'].map(v=>'<button data-payment-filter="'+v+'" aria-pressed="'+(v===paymentFilter)+'">'+v+'</button>').join('')+'</div>'+
- panel('Kasım 2026 · '+paymentFilter,paymentTable(rows));
+ monthCalendar()+panel('Ödeme listesi · '+paymentFilter,paymentTable(rows));
 }
 function paymentDetail(){
  const p=paymentStore.records.find(x=>x.id===detailId);if(!p)return calendar();
@@ -474,10 +496,10 @@ function personal(){
  '<p>Şirket tarafından ödenmesi, ödemenin otomatik olarak şirket işletme gideri olduğu anlamına gelmez. Ortak cari / muhasebe eşlemesi ayrıca yapılır.</p>';
 }
 function inventory(){
- const rows=stock.items.filter(x=>x.kind===inventoryView),fields={eyewear:[['brand','Marka'],['model','Model'],['color','Renk'],['eyeSize','Ekartman'],['bridge','Burun'],['temple','Kol']],opticalLens:[['brand','Marka'],['model','Model'],['power','Numara']],contactLens:[['brand','Marka'],['model','Model'],['power','Numara'],['color','Renk']]}[inventoryView];
+ const rows=stock.items.filter(x=>x.kind===inventoryView),fields={eyewear:[['brand','Marka'],['model','Model'],['color','Renk'],['colorCode','Renk kodu'],['eyeSize','Ekartman'],['bridge','Burun'],['temple','Kol']],opticalLens:[['brand','Marka'],['model','Model'],['power','Numara']],contactLens:[['brand','Marka'],['model','Model'],['power','Numara'],['color','Renk']]}[inventoryView];
  return head('Envanter & barkod','Barkodla ürünü bulun veya Excel şablonuyla toplu stok aktarın.',tag('Atrium'))+
- '<div class="kp-subtabs">'+[['eyewear','Gözlük'],['opticalLens','Cam'],['contactLens','Lens'],['import','Excel aktarımı']].map(([v,t])=>'<button data-stock-view="'+v+'" aria-pressed="'+(v===inventoryView)+'">'+t+'</button>').join('')+'</div>'+
- (inventoryView==='import'?importScreen():
+ '<div class="kp-subtabs">'+[['eyewear','Gözlük'],['opticalLens','Cam'],['contactLens','Lens'],...(role==='admin'?[['import','Excel aktarımı'],['manual','Manuel giriş']]:[]) ].map(([v,t])=>'<button data-stock-view="'+v+'" aria-pressed="'+(v===inventoryView)+'">'+t+'</button>').join('')+'</div>'+
+ (inventoryView==='manual'?manualInventory():inventoryView==='import'?importScreen():
  '<form class="kp-scan" id="kp-inventory-scan"><input name="barcode" aria-label="Barkod" placeholder="Barkod okutun / yazın" value="'+(rows[0]?.barcode||'')+'"><button type="submit" class="kp-primary">Siparişe aktar</button></form>'+
  panel('Ürün varyantları','<div class="kp-table"><table><thead><tr>'+fields.map(([,label])=>'<th>'+label+'</th>').join('')+'<th>SKU / barkod</th><th>Fiyat</th><th>Stok</th><th>Rezerve</th><th>Satılabilir</th></tr></thead><tbody>'+rows.map(p=>'<tr>'+fields.map(([key])=>'<td>'+esc(p[key])+'</td>').join('')+'<td><strong>'+esc(p.sku)+'</strong><small>'+esc(p.barcode)+'</small></td><td>'+money(p.price)+'</td><td>'+p.qty+'</td><td>'+p.reserved+'</td><td>'+ (p.qty-p.reserved)+'</td></tr>').join('')+'</tbody></table></div>')+
  '<p>“Siparişe aktar” ürünü mevcut personel formunun ürün satırına ekler. Ürün adı/model, ölçüler, kategori ve fiyat otomatik dolar.</p>');
@@ -529,16 +551,18 @@ function bindCatalog(safely){
 }
 function takeDraft(){const f=body.querySelector('#kp-payment-form');if(f)Object.assign(draft,Object.fromEntries(new FormData(f)))}
 function render(){
+ if(!canPanel(role,active)&&!(active==='users'&&role==='admin'))active=ROLE_PANELS[role][0];
+ if(role!=='admin'&&['manual','import'].includes(inventoryView))inventoryView='eyewear';
  staffFrame=null;staffReady=false;
- body.innerHTML=(message?'<div class="kp-strip" role="status">'+esc(message)+'</div>':'')+({manager,finance,inventory,staff}[active])();
- root.querySelectorAll('[data-panel]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.panel===active)));
+ body.innerHTML=(message?'<div class="kp-strip" role="status">'+esc(message)+'</div>':'')+({manager,finance,inventory,staff,users:usersScreen}[active])();
+ root.querySelectorAll('[data-panel]').forEach(b=>{b.hidden=!canPanel(role,b.dataset.panel);b.setAttribute('aria-pressed',String(b.dataset.panel===active))});
  if(active==='staff'){staffFrame=body.querySelector('iframe');bridgeNonce='kz-'+Math.random().toString(36).slice(2);staffFrame.srcdoc=original.replace('</body>',bridgeScript(bridgeNonce)+'</body>');}
  const safely=fn=>{try{fn()}catch(e){const el=body.querySelector('#kp-form-error');if(el)el.textContent=e.message;else{flash(e.message);render()}}};
  body.querySelectorAll('[data-finance]').forEach(b=>b.onclick=()=>{takeDraft();financeView=b.dataset.finance;message='';render()});
  body.querySelectorAll('[data-payment-filter]').forEach(b=>b.onclick=()=>{paymentFilter=b.dataset.paymentFilter;render()});
  body.querySelectorAll('[data-payment]').forEach(b=>b.onclick=()=>{active='finance';detailId=b.dataset.payment;financeView='detail';message='';render()});
  body.querySelectorAll('[data-stock-view]').forEach(b=>b.onclick=()=>{inventoryView=b.dataset.stockView;message='';render()});
- bindCatalog(safely);
+ bindCatalog(safely);bindExtra(safely);
  body.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{takeDraft();paymentMode=b.dataset.mode;render()});
  const form=body.querySelector('#kp-payment-form');
  if(form){
@@ -556,6 +580,25 @@ function render(){
  body.querySelector('#kp-apply-import')?.addEventListener('click',()=>safely(()=>{const n=applyImport(stock,importPlan);message=n+' satır uygulandı. Aynı dosya tekrar stok ekleyemez.';render()}));
  for(const id of ['kp-inventory-scan','kp-staff-scan'])body.querySelector('#'+id)?.addEventListener('submit',e=>{e.preventDefault();safely(()=>scanIntoStaff(String(new FormData(e.currentTarget).get('barcode')).trim()))});
 }
+let role='admin',calendarMonth='2026-11',calendarDay='',reportFrom='2026-11-01',reportTo='2026-11-30',reportKind='Tümü';
+let manualKind='Gozluk',userDrafts=[];
+const roleLabel={admin:'Yönetici',accountant:'Muhasebeci',staff:'Personel'};
+function monthCalendar(){const grid=monthDays(calendarMonth);let rows=paymentStore.records.filter(p=>!p.cancelled&&p.due.startsWith(calendarMonth));return panel('Ödeme takvimi','<div class="kp-detail"><label>Ay<input id="kp-calendar-month" type="month" value="'+calendarMonth+'"></label></div><div class="kp-calendar">'+['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'].map(d=>'<strong>'+d+'</strong>').join('')+Array.from({length:grid.offset},()=>'<div></div>').join('')+grid.days.map(d=>{const day=rows.filter(p=>p.due===d),remaining=day.reduce((s,p)=>s+paymentRemaining(p),0);return '<button data-calendar-day="'+d+'" aria-pressed="'+(d===calendarDay)+'"><strong>'+Number(d.slice(8))+'</strong>'+(day.length?'<span>'+day.length+' ödeme</span><small>'+money(remaining)+'</small>':'')+'</button>'}).join('')+'</div>'+ (calendarDay?'<div class="kp-detail"><button id="kp-calendar-clear">Ayın tamamını göster</button></div>':'')+paymentTable(rows.filter(p=>!calendarDay||p.due===calendarDay)));}
+function movementScreen(){const rows=paymentRows(paymentStore).filter(r=>r.date>=reportFrom&&r.date<=reportTo&&(reportKind==='Tümü'||(reportKind==='Planlar'?r.kind.includes('plan'):!r.kind.includes('plan'))));return head('Hareketler & hesap özeti','Planlar, gerçekleşen ödemeler ve çek/senet teslimleri ayrı izlenir. Bu görünüm resmî mizan değildir.')+'<form id="kp-report-filter" class="kp-form">'+inp('Başlangıç','from',reportFrom,'date')+inp('Bitiş','to',reportTo,'date')+sel('Kayıt türü','kind',['Tümü','Planlar','Gerçekleşen hareketler'],reportKind)+'<button type="submit">Filtrele</button></form><div class="kp-kpis">'+kpi('Nakit çıkışı',money(rows.reduce((s,r)=>s+r.cashOut,0)),'Planlar dahil edilmez')+kpi('Kart borcu değişimi',money(rows.reduce((s,r)=>s+r.cardChange,0)),'Kullanım artı, ekstre ödemesi eksi')+'</div>'+panel('Tüm kayıtlar','<div class="kp-table"><table><thead><tr><th>Tarih / kayıt</th><th>Firma / kişi</th><th>İşlem</th><th>Belge / hesap</th><th>Tutar</th><th>Nakit çıkışı</th><th>Kart borcu değişimi</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+esc(r.date)+'<small>'+esc(r.id)+'</small></td><td>'+esc(r.payee)+'<small>'+esc(r.group)+'</small></td><td>'+esc(r.kind)+'</td><td>'+esc(r.source)+'<small>'+esc(accountName(r.account))+'</small></td><td>'+money(r.amount)+'</td><td>'+money(r.cashOut)+'</td><td>'+money(r.cardChange)+'</td></tr>').join('')+'</tbody></table></div>')+panel('Hesap bakiyeleri · '+esc(reportTo),'<div class="kp-list">'+accountBalances(catalog,paymentStore,reportTo).map(a=>'<div><span>'+esc(a.label)+(a.kind==='card'?' · Kart borcu':' · Bakiye')+'</span><b>'+money(a.balance)+'</b></div>').join('')+'</div>');}
+function manualInventory(){const glass=manualKind==='Gozluk',lens=manualKind==='Lens';return panel('Manuel ürün / stok girişi','<form id="kp-manual-stock"><div class="kp-form">'+sel('Ürün türü','urun_turu',['Gozluk','Cam','Lens'],manualKind)+inp('Marka *','marka','','text','required')+inp('Model *','model','','text','required')+(glass||lens?inp('Renk adı *','renk','','text','required'):'')+(glass?inp('Renk kodu','renk_kodu','','text','placeholder="Örn. 2000"')+inp('Ekartman *','ekartman','','text','required')+inp('Burun *','burun','','text','required')+inp('Kol boyu *','kol_boyu','','text','required'):inp('Numara *','numara','','text','required placeholder="-1.00"'))+inp('Kategori *','kategori','','text','required')+inp('İç SKU *','ic_sku','','text','required')+inp('Üretici barkodu *','uretici_barkodu','','text','required')+inp('Şube *','sube','Atrium','text','required')+inp('Adet *','adet','1','number','required min="0" step="1"')+inp('Birim fiyat (TL) *','birim_fiyat_tl','','number','required min="0" step="0.01"')+sel('Stok işlemi','islem',['EKLE','SAYIM','URUN'],'EKLE')+inp('Belge / referans *','referans','','text','required')+'</div><div class="kp-detail"><button class="kp-primary" type="submit">Kontrol et ve kaydet</button></div><div id="kp-form-error" class="kp-error" role="alert"></div></form>');}
+function usersScreen(){return head('Kullanıcılar & roller','Davet taslağıdır. Gerçek kullanıcı oluşturmaz; Supabase Auth bağlantısı bekleniyor.')+panel('Erişim dağılımı','<div class="kp-list"><div><span>Personel</span><b>Sipariş + stok görüntüleme</b></div><div><span>Muhasebeci</span><b>Finans, takvim, hareketler</b></div><div><span>Yönetici</span><b>Tüm paneller + tanımlar + stok girişi</b></div></div>')+panel('Kullanıcı davet taslağı','<form id="kp-user-draft"><div class="kp-form">'+inp('Ad soyad','name','','text','required')+inp('E-posta','email','','email','required')+sel('Rol','role',Object.entries(roleLabel),'staff')+'</div><div class="kp-detail"><button type="submit">Davet taslağını ekle</button></div><div id="kp-form-error" class="kp-error" role="alert"></div></form>')+panel('Davet taslakları','<div class="kp-list">'+userDrafts.map(u=>'<div><span>'+esc(u.name)+'<small>'+esc(u.email)+'</small></span><b>'+esc(roleLabel[u.role])+' · Henüz davet edilmedi</b></div>').join('')+'</div>');}
+function bindExtra(safely){
+ body.querySelector('#kp-calendar-month')?.addEventListener('change',e=>{calendarMonth=e.target.value;calendarDay='';safely(()=>{monthDays(calendarMonth);render()})});
+ body.querySelectorAll('[data-calendar-day]').forEach(b=>b.onclick=()=>{calendarDay=b.dataset.calendarDay;render()});
+ body.querySelector('#kp-calendar-clear')?.addEventListener('click',()=>{calendarDay='';render()});
+ body.querySelector('#kp-report-filter')?.addEventListener('submit',e=>{e.preventDefault();safely(()=>{const f=new FormData(e.currentTarget);if(f.get('from')>f.get('to'))throw Error('Başlangıç bitişten sonra olamaz.');reportFrom=f.get('from');reportTo=f.get('to');reportKind=f.get('kind');render()})});
+ body.querySelector('#kp-manual-stock')?.querySelector('[name="urun_turu"]').addEventListener('change',e=>{manualKind=e.target.value;render()});
+ body.querySelector('#kp-manual-stock')?.addEventListener('submit',e=>{e.preventDefault();safely(()=>{if(role!=='admin')throw Error('Stok değiştirme yetkiniz yok.');const row=Object.fromEntries(new FormData(e.currentTarget)),plan=importPreview(stock,[row]);if(plan.errors.length)throw Error(plan.errors.map(e=>e.message).join(' '));applyImport(stock,plan);message='Manuel stok kaydı oluşturuldu.';inventoryView={Gozluk:'eyewear',Cam:'opticalLens',Lens:'contactLens'}[row.urun_turu];render()})});
+ body.querySelector('#kp-users-open')?.addEventListener('click',()=>{active='users';render()});
+ body.querySelector('#kp-user-draft')?.addEventListener('submit',e=>{e.preventDefault();safely(()=>{if(role!=='admin')throw Error('Yetkisiz işlem.');const u=Object.fromEntries(new FormData(e.currentTarget));if(!u.email||!roleLabel[u.role])throw Error('Geçerli kullanıcı taslağı girin.');if(userDrafts.some(x=>x.email.toLowerCase()===u.email.toLowerCase()))throw Error('E-posta zaten taslaklarda var.');userDrafts.push(u);render()})});
+}
+
+const rolePicker=root.querySelector('#kp-demo-role');rolePicker?.addEventListener('change',e=>{role=e.target.value;if(!ROLE_PANELS[role])role='staff';message='Demo rolü değişti. Bu seçim gerçek giriş güvenliği sağlamaz.';active=ROLE_PANELS[role][0];render()});
 root.querySelectorAll('[data-panel]').forEach(b=>b.onclick=()=>{takeDraft();active=b.dataset.panel;message='';pendingStaff=null;render()});render();
 
 
