@@ -70,7 +70,7 @@ Kaynaklar:
 ## Envanter ve barkod: ilk faz
 - Gözlük varyantı: marka → model → renk → ölçü (ekartman, burun, kol boyu).
 - Cam varyantı: marka → model → numara.
-- Lens varyantı: marka → model → renk.
+- Lens varyantı: marka → model → numara → renk.
 - Üretici barkodu ve iç SKU ayrı alanlardır. Lot/son kullanma, reçete ve diğer takip alanları bu kimlik kurallarından ayrı modellenir. Numaranın hangi optik bileşenleri kapsadığı stok ürün tipine göre açık tanımlanır; farklı fiziksel stoklar yanlışlıkla birleştirilmez.
 - Üretici barkodu ve iç SKU ayrı; aynı varyanta birden fazla barkod.
 - Barkodlar metindir; baştaki sıfırlar korunur. EAN/GTIN türünde kontrol basamağı doğrulanır; iç Code 128 ayrı türdür.
@@ -153,3 +153,43 @@ Finans modeli yalnızca tedarikçi ve kart ekstresi ödemesinden oluşmaz. Belge
 Referanslar (uygulama kapsamı ve güncel oranlar ayrıca doğrulanır):
 - https://gib.gov.tr/mevzuat/kanun/436/teblig/9108
 - https://dijital.gib.gov.tr/hesaplamalar/SmmMeslekMakbuzuHesaplama
+
+
+## v0.4: ödeme föyü ve Excel aktarım incelemesi
+Ödeme merkezindeki açıklama tabloları kaldırıldı. Kullanıcı akışı Yeni ödeme, Ödeme takvimi, Hesaplar ve Şahsi/aile olarak yeniden düzenlendi.
+
+### Ödeme föyü
+- Sipariş föyüne benzer bölüm başlıkları: ödeme bilgileri, belge/açıklama ve gerekiyorsa lehtar bilgileri.
+- Türler: tedarikçi, hizmet firması, vergi/SGK, şirket kartı ekstresi, şahsi/aile.
+- Firma/kişi, tutar, vade, yöntem, kaynak belge ve açıklama.
+- Yöntemler: havale/EFT, nakit, şirket kredi kartı, çek ve senet.
+- Plan kaydı nakit hareketi veya otomatik gider fişi değildir.
+- Şimdi öde aynı formdan gerçek ödeme onayı oluşturur; gelecekteki tarih gerçekleşmiş gibi onaylanamaz.
+- Takvimde bekleyen, bugün, ödenen ve tüm kayıtlar. Gecikmiş ve kısmi ödenmiş durumlar görünür.
+- Vadesinde Ödemeyi aç > gerçek tarih/tutar/hesap > Ödendi olarak onayla.
+- Çek/senet teslimi veya düzenlemesi nakit çıkışı değildir. Tahsil/itfa gerçekleşince bir kez kasa/banka çıkışı oluşur. Çek ve senetlerin tedarikçi borcundan kıymetli evrak borcuna aktarımı canlı muhasebe motorunda ayrı fişlerle kurulmalıdır.
+- Çek/senet numarası zorunludur. Prototipte kısmi çek/senet itfası kapalı; banka/nakit kısmi ödemeleri açıktır.
+- Kartla satıcı ödemesi kart borcu doğurur. Ekstre kapatma bankadan/kasadan ayrı işlemdir; kartı yine kartla kapatma seçeneği yoktur.
+- Şahsi/aile ödemesinde kimin için olduğu ve şahsi ödeme konusu zorunludur. Şirket hesabından çıkabilir fakat işletme giderine otomatik girmez. Ortak cari ve vergi eşlemesi muhasebeci onayına bağlıdır.
+- Önizleme 20 Kasım 2026 örnek çalışma günü kullanır. Kayıtlar yalnızca önizleme belleğinde yaşar; gerçek banka işlemi yapılmaz.
+
+### Barkod / personel formu
+- Ürün kimlikleri: gözlük marka/model/renk/ekartman/burun/kol; cam marka/model/numara; lens marka/model/numara/renk.
+- Barkod eşleşmesi mevcut personel formunun ürün satırına ürün adı/model, adet, ekartman, köprü, kol, kategori ve fiyat aktarır.
+- Önizlemede orijinal kaynak forma, kaynak kodu yeniden tasarlanmadan dar bir message adaptörü eklenir. Kaynak referans dosyası korunur.
+- Yeni satıra değerler input.value ile yazılır; ürün adı HTML olarak yorumlanmaz. Mesajlar iframe kaynağı ve oturum içi nonce ile kontrol edilir.
+- Gerçek stok rezervasyonu ve SKU'nun sunucuda sipariş kalemine bağlanması Supabase entegrasyonunda uygulanmalıdır; önizleme bu üretim entegrasyonunun tamamlandığı anlamına gelmez.
+
+### Excel aktarımı
+- Kullanıcı indirilebilir XLSX şablonunu doldurur, yükler, satırları kontrol eder ve uygular.
+- Stok sayfası: urun_turu, marka, model, renk, numara, ekartman, burun, kol_boyu, kategori, ic_sku, uretici_barkodu, sube, adet, birim_fiyat_tl, islem, referans.
+- Üç örnek satır ve Kilavuz sayfası. Barkod/SKU/numara metin; adet ve fiyat sayısal.
+- EKLE mevcut fiziksel stoğa ekler. SAYIM fiziksel stoğu sayım değerine eşitler; rezerve stokun altına inemez. URUN metadata/fiyat günceller, stoğu değiştirmez.
+- Stok yüklenince hemen değişmez; kontrol edilen önizleme kullanıcı onayıyla uygulanır.
+- Hatalı satır, çakışan barkod, aynı dosyada tekrarlanan SKU/şube, yanlış varyanta bağlanan SKU, geçersiz adet/fiyat ve daha önce kullanılan kaynak referansı kontrol edilir.
+- Bir hata varsa bütün aktarım durur. Önizleme sonrası veri değişirse yeniden kontrol gerekir.
+- Aynı dosya veya aynı SKU/şube/işlem/referans tekrar stok ekleyemez.
+- Dosya en fazla 10 MB ve 2000 veri satırı. Sadece standart XLSX; şifreli, ZIP64 veya formüllü Stok sayfası desteklenmez. Hücre formülleri/makrolar çalıştırılmaz.
+- XLSX okuyucu tarayıcının DecompressionStream deflate-raw desteğini gerektirir. Gerçek Chrome/Safari ve barkod cihazı kabul testi henüz yapılmamıştır.
+- Şablon Artifact Tool ile üretildi; gerçek dosya açılarak başlıklar, tipler, numara/barkod korunumu ve stok aktarımı test edildi.
+- Gerçek üretim aktarımı tenant/şube yetkisi, transaction, idempotency ve audit kontrollerini sunucuda da zorunlu kılmalıdır. Demo önizlemesindeki bellek kontrolleri bunların yerine geçmez.
