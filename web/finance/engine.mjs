@@ -63,6 +63,7 @@ export const TAX_TYPES = {
 };
 
 const SYS = {
+  RECEIVABLE: { code: '120', label: 'Alıcılar (müşteri bakiyeleri)', type: 'asset' },
   INVENTORY: { code: '153', label: 'Ticari mallar (stok)', type: 'asset' },
   CARRY_VAT: { code: '190', label: 'Devreden KDV', type: 'asset' },
   INPUT_VAT: { code: '191', label: 'İndirilecek KDV', type: 'asset' },
@@ -72,6 +73,7 @@ const SYS = {
   REVIEW: { code: 'ASKI', label: 'İnceleme / askı hesabı', type: 'asset' },
   LOAN: { code: '300', label: 'Banka kredileri', type: 'liability' },
   PAYABLE: { code: '320', label: 'Satıcılar ve hizmet firmaları', type: 'liability' },
+  GRNI: { code: '329', label: 'Faturası gelmemiş mal kabulleri', type: 'liability' },
   NOTES: { code: '321', label: 'Verilen çek ve senetler', type: 'liability' },
   STAFF: { code: '335', label: 'Personele borçlar', type: 'liability' },
   ADVANCES_IN: { code: '340', label: 'Alınan sipariş avansları', type: 'liability' },
@@ -82,6 +84,9 @@ const SYS = {
   OUTPUT_VAT: { code: '391', label: 'Hesaplanan KDV', type: 'liability' },
   OPENING: { code: '500', label: 'Açılış bakiyeleri / özkaynak', type: 'equity' },
   SALES: { code: '600', label: 'Yurt içi satışlar', type: 'income' },
+  SALES_RET: { code: '610', label: 'Satıştan iadeler (−)', type: 'income' },
+  COGS: { code: '621', label: 'Satılan ticari mallar maliyeti', type: 'expense' },
+  OTHER_INCOME: { code: '649', label: 'Kasa fazlası ve diğer gelirler', type: 'income' },
 };
 export const ACCOUNTS = Object.freeze(Object.fromEntries(Object.keys(SYS).map((k) => [k, k])));
 const DEBIT_NORMAL = new Set(['asset', 'expense']);
@@ -144,7 +149,15 @@ const DEFAULT_CATEGORIES = [
   ['bank-fee', 'Banka ve kart masrafları', 'finance', '780', true],
   ['penalty', 'Gecikme zammı ve cezalar (KKEG)', 'other', '689', true],
   ['tax-provision', 'Kurumlar / gelir vergisi karşılığı', 'tax', '691', true],
+  ['stock-diff', 'Sayım ve fire farkları', 'opex', '770', true],
+  ['dues', 'Aidat', 'opex', '770'],
+  ['meal', 'Yemek / yan haklar', 'opex', '770'],
+  ['bonus', 'Prim / ikramiye', 'opex', '770'],
+  ['cleaning', 'Temizlik / sarf', 'opex', '770'],
+  ['safety', 'İş güvenliği / OSGB', 'opex', '770'],
+  ['social', 'Sosyal medya danışmanlığı', 'opex', '760'],
 ];
+export const BRANCH_KINDS = { store: 'Mağaza', online: 'E-ticaret', hq: 'Merkez / ortak giderler' };
 export function createBooks({ tenant = 'demo-optik', today, company = 'Demo işletme' } = {}) {
   if (!isoDate(today)) throw Error('Çalışma günü geçerli bir tarih olmalı.');
   return {
@@ -157,7 +170,14 @@ export function createBooks({ tenant = 'demo-optik', today, company = 'Demo işl
       { id: 'vergi', label: 'Vergi dairesi', type: 'public', active: true, system: true },
       { id: 'sgk', label: 'SGK', type: 'public', active: true, system: true },
       { id: 'personel', label: 'Personel (bordro)', type: 'staff', active: true, system: true },
+      { id: 'perakende', label: 'Perakende / fişli mağaza masrafı', type: 'service', active: true, system: true },
     ],
+    branches: [{ id: 'main', label: 'Ana şube', kind: 'store', active: true, sellers: [], stockFrom: '', cashAccount: '' }],
+    stock: { items: [], moves: [] },
+    receipts: [],
+    orders: [],
+    budgets: {},
+    cashCounts: [],
     categories: DEFAULT_CATEGORIES.map(([id, label, pl, code, system]) => ({ id, label, pl, code, active: true, ...(system ? { system: true } : {}) })),
     documents: [],
     obligations: [],
@@ -217,6 +237,8 @@ export function saveMoneyAccount(b, input) {
   if (existing) {
     existing.label = label;
     if (input.iban !== undefined) existing.iban = clean(input.iban).slice(0, 40);
+    if (existing.kind === 'pos' && input.pos) existing.pos = posConfig(input.pos, existing.pos);
+    if (['card', 'bank'].includes(existing.kind) && input.limit !== undefined) existing.limit = Number(input.limit) || 0;
     return existing;
   }
   if (!MONEY_KINDS[input.kind]) throw Error('Hesap türünü seçin.');
@@ -228,10 +250,81 @@ export function saveMoneyAccount(b, input) {
     // Kart: kredi limiti. Banka: KMH (kredili mevduat) limiti; bakiye en fazla bu kadar eksiye düşebilir.
     limit: ['card', 'bank'].includes(input.kind) ? Number(input.limit) || 0 : 0,
     active: true,
+    ...(input.kind === 'pos' ? { pos: posConfig(input.pos) } : {}),
   };
   b.accounts.push(row);
   return row;
 }
+/**
+ * POS ayarı. rates: taksit sayısı → komisyon (onbinde; 249 = %2,49). settleDays: valör (kaç gün sonra bankaya geçer).
+ * auto=false (varsayılan): komisyon ertesi gün banka ekstresinden muhasebeci tarafından girilir; oranlar yalnızca tahmindir.
+ * auto=true: bankaya geçiş, tanımlı orana göre otomatik hesaplanabilir.
+ */
+function posConfig(input = {}, prev = {}) {
+  const c = { bankId: prev.bankId || '', settleDays: 1, rates: {}, auto: false, ...prev };
+  if (input.bankId !== undefined) c.bankId = input.bankId;
+  if (input.settleDays !== undefined) {
+    const d = Number(input.settleDays);
+    if (!Number.isInteger(d) || d < 0 || d > 60) throw Error('Valör 0–60 gün olmalı.');
+    c.settleDays = d;
+  }
+  if (input.auto !== undefined) c.auto = !!input.auto;
+  if (input.rates) {
+    const r = {};
+    for (const [k, v] of Object.entries(input.rates)) {
+      const n = Number(k);
+      if (!Number.isInteger(n) || n < 1 || n > 12) throw Error('Taksit sayısı 1–12 olmalı.');
+      if (v === '' || v === null || v === undefined) continue;
+      if (!Number.isInteger(v) || v < 0 || v > 5000) throw Error('Komisyon oranı geçersiz.');
+      r[n] = v;
+    }
+    c.rates = r;
+  }
+  return c;
+}
+export function saveBranch(b, input) {
+  const existing = input.id && b.branches.find((x) => x.id === input.id);
+  const label = uniqueLabel(b.branches, input.label, input.id);
+  const sellers = (input.sellers || []).map(clean).filter(Boolean).slice(0, 20);
+  if (input.stockFrom && !b.branches.some((x) => x.id === input.stockFrom)) throw Error('Stok şubesi bulunamadı.');
+  if (existing) {
+    Object.assign(existing, { label, sellers, stockFrom: input.stockFrom ?? existing.stockFrom, cashAccount: input.cashAccount ?? existing.cashAccount });
+    return existing;
+  }
+  if (!BRANCH_KINDS[input.kind]) throw Error('Şube türünü seçin.');
+  const row = { id: input.newId || slug(label, b.branches, 'sb'), label, kind: input.kind, active: true, sellers, stockFrom: input.stockFrom || '', cashAccount: input.cashAccount || '' };
+  b.branches.push(row);
+  return row;
+}
+export function defaultBranch(b) {
+  return (b.branches.find((x) => x.active && x.kind !== 'hq') || b.branches[0]).id;
+}
+function hqBranch(b) {
+  return (b.branches.find((x) => x.active && x.kind === 'hq') || b.branches.find((x) => x.id === defaultBranch(b))).id;
+}
+function branchOf(b, id) {
+  const br = b.branches.find((x) => x.id === (id || defaultBranch(b)));
+  if (!br || !br.active) throw Error('Aktif bir şube / masraf merkezi seçin.');
+  return br;
+}
+/** Satış temsilcisine göre şube (ör. "İnternet (Online)" → E-ticaret). */
+export function branchForSeller(b, seller) {
+  const s = clean(seller).toLocaleLowerCase('tr-TR');
+  return (s && b.branches.find((x) => x.active && x.sellers.some((y) => s.includes(y.toLocaleLowerCase('tr-TR'))))?.id) || defaultBranch(b);
+}
+function cleanAttachments(list) {
+  const out = [];
+  for (const a of list || []) {
+    const name = clean(a.name).slice(0, 120);
+    if (!a.id || !name) throw Error('Ek dosya bilgisi eksik.');
+    if (!/^(application\/pdf|image\/(png|jpeg|webp|heic))$/.test(a.type)) throw Error(name + ': yalnızca PDF, JPG, PNG, WEBP veya HEIC eklenebilir.');
+    if (!Number.isSafeInteger(a.size) || a.size <= 0 || a.size > 10 * 1024 * 1024) throw Error(name + ': dosya en fazla 10 MB olabilir.');
+    out.push({ id: String(a.id).slice(0, 60), name, type: a.type, size: a.size });
+  }
+  if (out.length > 10) throw Error('En fazla 10 ek dosya.');
+  return out;
+}
+
 export function saveParty(b, input) {
   const existing = input.id && b.parties.find((x) => x.id === input.id);
   if (input.id && !existing) throw Error('Firma / kişi bulunamadı.');
@@ -269,7 +362,7 @@ export function saveCategory(b, input) {
   return row;
 }
 export function toggleDefinition(b, collection, id) {
-  const rows = { accounts: b.accounts, parties: b.parties, categories: b.categories, templates: b.templates }[collection];
+  const rows = { accounts: b.accounts, parties: b.parties, categories: b.categories, templates: b.templates, branches: b.branches }[collection];
   const row = rows?.find((x) => x.id === id);
   if (!row) throw Error('Tanım bulunamadı.');
   if (row.system) throw Error('Sistem tanımı pasife alınamaz.');
@@ -381,7 +474,7 @@ export function lines(b, { asOf = '9999-12-31', from = '0000-01-01' } = {}) {
     .map(([e]) => e)
     .flatMap((e) => e.lines.map((l) => ({ ...l, date: e.date, entry: e.key, kind: e.kind, memo: e.memo, docId: e.docId, paymentId: e.paymentId })));
 }
-export function balance(b, account, { asOf = '9999-12-31', party, instrument, review } = {}) {
+export function balance(b, account, { asOf = '9999-12-31', party, instrument, review, order } = {}) {
   const info = accountInfo(b, account);
   if (!info) throw Error('Bilinmeyen hesap: ' + account);
   const sign = DEBIT_NORMAL.has(info.type) ? 1 : -1;
@@ -393,7 +486,8 @@ export function balance(b, account, { asOf = '9999-12-31', party, instrument, re
         l.account === account &&
         (party === undefined || l.party === party) &&
         (instrument === undefined || l.instrument === instrument) &&
-        (review === undefined || l.review === review),
+        (review === undefined || l.review === review) &&
+        (order === undefined || l.order === order),
     )
     .reduce((s, l) => s + sign * (l.debit - l.credit), 0);
 }
@@ -444,7 +538,7 @@ function docBase(b, input) {
   const docNo = clean(input.docNo).slice(0, 60);
   if (docNo && input.partyId && b.documents.some((d) => !d.reversed && d.partyId === input.partyId && same(d.docNo, docNo) && d.type === input.type))
     throw Error('Bu firmadan aynı numaralı belge zaten kayıtlı: ' + docNo);
-  return { docNo, note: clean(input.note).slice(0, 400), due: input.due || input.date };
+  return { docNo, note: clean(input.note).slice(0, 400), due: input.due || input.date, branch: branchOf(b, input.branchId), attachments: cleanAttachments(input.attachments) };
 }
 
 /**
@@ -459,7 +553,8 @@ export function planDocument(b, input) {
   const effects = { expense: 0, asset: 0, payable: 0, tax: 0, cash: 0, owner: 0, review: 0, financing: 0 };
   let partyRow = null;
   let cf = 'operating';
-  const doc = { id, type: input.type, date: input.date, due: base.due, docNo: base.docNo, note: base.note, period: input.period || input.date.slice(0, 7) };
+  const doc = { id, type: input.type, date: input.date, due: base.due, docNo: base.docNo, note: base.note, period: input.period || input.date.slice(0, 7), branchId: base.branch.id, attachments: base.attachments };
+  let stockMoves = [];
   const payableTo = (p, amount, label, ledgerAccount = 'PAYABLE', extra = {}) => {
     if (amount <= 0) return;
     obligations.push({
@@ -480,7 +575,34 @@ export function planDocument(b, input) {
       const net = amt(input.net, 'Matrah'),
         vat = amt(input.vat || 0, 'KDV', { zero: true });
       const total = net + vat;
-      ls.push(L(input.type === 'capex' ? 'FIXED' : 'INVENTORY', net, 0));
+      if (input.type === 'purchase' && input.receiptId) {
+        // Mal kabulü (irsaliye) daha önce stoğa girdi: fatura GRNI'yi kapatır; fiyat farkı stok değerine yansır.
+        const rc = b.receipts.find((x) => x.id === input.receiptId);
+        if (!rc || rc.invoiced) throw Error('Faturalanmamış mal kabulü seçin.');
+        if (rc.partyId && rc.partyId !== partyRow.id) throw Error('Mal kabulü başka bir firmaya ait.');
+        ls.push(L('GRNI', rc.value, 0));
+        const diff = net - rc.value;
+        if (diff) {
+          ls.push(L('INVENTORY', diff > 0 ? diff : 0, diff < 0 ? -diff : 0));
+          stockMoves.push({ sku: rc.lines[0].sku, branch: rc.branchId, qty: 0, value: diff, type: 'price-variance' });
+        }
+        Object.assign(doc, { receiptId: rc.id, priceVariance: diff });
+      } else {
+        const sl = (input.type === 'purchase' ? input.lines || [] : []).filter((x) => x && x.qty);
+        if (sl.length) {
+          let t = 0;
+          for (const x of sl) {
+            if (!clean(x.sku)) throw Error('Stok satırında SKU eksik.');
+            if (!Number.isSafeInteger(x.qty) || x.qty <= 0) throw Error(x.sku + ': adet pozitif tam sayı olmalı.');
+            amt(x.unitCost, x.sku + ' birim maliyet');
+            t += x.qty * x.unitCost;
+          }
+          if (t !== net) throw Error('Stok satırlarının toplamı (' + (t / 100).toLocaleString('tr-TR') + ' TL) matrahla aynı olmalı.');
+          stockMoves = sl.map((x) => ({ sku: clean(x.sku), label: clean(x.label), branch: branchOf(b, x.branchId || base.branch.id).id, qty: x.qty, value: x.qty * x.unitCost, type: 'purchase' }));
+          doc.stockLines = stockMoves.map((m) => ({ sku: m.sku, qty: m.qty, unitCost: m.value / m.qty }));
+        }
+        ls.push(L(input.type === 'capex' ? 'FIXED' : 'INVENTORY', net, 0));
+      }
       if (vat) ls.push(L('INPUT_VAT', vat, 0));
       ls.push(L('PAYABLE', 0, total, { party: partyRow.id }));
       effects.asset = net;
@@ -654,6 +776,23 @@ export function planDocument(b, input) {
       break;
     }
   }
+  // Vade planı (taksitli alış): ana firma borcu birden çok vadeye bölünür.
+  if (input.schedule?.length) {
+    const main = obligations.find((o) => ['party', 'staff', 'loan'].includes(o.kind));
+    if (!main) throw Error('Bu belgede bölünecek firma borcu yok.');
+    const parts = input.schedule.map((x, i) => {
+      if (!isoDate(x.due) || x.due < input.date) throw Error((i + 1) + '. taksit vadesi geçersiz.');
+      amt(x.amount, (i + 1) + '. taksit');
+      return x;
+    });
+    if (parts.length > 36) throw Error('En fazla 36 taksit.');
+    const tot = sum(parts, (x) => x.amount);
+    if (tot !== main.amount) throw Error('Taksitlerin toplamı (' + (tot / 100).toLocaleString('tr-TR') + ' TL) ödenecek tutarla aynı olmalı (' + (main.amount / 100).toLocaleString('tr-TR') + ' TL).');
+    const at = obligations.indexOf(main);
+    obligations.splice(at, 1, ...parts.map((x, i) => ({ ...main, amount: x.amount, due: x.due, label: main.label + ' · taksit ' + (i + 1) + '/' + parts.length })));
+    doc.schedule = parts.map((x) => ({ due: x.due, amount: x.amount }));
+  }
+  for (const l of ls) if (!l.branch) l.branch = base.branch.id;
   doc.partyId = partyRow?.id || '';
   doc.partyLabel = partyRow?.label || (doc.cardId ? accountInfo(b, doc.cardId).label : '');
   const entry = ls.length
@@ -665,6 +804,7 @@ export function planDocument(b, input) {
     entry,
     obligations: obligations.map((o) => ({ ...o, cf: o.cf || cf, plan: { date: o.due, method: input.plannedMethod || defaultMethod(o), accountId: input.plannedAccount || '' } })),
     effects,
+    stockMoves,
   };
 }
 const defaultMethod = (o) => (o.kind === 'card-statement' || o.kind === 'loan' || o.kind === 'tax' || o.kind === 'staff' ? 'transfer' : 'transfer');
@@ -686,7 +826,9 @@ export function recordDocument(b, input) {
   return once(b, input.key || 'doc:' + canonical(input), input, () => {
     const plan = planDocument(b, input);
     if (plan.entry) postAll(b, [plan.entry]);
-    b.documents.push({ ...plan.doc, reversed: false, effects: plan.effects });
+    for (const m of plan.stockMoves) addMove(b, { ...m, date: plan.doc.date, ref: plan.doc.id });
+    if (plan.doc.receiptId) b.receipts.find((x) => x.id === plan.doc.receiptId).invoiced = plan.doc.id;
+    b.documents.push({ ...plan.doc, reversed: false, effects: plan.effects, pending: !!input.pending, enteredBy: input.enteredBy || '' });
     for (const o of plan.obligations) {
       b.obligations.push({ ...o, id: nextId(b.obligations, 'BK'), docId: plan.doc.id, settlements: [], cancelled: false });
     }
@@ -712,8 +854,13 @@ export function reverseDocument(b, { docId, date = b.today, reason }) {
   if (obls.some((o) => o.settlements.some((s) => !s.reversed))) throw Error('Ödemesi yapılmış belge iptal edilemez. Önce ödemeyi ters kayıtla geri alın.');
   const rv = b.reviews.find((r) => r.docId === docId);
   if (rv && rv.resolutions.length) throw Error('İnceleme farkı sınıflandırılmış; önce sınıflandırmayı geri alın.');
+  for (const m of b.stock.moves.filter((x) => x.ref === docId && x.qty > 0)) {
+    if (stockQty(b, m.sku, m.branch) < m.qty) throw Error(m.sku + ' stoğu satılmış; alış faturası iptal yerine alış iadesi gerekir.');
+  }
   const orig = b.entries.find((e) => e.key === 'doc:' + docId);
   if (orig) postAll(b, [reversal(orig, date, 'rev:doc:' + docId, reason)]);
+  for (const m of b.stock.moves.filter((x) => x.ref === docId)) addMove(b, { ...m, id: undefined, date, qty: -m.qty, value: -m.value, type: 'reversal', ref: 'rev:' + docId });
+  if (d.receiptId) b.receipts.find((x) => x.id === d.receiptId).invoiced = false;
   d.reversed = true;
   d.reverseReason = clean(reason);
   obls.forEach((o) => (o.cancelled = true));
@@ -883,6 +1030,7 @@ export function recordPayment(b, input) {
       advanceUsed: 0,
       allocations: p.settlements,
       instrumentId: p.instrument?.id || '',
+      attachments: cleanAttachments(input.attachments),
       reversed: false,
     };
     b.payments.push(payment);
@@ -1036,6 +1184,7 @@ export function resolveReview(b, { key, reviewId, amount, target, categoryId, pa
                   ? L(money(b, r.cardId || '', ['card']).id, amount, 0)
                   : L('PAYABLE', amount, 0, { party: activeParty(b, partyId).id });
     const rk = r.id + ':' + (r.resolutions.length + 1);
+    debit.branch = r.branchId || hqBranch(b);
     postAll(b, [{ key: 'rvw:' + rk, date, kind: 'reclassification', memo: 'İnceleme sınıflandırma · ' + REVIEW_TARGETS[target] + (note ? ' · ' + clean(note) : ''), lines: [debit, L('REVIEW', 0, amount, { review: r.id })] }]);
     r.resolutions.push({ id: rk, date, amount, target, categoryId: categoryId || '', partyId: partyId || '', note: clean(note).slice(0, 200) });
     audit(b, 'İnceleme farkı sınıflandırıldı', r.id, REVIEW_TARGETS[target]);
@@ -1054,30 +1203,321 @@ export function transfer(b, { key, date, from, to, amount, note }) {
     return true;
   });
 }
-/** Satış tahsilatı. Teslim edilmemiş sipariş için avans (340), teslimde hasılat (600) ve KDV (391). */
-export function recordCollection(b, { key, date, accountId, gross, vat = 0, orderNo, customer, delivered = false }) {
-  return once(b, key, { date, accountId, gross, vat, orderNo, customer, delivered }, () => {
+// ───────────────────────── stok defteri (ortalama maliyet) ─────────────────────────
+// Miktar şube (depo) bazında, maliyet SKU bazında hareketli ağırlıklı ortalamadır. Muhasebe stoğu (153) ile
+// stok defteri değeri kapanış kontrolünde karşılaştırılır.
+function ensureItem(b, { sku, label = '', category = '' }) {
+  let it = b.stock.items.find((x) => x.sku === sku);
+  if (!it) {
+    it = { sku, label: clean(label) || sku, category: clean(category) };
+    b.stock.items.push(it);
+  } else if (label && it.label === sku) it.label = clean(label);
+  return it;
+}
+function addMove(b, m) {
+  ensureItem(b, m);
+  b.stock.moves.push({ id: 'SH-' + (b.stock.moves.length + 1), date: m.date, sku: m.sku, branch: m.branch, qty: m.qty, value: m.value, type: m.type, ref: m.ref || '' });
+}
+export function stockQty(b, sku, branch, asOf = '9999-12-31') {
+  return sum(b.stock.moves.filter((m) => m.sku === sku && (!branch || m.branch === branch) && m.date <= asOf), (m) => m.qty);
+}
+export function stockValue(b, sku, asOf = '9999-12-31') {
+  return sum(b.stock.moves.filter((m) => (!sku || m.sku === sku) && m.date <= asOf), (m) => m.value);
+}
+/** Birim ortalama maliyet (kuruş, yuvarlanmış; çıkışta tam oran kullanılır). */
+export function avgCost(b, sku, asOf) {
+  const q = stockQty(b, sku, undefined, asOf);
+  return q > 0 ? Math.round(stockValue(b, sku, asOf) / q) : 0;
+}
+function issue(b, sku, branch, qty, asOf) {
+  const here = stockQty(b, sku, branch, asOf);
+  if (qty > here) throw Error(sku + ': ' + (b.branches.find((x) => x.id === branch)?.label || branch) + ' stoğu yetersiz (' + here + ' adet). Negatif stok kapalı.');
+  const q = stockQty(b, sku, undefined, asOf),
+    v = stockValue(b, sku, asOf);
+  return qty === q ? v : Math.round((v * qty) / q);
+}
+export function stockSummary(b, asOf = b.today) {
+  const keys = [...new Set(b.stock.moves.map((m) => m.sku + '|' + m.branch))];
+  return keys
+    .map((k) => {
+      const [sku, branch] = k.split('|');
+      const qty = stockQty(b, sku, branch, asOf);
+      const all = stockQty(b, sku, undefined, asOf);
+      // Değer, SKU'nun toplam stok değerinden şube payıdır (ortalama yuvarlamasıyla 153 hesabından sapmaz).
+      return { sku, branch, label: b.stock.items.find((x) => x.sku === sku)?.label || sku, qty, avg: avgCost(b, sku, asOf), value: all ? Math.round((stockValue(b, sku, asOf) * qty) / all) : 0 };
+    })
+    .filter((r) => r.qty || r.value);
+}
+function stockLines(b, list, defBranch) {
+  return (list || []).filter((x) => x && x.qty).map((x) => {
+    if (!clean(x.sku)) throw Error('SKU eksik.');
+    if (!Number.isSafeInteger(x.qty) || x.qty <= 0) throw Error(x.sku + ': adet pozitif tam sayı olmalı.');
+    return { sku: clean(x.sku), label: x.label, category: x.category, branch: branchOf(b, x.branchId || defBranch).id, qty: x.qty, unitCost: x.unitCost };
+  });
+}
+export function openingStock(b, { key = 'opening-stock', date, lines: list }) {
+  return once(b, key, { date, list }, () => {
+    const ls = stockLines(b, list);
+    ls.forEach((x) => amt(x.unitCost, x.sku + ' birim maliyet'));
+    const value = sum(ls, (x) => x.qty * x.unitCost);
+    postAll(b, [{ key: 'stk:' + key, date, kind: 'opening', memo: 'Açılış stoğu', lines: [L('INVENTORY', value, 0, { branch: ls[0].branch }), L('OPENING', 0, value)] }]);
+    ls.forEach((x) => addMove(b, { ...x, date, value: x.qty * x.unitCost, type: 'opening', ref: key }));
+    return value;
+  });
+}
+/** Mal kabul (irsaliye / faturası sonra gelecek). Stok girer, "faturası gelmemiş mal" borcu oluşur. */
+export function goodsReceipt(b, { key, date, partyId = '', branchId, lines: list, ref = '' }) {
+  return once(b, key, { date, partyId, branchId, list, ref }, () => {
+    if (partyId) activeParty(b, partyId, ['supplier']);
+    const br = branchOf(b, branchId);
+    const ls = stockLines(b, list, br.id);
+    if (!ls.length) throw Error('En az bir stok satırı girin.');
+    ls.forEach((x) => amt(x.unitCost, x.sku + ' birim maliyet'));
+    const value = sum(ls, (x) => x.qty * x.unitCost);
+    const id = nextId(b.receipts, 'MK');
+    postAll(b, [{ key: 'grn:' + id, date, kind: 'goods-receipt', memo: 'Mal kabul ' + (clean(ref) || id) + (partyId ? ' · ' + party(b, partyId).label : ''), lines: [L('INVENTORY', value, 0, { branch: br.id }), L('GRNI', 0, value, { branch: br.id })] }]);
+    ls.forEach((x) => addMove(b, { ...x, date, value: x.qty * x.unitCost, type: 'receipt', ref: id }));
+    b.receipts.push({ id, date, partyId, branchId: br.id, value, lines: ls.map((x) => ({ sku: x.sku, qty: x.qty, unitCost: x.unitCost })), ref: clean(ref), invoiced: false });
+    return id;
+  });
+}
+/** Sayım: fark ortalama maliyetle "sayım ve fire farkları"na yazılır (eksik gider, fazla gider azaltır). */
+export function stockCount(b, { key, date, sku, branchId, counted, note = '' }) {
+  return once(b, key, { date, sku, branchId, counted, note }, () => {
+    const br = branchOf(b, branchId);
+    if (!Number.isSafeInteger(counted) || counted < 0) throw Error('Sayılan adet sıfır veya pozitif olmalı.');
+    const now = stockQty(b, sku, br.id, date);
+    const diff = counted - now;
+    if (!diff) return 0;
+    const unit = avgCost(b, sku, date);
+    const value = diff < 0 ? -issue(b, sku, br.id, -diff, date) : diff * unit;
+    if (value) postAll(b, [{ key: 'cnt:' + key, date, kind: 'stock-count', memo: 'Sayım farkı ' + sku + ' (' + (diff > 0 ? '+' : '') + diff + ')' + (note ? ' · ' + clean(note) : ''), lines: value < 0 ? [L('exp:stock-diff', -value, 0, { branch: br.id }), L('INVENTORY', 0, -value, { branch: br.id })] : [L('INVENTORY', value, 0, { branch: br.id }), L('exp:stock-diff', 0, value, { branch: br.id })] }]);
+    addMove(b, { sku, branch: br.id, date, qty: diff, value, type: 'count', ref: key });
+    return diff;
+  });
+}
+
+// ───────────────────────── satış: sipariş föyü → tahsilat → teslim (hasılat + SMM) → iade ─────────────────────────
+/** POS hesabını föydeki "Garanti 3 Taksit" gibi bilgiden bulur. */
+export function posForCard(b, detail) {
+  const s = clean(detail).toLocaleLowerCase('tr-TR');
+  const pos = b.accounts.filter((a) => a.kind === 'pos' && a.active);
+  const word = (l) => l.toLocaleLowerCase('tr-TR').replace(/ pos.*$/, '').replace(/\(.*\)/, '').trim();
+  return (pos.find((a) => s && s.includes(word(a.label).split(' ')[0])) || pos.find((a) => /diğer/i.test(a.label)) || pos[0])?.id;
+}
+export function installmentsOf(detail) {
+  const m = /(\d{1,2})\s*taksit/i.exec(String(detail || ''));
+  return m ? Math.min(12, Math.max(1, Number(m[1]))) : 1;
+}
+function posExpectation(b, accId, date, gross, inst) {
+  const a = b.accounts.find((x) => x.id === accId);
+  if (a?.kind !== 'pos') return {};
+  const rate = a.pos?.rates?.[inst];
+  return { expectedDate: addDays(date, a.pos?.settleDays ?? 1), expectedFee: rate === undefined ? null : Math.round((gross * rate) / 10000) };
+}
+/** Satır brüt tutarlarını sipariş toplamına (indirim sonrası) göre dağıtır; KDV satır kategorisinin oranıyla ayrılır. */
+function priceLines(order) {
+  const raw = order.lines.map((l) => l.qty * l.unitPrice);
+  const base = sum(raw);
+  const ratio = base > 0 ? order.total / base : 0;
+  let left = order.total;
+  return order.lines.map((l, i) => {
+    const gross = i === order.lines.length - 1 ? left : Math.round(raw[i] * ratio);
+    left -= gross;
+    const vat = Math.round((gross * l.vatRate) / (100 + l.vatRate));
+    return { ...l, gross, vat, net: gross - vat };
+  });
+}
+function collectionTarget(order) {
+  return order.delivered ? 'RECEIVABLE' : 'ADVANCES_IN';
+}
+function postOrderPayment(b, order, p, key) {
+  const acc = money(b, p.accountId, ['cash', 'bank', 'pos']);
+  amt(p.amount, 'Tahsilat');
+  if (p.date > b.today) throw Error('Gelecek tarihli tahsilat işlenemez.');
+  const id = nextId(b.collections, 'TH');
+  const inst = p.installments || 1;
+  postAll(b, [{ key: 'col:' + key, date: p.date, kind: 'collection', memo: 'Tahsilat ' + order.no + ' · ' + order.customer + (acc.kind === 'pos' ? ' · ' + acc.label + (inst > 1 ? ' ' + inst + ' taksit' : ' tek çekim') : ''), lines: [L(acc.id, p.amount, 0, { ...(acc.kind === 'pos' ? {} : { cf: 'operating' }), branch: order.branchId }), L(collectionTarget(order), 0, p.amount, { order: order.id, branch: order.branchId })] }]);
+  b.collections.push({ id, orderId: order.id, date: p.date, accountId: acc.id, gross: p.amount, vat: 0, installments: inst, orderNo: order.no, customer: order.customer, branchId: order.branchId, delivered: order.delivered, settled: 0, ...posExpectation(b, acc.id, p.date, p.amount, inst) });
+  order.collected += p.amount;
+  return id;
+}
+/**
+ * Sipariş föyünden gelen kaydı finansa işler (idempotent). Yeni tahsilatlar avans olarak girer;
+ * föyde durum "Teslim Edildi" olunca hasılat, KDV ve (SKU bağlı satırlar için) satılan malın maliyeti kaydedilir.
+ * order: {id, no, date, customer, seller, branchId?, total, lines:[{label, qty, unitPrice, vatRate, category, sku?}],
+ *         payments:[{amount, date, method:'cash'|'card', detail, accountId?}], delivered, deliveredOn}
+ */
+export function syncOrder(b, input) {
+  if (!input.id || !clean(input.no)) throw Error('Sipariş numarası eksik.');
+  const total = amt(input.total, 'Sipariş tutarı');
+  const lines = (input.lines || []).map((l) => {
+    if (!Number.isSafeInteger(l.qty) || l.qty <= 0) throw Error('Ürün adedi geçersiz.');
+    amt(l.unitPrice, 'Birim fiyat', { zero: true });
+    if (![0, 1, 10, 20].includes(l.vatRate)) throw Error((l.label || 'Ürün') + ': KDV oranı bilinmiyor (kategori seçin).');
+    return { label: clean(l.label).slice(0, 120), qty: l.qty, unitPrice: l.unitPrice, vatRate: l.vatRate, category: clean(l.category), sku: clean(l.sku) };
+  });
+  if (!lines.length) throw Error('Siparişte ürün yok.');
+  let order = b.orders.find((o) => o.id === input.id);
+  const branchId = input.branchId || branchForSeller(b, input.seller);
+  const br = branchOf(b, branchId);
+  if (!order) {
+    order = { id: input.id, no: clean(input.no), date: input.date, customer: clean(input.customer).slice(0, 80), seller: clean(input.seller), branchId: br.id, stockBranch: br.stockFrom || br.id, total, lines, collected: 0, paymentKeys: [], delivered: false, deliveredOn: '', returns: [], warnings: [], cancelled: false };
+    b.orders.push(order);
+  } else if (!order.delivered) {
+    Object.assign(order, { customer: clean(input.customer).slice(0, 80), total, lines, seller: clean(input.seller) });
+  } else if (total !== order.total || lines.length !== order.lines.length) {
+    if (!order.warnings.includes('changed-after-delivery')) order.warnings.push('changed-after-delivery');
+  }
+  const result = { payments: 0, delivered: false };
+  const seen = [];
+  (input.payments || []).forEach((p, i) => {
+    const k = order.id + ':' + p.date + ':' + p.amount + ':' + p.method + ':' + clean(p.detail) + ':' + seen.filter((x) => x === p.date + p.amount).length;
+    seen.push(p.date + p.amount);
+    if (order.paymentKeys.includes(k)) return;
+    const accountId = p.accountId || (p.method === 'card' ? posForCard(b, p.detail) : br.cashAccount || b.accounts.find((a) => a.kind === 'cash' && a.active)?.id);
+    postOrderPayment(b, order, { ...p, accountId, installments: installmentsOf(p.detail) }, k);
+    order.paymentKeys.push(k);
+    result.payments++;
+  });
+  if (order.paymentKeys.length > (input.payments || []).length && !order.warnings.includes('payment-removed')) order.warnings.push('payment-removed');
+  if (input.delivered && !order.delivered) {
+    deliverSale(b, order, input.deliveredOn && input.deliveredOn <= b.today ? input.deliveredOn : b.today);
+    result.delivered = true;
+  }
+  return result;
+}
+function deliverSale(b, order, date) {
+  const priced = priceLines(order);
+  const ls = [];
+  const applied = Math.min(order.collected - sum(order.returns, (r) => r.refund || 0), order.total);
+  if (applied > 0) ls.push(L('ADVANCES_IN', applied, 0, { order: order.id, branch: order.branchId }));
+  if (order.total - applied > 0) ls.push(L('RECEIVABLE', order.total - applied, 0, { order: order.id, branch: order.branchId }));
+  for (const l of priced) {
+    if (l.net) ls.push(L('SALES', 0, l.net, { branch: order.branchId }));
+    if (l.vat) ls.push(L('OUTPUT_VAT', 0, l.vat, { branch: order.branchId }));
+  }
+  const moves = [];
+  let cogs = 0;
+  priced.forEach((l, i) => {
+    l.cost = null;
+    if (!l.sku) return;
+    const c = issue(b, l.sku, order.stockBranch, l.qty, date);
+    l.cost = c;
+    cogs += c;
+    moves.push({ sku: l.sku, branch: order.stockBranch, qty: -l.qty, value: -c, type: 'sale', ref: order.id + ':' + i });
+  });
+  if (cogs) ls.push(L('COGS', cogs, 0, { branch: order.branchId }), L('INVENTORY', 0, cogs, { branch: order.stockBranch }));
+  postAll(b, [{ key: 'dlv:' + order.id, date, kind: 'delivery', memo: 'Teslim · hasılat ' + order.no + ' · ' + order.customer, lines: ls }]);
+  moves.forEach((m) => addMove(b, { ...m, date }));
+  order.lines = priced;
+  order.delivered = true;
+  order.deliveredOn = date;
+  order.cogs = cogs;
+  order.unlinked = sum(priced.filter((l) => !l.sku), (l) => l.net);
+  b.collections.filter((c) => c.orderId === order.id).forEach((c) => (c.delivered = true));
+}
+export function deliverOrderById(b, { orderId, date = b.today }) {
+  const o = b.orders.find((x) => x.id === orderId);
+  if (!o || o.delivered || o.cancelled) throw Error('Teslim bekleyen sipariş bulunamadı.');
+  deliverSale(b, o, date);
+}
+export function orderBalance(b, orderId) {
+  // Pozitif: müşteri borçlu. Negatif: müşteriye iade edilecek / avans.
+  return balance(b, 'RECEIVABLE', { order: orderId }) - balance(b, 'ADVANCES_IN', { order: orderId });
+}
+/**
+ * İade / iptal. Teslim edilmediyse kapora iadesi (avans kapanır). Teslim edildiyse seçilen satırlar için satış iadesi
+ * (610 + KDV düzeltmesi), stoğa geri giriş (teslimdeki maliyetle) ve isteğe bağlı para iadesi. Asıl kayıtlar silinmez.
+ * input: {key, orderId, date, lines:[{index, qty}], refund:{accountId, amount}, restock, reason}
+ */
+export function returnOrder(b, input) {
+  return once(b, input.key, { ...input, key: undefined }, () => {
+    const o = b.orders.find((x) => x.id === input.orderId);
+    if (!o || o.cancelled) throw Error('Sipariş bulunamadı.');
+    if (!clean(input.reason)) throw Error('İade / iptal nedeni zorunlu.');
+    const date = input.date || b.today;
+    if (date > b.today) throw Error('Gelecek tarihli iade olamaz.');
+    const ls = [];
+    const moves = [];
+    let credit = 0;
+    const done = [];
+    if (o.delivered) {
+      for (const r of input.lines || []) {
+        const l = o.lines[r.index];
+        if (!l) throw Error('İade satırı bulunamadı.');
+        const prev = sum(o.returns.flatMap((x) => x.lines).filter((x) => x.index === r.index), (x) => x.qty);
+        if (!Number.isSafeInteger(r.qty) || r.qty <= 0 || prev + r.qty > l.qty) throw Error(l.label + ': iade adedi satılan adedi aşamaz.');
+        const part = (v) => (prev + r.qty === l.qty ? v - Math.round((v * prev) / l.qty) : Math.round((v * r.qty) / l.qty));
+        const gross = part(l.gross),
+          vat = part(l.vat);
+        credit += gross;
+        if (gross - vat) ls.push(L('SALES_RET', gross - vat, 0, { branch: o.branchId }));
+        if (vat) ls.push(L('OUTPUT_VAT', vat, 0, { branch: o.branchId }));
+        if (l.sku && l.cost && input.restock !== false) {
+          const c = part(l.cost);
+          ls.push(L('INVENTORY', c, 0, { branch: o.stockBranch }), L('COGS', 0, c, { branch: o.branchId }));
+          moves.push({ sku: l.sku, branch: o.stockBranch, qty: r.qty, value: c, type: 'return', ref: o.id + ':' + r.index });
+        }
+        done.push({ index: r.index, qty: r.qty, gross });
+      }
+      if (!done.length && !input.refund?.amount) throw Error('İade edilecek satır seçin.');
+      if (credit) ls.push(L('RECEIVABLE', 0, credit, { order: o.id, branch: o.branchId }));
+    }
+    const owed = -(orderBalance(b, o.id) - credit); // müşteriye borçlu olduğumuz tutar (iade sonrası)
+    const refund = input.refund?.amount || 0;
+    if (refund) {
+      amt(refund, 'İade tutarı');
+      if (refund > owed) throw Error('Para iadesi müşterinin alacağını (' + (Math.max(0, owed) / 100).toLocaleString('tr-TR') + ' TL) aşamaz.');
+      const acc = money(b, input.refund.accountId, ['cash', 'bank', 'pos']);
+      if (acc.kind === 'pos' && balance(b, acc.id, { asOf: date }) < refund) throw Error(acc.label + ' bakiyesi yetersiz; iadeyi bankadan yapın.');
+      ls.push(L(o.delivered ? 'RECEIVABLE' : 'ADVANCES_IN', refund, 0, { order: o.id, branch: o.branchId }), L(acc.id, 0, refund, acc.kind === 'pos' ? {} : { cf: 'operating' }));
+    }
+    if (!ls.length) throw Error('İşlenecek iade yok.');
+    postAll(b, [{ key: 'ret:' + input.key, date, kind: 'refund', memo: (o.delivered ? 'Satış iadesi ' : 'Sipariş iptali / kapora iadesi ') + o.no + ' · ' + clean(input.reason), lines: ls }]);
+    moves.forEach((m) => addMove(b, { ...m, date }));
+    o.returns.push({ date, lines: done, credit, refund, reason: clean(input.reason) });
+    if (!o.delivered && refund && orderBalance(b, o.id) === 0) o.cancelled = true;
+    audit(b, o.delivered ? 'Satış iadesi' : 'Sipariş iptali', o.id, input.reason);
+    return true;
+  });
+}
+/** Föy dışı toplu tahsilat (ör. gün sonu özeti). Stok satırı yoksa maliyet bağlanmamış satış olarak işaretlenir. */
+export function recordCollection(b, { key, date, accountId, gross, vat = 0, orderNo, customer, delivered = false, installments = 1, branchId }) {
+  return once(b, key, { date, accountId, gross, vat, orderNo, customer, delivered, installments, branchId }, () => {
     const acc = money(b, accountId, ['cash', 'bank', 'pos']);
+    const br = branchOf(b, branchId);
     amt(gross, 'Tahsilat');
     amt(vat, 'KDV', { zero: true });
     if (vat >= gross) throw Error('KDV tahsilat tutarından küçük olmalı.');
     const id = nextId(b.collections, 'TH');
-    const ls = [L(acc.id, gross, 0, acc.kind === 'pos' ? {} : { cf: 'operating' })];
-    if (delivered) ls.push(L('SALES', 0, gross - vat), ...(vat ? [L('OUTPUT_VAT', 0, vat)] : []));
-    else ls.push(L('ADVANCES_IN', 0, gross));
+    const ls = [L(acc.id, gross, 0, { ...(acc.kind === 'pos' ? {} : { cf: 'operating' }), branch: br.id })];
+    if (delivered) ls.push(L('SALES', 0, gross - vat, { branch: br.id }), ...(vat ? [L('OUTPUT_VAT', 0, vat, { branch: br.id })] : []));
+    else ls.push(L('ADVANCES_IN', 0, gross, { order: 'col:' + id, branch: br.id }));
     postAll(b, [{ key: 'col:' + id, date, kind: 'collection', memo: 'Tahsilat ' + clean(orderNo) + ' · ' + clean(customer), lines: ls }]);
-    b.collections.push({ id, date, accountId, gross, vat, orderNo: clean(orderNo), customer: clean(customer), delivered, deliveredOn: delivered ? date : '' });
+    b.collections.push({ id, date, accountId, gross, vat, orderNo: clean(orderNo), customer: clean(customer), delivered, deliveredOn: delivered ? date : '', installments, branchId: br.id, settled: 0, unlinked: delivered ? gross - vat : 0, ...posExpectation(b, acc.id, date, gross, installments) });
     return id;
   });
 }
 export function deliverOrder(b, { collectionId, date = b.today }) {
   const c = b.collections.find((x) => x.id === collectionId);
-  if (!c || c.delivered) throw Error('Teslim bekleyen tahsilat bulunamadı.');
-  postAll(b, [{ key: 'dlv:' + c.id, date, kind: 'delivery', memo: 'Teslim · hasılat ' + c.orderNo, lines: [L('ADVANCES_IN', c.gross, 0), L('SALES', 0, c.gross - c.vat), ...(c.vat ? [L('OUTPUT_VAT', 0, c.vat)] : [])] }]);
+  if (!c || c.delivered || c.orderId) throw Error('Teslim bekleyen tahsilat bulunamadı.');
+  postAll(b, [{ key: 'dlv:' + c.id, date, kind: 'delivery', memo: 'Teslim · hasılat ' + c.orderNo, lines: [L('ADVANCES_IN', c.gross, 0, { order: 'col:' + c.id, branch: c.branchId }), L('SALES', 0, c.gross - c.vat, { branch: c.branchId }), ...(c.vat ? [L('OUTPUT_VAT', 0, c.vat, { branch: c.branchId })] : [])] }]);
   c.delivered = true;
   c.deliveredOn = date;
+  c.unlinked = c.gross - c.vat;
 }
-/** POS bloke çözümü: brüt POS alacağı bankaya net geçer, komisyon gider olur. */
+
+// ───────────────────────── POS → banka ─────────────────────────
+/** Bankaya geçmeyi bekleyen POS tahsilatları ve tanımlı orana göre tahmini komisyon. */
+export function posPending(b, posId, asOf = b.today) {
+  const rows = b.collections
+    .filter((c) => c.accountId === posId && c.gross - (c.settled || 0) > 0)
+    .map((c) => ({ ...c, open: c.gross - (c.settled || 0) }));
+  const due = rows.filter((c) => (c.expectedDate || c.date) <= asOf);
+  return { rows, gross: sum(rows, (c) => c.open), due: sum(due, (c) => c.open), dueFee: due.every((c) => c.expectedFee !== null && c.expectedFee !== undefined) ? sum(due, (c) => Math.round(((c.expectedFee || 0) * c.open) / c.gross)) : null, unknownRates: rows.filter((c) => c.expectedFee === null || c.expectedFee === undefined).length };
+}
+/** POS bloke çözümü: brüt POS alacağı bankaya net geçer, komisyon gider olur. Tahsilatlar eski tarihliden başlayarak kapanır. */
 export function settlePos(b, { key, date, posId, bankId, gross, fee }) {
   return once(b, key, { date, posId, bankId, gross, fee }, () => {
     const pos = money(b, posId, ['pos']),
@@ -1086,9 +1526,121 @@ export function settlePos(b, { key, date, posId, bankId, gross, fee }) {
     amt(fee, 'Komisyon', { zero: true });
     if (fee >= gross) throw Error('Komisyon brüt tutardan küçük olmalı.');
     if (gross > balance(b, pos.id, { asOf: date })) throw Error('POS hesabında bu kadar bekleyen tahsilat yok.');
-    postAll(b, [{ key: 'pos:' + key, date, kind: 'pos-settlement', memo: 'POS → ' + bank.label, lines: [L(bank.id, gross - fee, 0, { cf: 'operating' }), ...(fee ? [L('exp:pos-fee', fee, 0)] : []), L(pos.id, 0, gross)] }]);
+    const firstOpen = b.collections.filter((x) => x.accountId === pos.id && x.gross - (x.settled || 0) > 0).sort((x, y) => x.date.localeCompare(y.date))[0];
+    postAll(b, [{ key: 'pos:' + key, date, kind: 'pos-settlement', memo: 'POS → ' + bank.label + ' · ' + pos.label, lines: [L(bank.id, gross - fee, 0, { cf: 'operating' }), ...(fee ? [L('exp:pos-fee', fee, 0, { branch: firstOpen?.branchId || defaultBranch(b) })] : []), L(pos.id, 0, gross)] }]);
+    let left = gross;
+    for (const c of b.collections.filter((x) => x.accountId === pos.id).sort((x, y) => x.date.localeCompare(y.date))) {
+      const open = c.gross - (c.settled || 0);
+      if (open <= 0) continue;
+      const use = Math.min(open, left);
+      c.settled = (c.settled || 0) + use;
+      left -= use;
+      if (!left) break;
+    }
     return true;
   });
+}
+/** Otomatik mod: valörü gelmiş tahsilatları tanımlı komisyon oranıyla bankaya aktarır. */
+export function settlePosAuto(b, { key, posId, date = b.today }) {
+  const pos = money(b, posId, ['pos']);
+  if (!pos.pos?.auto) throw Error(pos.label + ' için otomatik hesaplama kapalı; komisyonu ekstreden girin.');
+  if (!pos.pos.bankId) throw Error(pos.label + ' için hesabın geçtiği banka tanımlı değil.');
+  const pp = posPending(b, posId, date);
+  if (!pp.due) throw Error('Valörü gelmiş POS tahsilatı yok.');
+  if (pp.dueFee === null) throw Error('Bazı taksit seçenekleri için komisyon oranı tanımlı değil.');
+  return settlePos(b, { key, date, posId, bankId: pos.pos.bankId, gross: pp.due, fee: pp.dueFee });
+}
+
+// ───────────────────────── mağaza kasası: personel masrafı ve gün sonu sayımı ─────────────────────────
+export const STAFF_EXPENSE_CATEGORIES = ['cleaning', 'cargo', 'meal', 'maintenance', 'other'];
+/** Satış personelinin kasadan yaptığı küçük masraf. Belge + nakit ödeme birlikte; muhasebe onayı bekler. */
+export function pettyExpense(b, { key, date, branchId, accountId, amount, vat = 0, categoryId, note, hasReceipt = false, attachments = [], by = '' }) {
+  return once(b, key, { date, branchId, accountId, amount, vat, categoryId, note, hasReceipt, attachments, by }, () => {
+    if (!STAFF_EXPENSE_CATEGORIES.includes(categoryId)) throw Error('Masraf türünü seçin.');
+    if (!clean(note)) throw Error('Masrafın ne için yapıldığını yazın.');
+    amt(amount, 'Tutar');
+    amt(vat, 'KDV', { zero: true });
+    if (vat >= amount) throw Error('KDV tutardan küçük olmalı.');
+    money(b, accountId, ['cash']);
+    const docId = recordDocument(b, { key: 'petty-doc:' + key, type: 'expense', partyId: 'perakende', categoryId, branchId, date, net: amount - vat, vat, note: clean(note) + (hasReceipt ? ' · fiş/fatura var' : ' · BELGESİZ'), attachments, pending: true, enteredBy: by || 'personel' });
+    const o = b.obligations.find((x) => x.docId === docId);
+    recordPayment(b, { key: 'petty-pay:' + key, date, method: 'cash', accountId, allocations: [{ obligationId: o.id, amount }], ref: 'Mağaza kasası' });
+    b.documents.find((d) => d.id === docId).hasReceipt = !!hasReceipt;
+    return docId;
+  });
+}
+/** Muhasebe onayı; kategori değiştiyse yeniden sınıflandırma fişi (nakit etkisi yok). */
+export function approveExpense(b, { docId, categoryId, date = b.today }) {
+  const d = b.documents.find((x) => x.id === docId);
+  if (!d || !d.pending || d.reversed) throw Error('Onay bekleyen masraf bulunamadı.');
+  const c = category(b, categoryId || d.categoryId);
+  if (c.id !== d.categoryId)
+    postAll(b, [{ key: 'reclass:' + docId, date, kind: 'reclassification', memo: 'Masraf sınıflandırma ' + docId + ': ' + catLabel(b, d.categoryId) + ' → ' + c.label, lines: [L('exp:' + c.id, d.net, 0, { branch: d.branchId }), L('exp:' + d.categoryId, 0, d.net, { branch: d.branchId })] }]);
+  d.categoryId = c.id;
+  d.pending = false;
+  audit(b, 'Mağaza masrafı onaylandı', docId, c.label);
+}
+const catLabel = (b, id) => b.categories.find((c) => c.id === id)?.label || id;
+/**
+ * Gün sonu kasa sayımı. Önce bankaya yatırılan tutar virmanlanır, sonra sayılan nakit sistemle karşılaştırılır.
+ * Açık: incelemeye (personel / hata / belgesiz masraf olabilir). Fazla: kasa fazlası geliri (649).
+ */
+export function cashCount(b, { key, date, accountId, counted, deposit, note = '', by = '' }) {
+  return once(b, key, { date, accountId, counted, deposit, note, by }, () => {
+    const acc = money(b, accountId, ['cash']);
+    if (!Number.isSafeInteger(counted) || counted < 0) throw Error('Sayılan nakdi girin.');
+    if (b.cashCounts.some((x) => x.accountId === acc.id && x.date === date)) throw Error(acc.label + ' için bu güne ait sayım zaten var.');
+    if (deposit?.amount) transfer(b, { key: 'dep:' + key, date, from: acc.id, to: deposit.bankId, amount: deposit.amount, note: 'Gün sonu bankaya yatan' });
+    const system = balance(b, acc.id, { asOf: date });
+    const diff = counted - system;
+    const id = nextId(b.cashCounts, 'KS');
+    const cbr = (b.branches.find((x) => x.cashAccount === acc.id) || { id: defaultBranch(b) }).id;
+    if (diff < 0) {
+      postAll(b, [{ key: 'cc:' + id, date, kind: 'cash-count', memo: 'Kasa sayım açığı · ' + acc.label + (note ? ' · ' + clean(note) : ''), lines: [L('REVIEW', -diff, 0, { review: 'R-' + id }), L(acc.id, 0, -diff, { cf: 'operating' })] }]);
+      b.reviews.push({ id: 'R-' + id, date, amount: -diff, branchId: cbr, source: 'Kasa sayım açığı', label: acc.label + ' ' + date + ': sayılan ' + (counted / 100).toLocaleString('tr-TR') + ' TL, sistem ' + (system / 100).toLocaleString('tr-TR') + ' TL', resolutions: [] });
+    } else if (diff > 0) {
+      postAll(b, [{ key: 'cc:' + id, date, kind: 'cash-count', memo: 'Kasa fazlası · ' + acc.label + (note ? ' · ' + clean(note) : ''), lines: [L(acc.id, diff, 0, { cf: 'operating' }), L('OTHER_INCOME', 0, diff, { branch: cbr })] }]);
+    }
+    b.cashCounts.push({ id, date, accountId: acc.id, counted, system, diff, deposit: deposit?.amount || 0, note: clean(note), by: clean(by) });
+    return { id, diff, system };
+  });
+}
+
+// ───────────────────────── bütçe (plan / fiili) ─────────────────────────
+/** key: 'sales' | 'cogs' | kategori id. branchId '' = tüm işletme. */
+export function setBudget(b, { period, branchId = '', key, amount }) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) throw Error('Ay seçin.');
+  if (branchId) branchOf(b, branchId);
+  if (key !== 'sales' && key !== 'cogs') category(b, key);
+  if (!Number.isSafeInteger(amount) || amount < 0) throw Error('Bütçe tutarı geçersiz.');
+  const k = period + '|' + branchId + '|' + key;
+  if (amount) b.budgets[k] = amount;
+  else delete b.budgets[k];
+}
+export function copyBudget(b, { from, to, branchId = '' }) {
+  let n = 0;
+  for (const [k, v] of Object.entries(b.budgets)) {
+    const [p, br, key] = k.split('|');
+    if (p === from && br === branchId) {
+      setBudget(b, { period: to, branchId, key, amount: v });
+      n++;
+    }
+  }
+  return n;
+}
+export function budgetReport(b, { period, branchId = '' }) {
+  const [y, m] = period.split('-').map(Number);
+  const to = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  const pl = profitAndLoss(b, { from: period + '-01', to, branch: branchId || undefined });
+  const plan = (key) => b.budgets[period + '|' + branchId + '|' + key] || 0;
+  const rows = [
+    { key: 'sales', label: 'Net satışlar', plan: plan('sales'), actual: pl.sales, income: true },
+    { key: 'cogs', label: 'Satılan malın maliyeti', plan: plan('cogs'), actual: pl.cogs },
+    ...b.categories.filter((c) => c.active || pl.categories.some((x) => x.id === c.id)).map((c) => ({ key: c.id, label: c.label, plan: plan(c.id), actual: pl.categories.find((x) => x.id === c.id)?.amount || 0 })),
+  ].filter((r) => r.plan || r.actual || r.key === 'sales' || r.key === 'cogs');
+  rows.forEach((r) => (r.variance = r.income ? r.actual - r.plan : r.plan - r.actual));
+  const planResult = plan('sales') - sum(rows.filter((r) => !r.income), (r) => r.plan);
+  return { period, rows, planResult, actualResult: pl.result - pl.otherIncome, elapsed: Math.min(1, Math.max(0, (Date.parse(b.today) - Date.parse(period + '-01') + 86400000) / (Date.parse(to) - Date.parse(period + '-01') + 86400000))) };
 }
 
 // ───────────────────────── beklenen ödemeler (belgesiz plan) & tekrarlayanlar ─────────────────────────
@@ -1209,16 +1761,33 @@ export function cashReport(b, { from = '0000-01-01', to = b.today } = {}) {
   const rows = out.map((l) => ({ date: l.date, account: accountInfo(b, l.account).label, memo: l.memo, cf: l.cf || 'operating', amount: l.credit, kind: l.kind }));
   return { rows, out: sum(out, (l) => l.credit), in: sum(inn, (l) => l.debit), internal: sum(ls.filter((l) => l.cf === 'internal' && l.credit), (l) => l.credit) };
 }
-/** 3) Gelir tablosu etkisi (tahakkuk esaslı; ödemeler gider yaratmaz). */
-export function profitAndLoss(b, { from = '0000-01-01', to = b.today } = {}) {
-  const ls = lines(b, { from, asOf: to }).filter((l) => l.kind !== 'opening');
-  const sales = sum(ls.filter((l) => l.account === 'SALES'), (l) => l.credit - l.debit);
+/** 3) Gelir tablosu etkisi (tahakkuk esaslı; ödemeler gider yaratmaz). branch verilirse yalnızca o şubenin satırları. */
+export function profitAndLoss(b, { from = '0000-01-01', to = b.today, branch } = {}) {
+  const ls = lines(b, { from, asOf: to }).filter((l) => l.kind !== 'opening' && (!branch || (branch === '__none__' ? !l.branch : l.branch === branch)));
+  const grossSales = sum(ls.filter((l) => l.account === 'SALES'), (l) => l.credit - l.debit);
+  const returns = sum(ls.filter((l) => l.account === 'SALES_RET'), (l) => l.debit - l.credit);
+  const cogs = sum(ls.filter((l) => l.account === 'COGS'), (l) => l.debit - l.credit);
+  const otherIncome = sum(ls.filter((l) => l.account === 'OTHER_INCOME'), (l) => l.credit - l.debit);
   const cats = b.categories
     .map((c) => ({ ...c, amount: sum(ls.filter((l) => l.account === 'exp:' + c.id), (l) => l.debit - l.credit) }))
     .filter((c) => c.amount);
   const groups = Object.fromEntries(Object.keys(PL_GROUPS).map((g) => [g, sum(cats.filter((c) => c.pl === g), (c) => c.amount)]));
   const expenses = sum(cats, (c) => c.amount);
-  return { sales, categories: cats, groups, expenses, result: sales - expenses };
+  const sales = grossSales - returns;
+  // Stok satırı bağlanmamış teslim edilmiş satışlar: maliyeti bilinmiyor (brüt kâr olduğundan yüksek görünür).
+  const inRange = (d) => d >= from && d <= to;
+  const unlinked =
+    sum(b.orders.filter((o) => o.delivered && inRange(o.deliveredOn) && (!branch || o.branchId === branch)), (o) => o.unlinked || 0) +
+    sum(b.collections.filter((c) => !c.orderId && c.delivered && inRange(c.deliveredOn || c.date) && (!branch || c.branchId === branch)), (c) => c.unlinked || 0);
+  return { grossSales, returns, sales, cogs, grossProfit: sales - cogs, otherIncome, categories: cats, groups, expenses, result: sales - cogs - expenses + otherIncome, unlinked };
+}
+/** Şube kâr/zararı. Merkez (ortak gider) ayrı sütundur; dağıtım anahtarı uygulanmaz. */
+export function branchPL(b, range = {}) {
+  const all = profitAndLoss(b, range);
+  const rows = b.branches.filter((x) => x.active || profitAndLoss(b, { ...range, branch: x.id }).result).map((x) => ({ branch: x, pl: profitAndLoss(b, { ...range, branch: x.id }) }));
+  const un = profitAndLoss(b, { ...range, branch: '__none__' });
+  if (un.result || un.expenses || un.sales) rows.push({ branch: { id: '', label: 'Atanmamış', kind: 'hq' }, pl: un });
+  return { rows, total: all };
 }
 /**
  * "Firmalara ödenen" ile "kasadan/bankadan çıkan" arasındaki köprü. İki rakam neden farklı, kalem kalem açıklar.
@@ -1240,7 +1809,10 @@ export function reportBridge(b, range = {}) {
     redemptions: kindSum('instrument'),
   };
   const cashFromPayments = parts.payments - parts.card - parts.instruments + parts.statements + parts.redemptions;
-  return { ...parts, cashOut: cash.out, reversals, other: cash.out - reversals - cashFromPayments, expenses: profitAndLoss(b, { from, to }).expenses };
+  const kindOut = (k) => sum(cash.rows.filter((r) => r.kind === k), (r) => r.amount);
+  const refunds = kindOut('refund'),
+    counts = kindOut('cash-count');
+  return { ...parts, refunds, counts, cashOut: cash.out, reversals, other: cash.out - reversals - cashFromPayments - refunds - counts, expenses: profitAndLoss(b, { from, to }).expenses };
 }
 /** Nakit akışı (doğrudan yöntem, yönetim amaçlı). Açılış + giriş − çıkış = kapanış kontrolü yapılır. */
 export function cashFlow(b, { from = '0000-01-01', to = b.today } = {}) {
@@ -1300,11 +1872,14 @@ export function closingChecks(b, asOf = b.today) {
   const review = reviewItems(b).filter((r) => r.remaining > 0);
   const overdue = openItems(b).filter((o) => o.due < b.today);
   const recon = b.accounts
-    .filter((a) => a.active && ['bank', 'card'].includes(a.kind))
+    .filter((a) => a.active && ['bank', 'card'].includes(a.kind) && b.entries.some((e) => e.lines.some((l) => l.account === a.id)))
     .map((a) => ({ account: a, last: [...b.reconciliations].reverse().find((r) => r.accountId === a.id) }));
   const cards = b.accounts.filter((a) => a.kind === 'card' && balance(b, a.id, { asOf }) < 0);
   const negBanks = b.accounts.filter((a) => a.kind === 'bank' && balance(b, a.id, { asOf }) < 0 && !a.limit);
   const kmh = b.accounts.filter((a) => a.kind === 'bank' && a.limit && balance(b, a.id, { asOf }) < 0);
+  const stockGap = balance(b, 'INVENTORY', { asOf }) - stockValue(b, undefined, asOf);
+  const pendingPetty = b.documents.filter((d) => d.pending && !d.reversed);
+  const pl = profitAndLoss(b, { to: asOf });
   const checks = [
     { ok: tb.debit === tb.credit, label: 'Tüm fişler dengeli (mizan borç = alacak)', detail: tb.debit === tb.credit ? 'Dengeli' : 'Fark var' },
     { ok: !review.length, label: 'İnceleme hesabında bekleyen fark yok', detail: review.length ? review.length + ' kalem, ' + TL(sum(review, (r) => r.remaining)) : 'Temiz', link: 'review' },
@@ -1315,6 +1890,11 @@ export function closingChecks(b, asOf = b.today) {
     { ok: balance(b, 'ADVANCES_IN', { asOf }) === 0, label: 'Teslim bekleyen sipariş avansı (bilgi)', detail: TL(balance(b, 'ADVANCES_IN', { asOf })) + ' avans; teslimde hasılata döner', info: true },
     { ok: true, label: 'İndirilecek KDV muhasebeci onayı bekliyor (bilgi)', detail: TL(balance(b, 'INPUT_VAT', { asOf })), info: true },
     { ok: !cards.length, label: 'Kart alacakları (fazla ödeme) izlenir', detail: cards.map((a) => a.label).join(', ') || 'Yok', info: true },
+    { ok: stockGap === 0, label: 'Muhasebe stoğu (153) stok defteriyle tutarlı', detail: stockGap ? 'Fark ' + TL(stockGap) + ' (SKU satırı girilmeden kaydedilen alış olabilir)' : 'Tutarlı' },
+    { ok: !pendingPetty.length, label: 'Onay bekleyen mağaza masrafı yok', detail: pendingPetty.length ? pendingPetty.length + ' masraf, ' + TL(sum(pendingPetty, (d) => d.total)) : 'Yok', link: 'review' },
+    { ok: balance(b, 'GRNI', { asOf }) === 0, label: 'Faturası gelmemiş mal kabulü yok', detail: TL(balance(b, 'GRNI', { asOf })), info: true },
+    { ok: !pl.unlinked, label: 'Satışların maliyeti stoğa bağlı', detail: pl.unlinked ? TL(pl.unlinked) + ' satışta SKU yok; brüt kâr olduğundan yüksek görünür' : 'Tamam', info: true },
+    { ok: true, info: true, label: 'Tahsil edilmemiş teslim edilmiş satış (bilgi)', detail: TL(balance(b, 'RECEIVABLE', { asOf })) },
   ];
   return { checks, ready: checks.filter((c) => !c.info).every((c) => c.ok) };
 }
@@ -1355,14 +1935,7 @@ export function demoBooks() {
     ['pos-halkbank', 'Halkbank POS', 'pos', 0],
     ['pos-vakif', 'TZH Vakıf (diğer POS)', 'pos', 0],
   ].forEach(([id, label, kind, limit]) => saveMoneyAccount(b, { newId: id, label, kind, limit }));
-  [
-    ['dues', 'Aidat', 'opex', '770'],
-    ['meal', 'Yemek / yan haklar', 'opex', '770'],
-    ['bonus', 'Prim / ikramiye', 'opex', '770'],
-    ['cleaning', 'Temizlik / sarf', 'opex', '770'],
-    ['safety', 'İş güvenliği / OSGB', 'opex', '770'],
-    ['social', 'Sosyal medya danışmanlığı', 'opex', '760'],
-  ].forEach(([id, label, pl, code]) => saveCategory(b, { newId: id, label, pl, code }));
+
   const suppliers = [
     // Optik (çerçeve / güneş)
     'Ant Optik', 'BDT Optik', 'Cem-Fa Gözlük', 'Derigo Gözlük', 'Dita İthalat', 'Emko Optik', 'Marchon', 'Hantes', 'Hazel Optik', 'Mercan Optik', 'Merve Optik', 'Mykita', 'Optomod', 'Optiser', 'Safilo', 'Ser Optik', 'Turkuaz Toptan', 'Opticmet (Vanni)', 'Armati', 'Platin Optik', 'Opka Optik', 'Asal Optik', 'Maybach',
@@ -1393,6 +1966,17 @@ export function demoBooks() {
     ['kredi-garanti', 'Garanti BBVA · işletme kredisi', 'bank', ''],
   ].forEach(([id, label, type, defaultCategory]) => saveParty(b, { newId: id, label, type, defaultCategory }));
 
+  // Şubeler: Atrium mağaza, E-ticaret (sosyal medya / ajans giderleri ve online satışlar), Merkez (ortak giderler).
+  b.branches = [];
+  saveBranch(b, { newId: 'atrium', label: 'Atrium mağaza', kind: 'store', cashAccount: 'cash-store' });
+  saveBranch(b, { newId: 'online', label: 'E-ticaret', kind: 'online', sellers: ['Fahri Can', 'İnternet'], stockFrom: 'atrium', cashAccount: 'cash-store' });
+  saveBranch(b, { newId: 'merkez', label: 'Merkez (ortak giderler)', kind: 'hq', cashAccount: 'cash-hq' });
+  // POS: föydeki örnek komisyon tablosu (onbinde). Komisyon varsayılan olarak ekstreden elle girilir; sanal POS otomatik.
+  const rates = { 1: 350, 2: 700, 3: 900, 4: 1069, 5: 1249, 6: 1449 };
+  for (const [id, bankId] of [['pos-garanti', 'bank-garanti'], ['pos-teb', 'bank-teb'], ['pos-akbank', 'bank-akbank'], ['pos-ziraat', 'bank-ziraat'], ['pos-yapikredi', 'bank-yapikredi'], ['pos-is', 'bank-is'], ['pos-qnb', 'bank-qnb'], ['pos-halkbank', 'bank-halkbank'], ['pos-vakif', 'bank-garanti']])
+    saveMoneyAccount(b, { id, label: b.accounts.find((x) => x.id === id).label, pos: { bankId, settleDays: 1, rates, auto: false } });
+  saveMoneyAccount(b, { newId: 'pos-online', label: 'E-ticaret sanal POS', kind: 'pos', pos: { bankId: 'bank-garanti', settleDays: 2, rates: { 1: 299, 3: 899, 6: 1449 }, auto: true } });
+
   b.today = '2026-11-01';
   postOpening(b, {
     date: '2026-11-01',
@@ -1406,59 +1990,84 @@ export function demoBooks() {
     ],
     dues: { 'seiko:PAYABLE': { due: '2026-11-10', label: 'Seiko · önceki alıştan devreden borç', method: 'card', accountId: 'card-garanti' } },
   });
+  openingStock(b, {
+    date: '2026-11-01',
+    lines: [
+      { sku: 'GOZ-001', label: 'Ray-Ban RX5154 · Siyah [2000]', branchId: 'atrium', qty: 8, unitCost: T(4000) },
+      { sku: 'CAM-001', label: 'Seiko örnek stok camı +1.00', branchId: 'atrium', qty: 20, unitCost: T(900) },
+      { sku: 'LEN-001', label: 'Demo Lens Color -1.00 Ela', branchId: 'atrium', qty: 6, unitCost: T(600) },
+    ],
+  });
   const run = (day, fn) => {
     b.today = day;
     return fn();
   };
   const ob = (docId) => b.obligations.find((o) => o.docId === docId);
   // Kira: şahıs ev sahibi, brüt 30.000, %20 stopaj (örnek oran) → ev sahibine 24.000
-  const rent = run('2026-11-01', () => recordDocument(b, { key: 'seed-rent', type: 'expense', partyId: 'evsahibi', categoryId: 'rent', docNo: 'KİRA-2026-11', date: '2026-11-01', due: '2026-11-05', net: T(30000), incomeWithheld: T(6000), period: '2026-11' }));
+  const rent = run('2026-11-01', () => recordDocument(b, { key: 'seed-rent', type: 'expense', partyId: 'evsahibi', categoryId: 'rent', branchId: 'atrium', docNo: 'KİRA-2026-11', date: '2026-11-01', due: '2026-11-05', net: T(30000), incomeWithheld: T(6000), period: '2026-11' }));
   run('2026-11-05', () => recordPayment(b, { key: 'seed-rent-pay', date: '2026-11-05', method: 'transfer', accountId: 'bank-garanti', allocations: [{ obligationId: ob(rent).id, amount: T(24000) }], ref: 'EFT-55120' }));
   // Ekim bordrosu (örnek kesinti tutarları)
-  const pay = run('2026-11-01', () => recordDocument(b, { key: 'seed-payroll', type: 'payroll', date: '2026-11-01', due: '2026-11-05', period: '2026-10', gross: T(60000), employeeSgk: T(8400), employerSgk: T(9450), incomeTax: T(5850), stampTax: T(455.4) }));
+  const pay = run('2026-11-01', () => recordDocument(b, { key: 'seed-payroll', type: 'payroll', branchId: 'atrium', date: '2026-11-01', due: '2026-11-05', period: '2026-10', gross: T(60000), employeeSgk: T(8400), employerSgk: T(9450), incomeTax: T(5850), stampTax: T(455.4) }));
   run('2026-11-05', () => recordPayment(b, { key: 'seed-payroll-pay', date: '2026-11-05', method: 'transfer', accountId: 'bank-garanti', allocations: [{ obligationId: ob(pay).id, amount: remaining(ob(pay)) }], ref: 'Maaş toplu EFT' }));
-  // Luxottica mal alışı → 05.11 çek verildi, vadesi 30.11 (nakit çıkışı vadede)
-  const lux = run('2026-11-03', () => recordDocument(b, { key: 'seed-lux', type: 'purchase', partyId: 'lux', docNo: 'LUX-2048', date: '2026-11-03', due: '2026-11-05', net: T(200000), vat: T(40000), note: 'Kasım çerçeve alımı' }));
-  run('2026-11-05', () => recordPayment(b, { key: 'seed-lux-cheque', date: '2026-11-05', method: 'cheque', accountId: 'bank-garanti', allocations: [{ obligationId: ob(lux).id, amount: T(240000) }], instrument: { no: 'CK-2026-018', maturity: '2026-11-30' } }));
-  // Reklam ajansı: KDV tevkifatlı hizmet (örnek 3/10)
-  run('2026-11-06', () => recordDocument(b, { key: 'seed-ajans', type: 'expense', partyId: 'ajans', categoryId: 'advertising', docNo: 'HZ-112', date: '2026-11-06', due: '2026-11-22', net: T(15000), vat: T(3000), vatWithheld: T(900) }));
+  // Luxottica mal alışı (SKU satırlı) → 05.11 çek verildi, vadesi 30.11 (nakit çıkışı vadede)
+  const lux = run('2026-11-03', () => recordDocument(b, { key: 'seed-lux', type: 'purchase', partyId: 'lux', branchId: 'atrium', docNo: 'LUX-2048', date: '2026-11-03', due: '2026-11-05', net: T(200000), vat: T(20000), note: 'Kasım çerçeve alımı', lines: [{ sku: 'GOZ-001', qty: 50, unitCost: T(4000) }] }));
+  run('2026-11-05', () => recordPayment(b, { key: 'seed-lux-cheque', date: '2026-11-05', method: 'cheque', accountId: 'bank-garanti', allocations: [{ obligationId: ob(lux).id, amount: T(220000) }], instrument: { no: 'CK-2026-018', maturity: '2026-11-30' } }));
+  // Reklam ajansı: KDV tevkifatlı hizmet (örnek 3/10) — e-ticaret gideri
+  run('2026-11-06', () => recordDocument(b, { key: 'seed-ajans', type: 'expense', partyId: 'ajans', categoryId: 'advertising', branchId: 'online', docNo: 'HZ-112', date: '2026-11-06', due: '2026-11-22', net: T(15000), vat: T(3000), vatWithheld: T(900) }));
+  // Sosyal medya danışmanlığı — e-ticaret gideri, ödendi
+  const sos = run('2026-11-07', () => recordDocument(b, { key: 'seed-sosyal', type: 'expense', partyId: 'sosyal', categoryId: 'social', branchId: 'online', docNo: 'SM-11', date: '2026-11-07', due: '2026-11-10', net: T(20000), vat: T(4000) }));
+  run('2026-11-10', () => recordPayment(b, { key: 'seed-sosyal-pay', date: '2026-11-10', method: 'transfer', accountId: 'bank-teb', allocations: [{ obligationId: ob(sos).id, amount: T(24000) }] }));
   // Seiko: devreden 50.000 borç 10.11 şirket kartıyla ödendi (kart borcu doğar, bankadan para çıkmaz)
   run('2026-11-10', () => recordPayment(b, { key: 'seed-seiko-card', date: '2026-11-10', method: 'card', accountId: 'card-garanti', allocations: [{ obligationId: b.obligations.find((o) => o.partyId === 'seiko').id, amount: T(50000) }], ref: 'Kart slip 4471' }));
   // Kasadan bankaya para yatırma (iç transfer)
   run('2026-11-12', () => transfer(b, { key: 'seed-deposit', date: '2026-11-12', from: 'cash-store', to: 'bank-is', amount: T(5000), note: 'Kasa fazlası yatırıldı' }));
-  // Satışlar: POS ve nakit; bir sipariş avansı (teslim bekliyor)
-  run('2026-11-12', () => recordCollection(b, { key: 'seed-col-1', date: '2026-11-12', accountId: 'pos-garanti', gross: T(36000), vat: T(3272.73), orderNo: 'SP-2041', customer: 'Örnek müşteri A', delivered: true }));
-  run('2026-11-12', () => recordCollection(b, { key: 'seed-col-2', date: '2026-11-12', accountId: 'cash-store', gross: T(8500), vat: T(772.73), orderNo: 'SP-2042', customer: 'Örnek müşteri B', delivered: true }));
-  run('2026-11-13', () => settlePos(b, { key: 'seed-pos-1', date: '2026-11-13', posId: 'pos-garanti', bankId: 'bank-garanti', gross: T(36000), fee: T(900) }));
-  run('2026-11-18', () => recordCollection(b, { key: 'seed-col-3', date: '2026-11-18', accountId: 'cash-store', gross: T(4000), vat: T(363.64), orderNo: 'SP-2050', customer: 'Örnek müşteri C (kapora)', delivered: false }));
-  run('2026-11-22', () => recordCollection(b, { key: 'seed-col-4', date: '2026-11-22', accountId: 'pos-garanti', gross: T(14500), vat: T(1318.18), orderNo: 'SP-2053', customer: 'Örnek müşteri D', delivered: true }));
-  // Gün sonu POS / nakit satış özetleri (örnek)
+  // Föy öncesi gün sonu özetleri (kalem detayı yok → maliyeti bağlanmamış satış olarak işaretlenir)
   [
     ['2026-11-05', T(68000), T(6181.82), T(9500), T(863.64)],
     ['2026-11-10', T(92000), T(8363.64), T(7200), T(654.55)],
-    ['2026-11-19', T(74000), T(6727.27), T(12000), T(1090.91)],
   ].forEach(([d, pos, pv, cash, cv], i) => {
-    run(d, () => recordCollection(b, { key: 'seed-day-pos-' + i, date: d, accountId: 'pos-garanti', gross: pos, vat: pv, orderNo: 'Gün sonu ' + d.slice(8) + '.11', customer: 'POS satışları', delivered: true }));
-    run(d, () => recordCollection(b, { key: 'seed-day-cash-' + i, date: d, accountId: 'cash-store', gross: cash, vat: cv, orderNo: 'Gün sonu ' + d.slice(8) + '.11', customer: 'Nakit satışlar', delivered: true }));
-    run(addDays(d, 1), () => settlePos(b, { key: 'seed-day-settle-' + i, date: addDays(d, 1), posId: 'pos-garanti', bankId: 'bank-garanti', gross: pos, fee: Math.round(pos * 0.025) }));
+    run(d, () => recordCollection(b, { key: 'seed-day-pos-' + i, date: d, accountId: 'pos-garanti', gross: pos, vat: pv, orderNo: 'Gün sonu ' + d.slice(8) + '.11', customer: 'POS satışları (föy öncesi)', delivered: true, branchId: 'atrium' }));
+    run(d, () => recordCollection(b, { key: 'seed-day-cash-' + i, date: d, accountId: 'cash-store', gross: cash, vat: cv, orderNo: 'Gün sonu ' + d.slice(8) + '.11', customer: 'Nakit satışlar (föy öncesi)', delivered: true, branchId: 'atrium' }));
+    run(addDays(d, 1), () => settlePos(b, { key: 'seed-day-settle-' + i, date: addDays(d, 1), posId: 'pos-garanti', bankId: 'bank-garanti', gross: pos, fee: Math.round(pos * 0.035) }));
   });
+  // Föy siparişleri (sipariş föyünden senkron). Fiyatlar KDV dahil birim fiyat.
+  const frame = { label: 'Ray-Ban RX5154 · Siyah [2000]', qty: 1, unitPrice: T(8500), vatRate: 10, category: 'Optik Çerçeve', sku: 'GOZ-001' };
+  const glass = { label: 'Seiko örnek stok camı +1.00', qty: 2, unitPrice: T(2250), vatRate: 10, category: 'Optik Cam', sku: 'CAM-001' };
+  run('2026-11-14', () => syncOrder(b, { id: 'ord-2041', no: 'SP-2041', date: '2026-11-12', customer: 'Örnek müşteri A', seller: 'Sema', total: T(12500), lines: [frame, glass], payments: [{ amount: T(4000), date: '2026-11-12', method: 'cash' }, { amount: T(8500), date: '2026-11-14', method: 'card', detail: 'Garanti Tek çekim' }], delivered: true, deliveredOn: '2026-11-14' }));
+  run('2026-11-15', () => syncOrder(b, { id: 'ord-2044', no: 'SP-2044', date: '2026-11-15', customer: 'Örnek müşteri E', seller: 'Nursu', total: T(2500), lines: [{ label: 'Demo Lens Color -1.00 Ela', qty: 2, unitPrice: T(1250), vatRate: 10, category: 'Lens', sku: 'LEN-001' }], payments: [{ amount: T(2500), date: '2026-11-15', method: 'cash' }], delivered: true, deliveredOn: '2026-11-15' }));
+  run('2026-11-18', () => syncOrder(b, { id: 'ord-2050', no: 'SP-2050', date: '2026-11-18', customer: 'Örnek müşteri C', seller: 'Erdoğan', total: T(13000), lines: [frame, glass], payments: [{ amount: T(4000), date: '2026-11-18', method: 'cash' }], delivered: false }));
+  run('2026-11-19', () => syncOrder(b, { id: 'ord-2051', no: 'SP-2051', date: '2026-11-19', customer: 'Örnek müşteri F', seller: 'Şuayip', total: T(17000), lines: [{ ...frame, qty: 2 }], payments: [{ amount: T(17000), date: '2026-11-19', method: 'card', detail: 'TEB 3 Taksit' }], delivered: true, deliveredOn: '2026-11-19' }));
+  run('2026-11-23', () => syncOrder(b, { id: 'ord-2053', no: 'SP-2053', date: '2026-11-22', customer: 'Örnek müşteri D', seller: 'İnternet (Online)', total: T(8500), lines: [{ label: 'Demo Lens Color -1.00 Ela', qty: 2, unitPrice: T(1250), vatRate: 10, category: 'Lens', sku: 'LEN-001' }, { label: 'Güneş gözlüğü (katalog dışı)', qty: 1, unitPrice: T(6000), vatRate: 20, category: 'Güneş Gözlüğü' }], payments: [{ amount: T(8500), date: '2026-11-22', method: 'card', detail: 'E-ticaret sanal POS', accountId: 'pos-online' }], delivered: true, deliveredOn: '2026-11-23' }));
+  run('2026-11-24', () => syncOrder(b, { id: 'ord-2054', no: 'SP-2054', date: '2026-11-24', customer: 'Örnek müşteri G', seller: 'Fahri Can', total: T(8500), lines: [frame], payments: [{ amount: T(8500), date: '2026-11-24', method: 'card', detail: 'Garanti 2 Taksit' }], delivered: true, deliveredOn: '2026-11-24' }));
+  // Müşteri 1 lensi iade etti: satış iadesi + stoğa geri giriş + nakit iade
+  run('2026-11-20', () => returnOrder(b, { key: 'seed-ret-2044', orderId: 'ord-2044', date: '2026-11-20', lines: [{ index: 0, qty: 1 }], refund: { accountId: 'cash-store', amount: T(1250) }, restock: true, reason: 'Numara uymadı' }));
+  run('2026-11-20', () => settlePos(b, { key: 'seed-pos-2051', date: '2026-11-20', posId: 'pos-teb', bankId: 'bank-teb', gross: T(17000), fee: T(1530) }));
+  run('2026-11-15', () => settlePos(b, { key: 'seed-pos-2041', date: '2026-11-15', posId: 'pos-garanti', bankId: 'bank-garanti', gross: T(8500), fee: T(297.5) }));
+  run('2026-11-24', () => settlePosAuto(b, { key: 'seed-pos-online', posId: 'pos-online', date: '2026-11-24' }));
   // Kredi taksiti
-  const loan = run('2026-11-15', () => recordDocument(b, { key: 'seed-loan', type: 'loan', partyId: 'kredi-garanti', docNo: 'Taksit 7/24', date: '2026-11-15', due: '2026-11-15', principal: T(25000), interest: T(6000), bsmv: T(300) }));
+  const loan = run('2026-11-15', () => recordDocument(b, { key: 'seed-loan', type: 'loan', partyId: 'kredi-garanti', branchId: 'merkez', docNo: 'Taksit 7/24', date: '2026-11-15', due: '2026-11-15', principal: T(25000), interest: T(6000), bsmv: T(300) }));
   run('2026-11-15', () => recordPayment(b, { key: 'seed-loan-pay', date: '2026-11-15', method: 'transfer', accountId: 'bank-garanti', allocations: [{ obligationId: ob(loan).id, amount: T(31300) }], ref: 'Otomatik tahsil' }));
-  // Muhasebe ücreti: serbest meslek makbuzu, %20 stopaj (örnek)
-  run('2026-11-15', () => recordDocument(b, { key: 'seed-smm', type: 'expense', partyId: 'muhasebe', categoryId: 'accounting', docNo: 'SMM-0381', date: '2026-11-15', due: '2026-11-25', net: T(10000), vat: T(2000), incomeWithheld: T(2000) }));
+  // Muhasebe ücreti: serbest meslek makbuzu, %20 stopaj (örnek) — merkez gideri
+  run('2026-11-15', () => recordDocument(b, { key: 'seed-smm', type: 'expense', partyId: 'muhasebe', categoryId: 'accounting', branchId: 'merkez', docNo: 'SMM-0381', date: '2026-11-15', due: '2026-11-25', net: T(10000), vat: T(2000), incomeWithheld: T(2000) }));
   // Kart ekstresi: kesim 17.11, son ödeme 24.11, ekstre 54.000 — sistemde bilinen 50.000
-  const st = run('2026-11-17', () => recordDocument(b, { key: 'seed-statement', type: 'card-statement', cardId: 'card-garanti', docNo: 'Kasım ekstresi', date: '2026-11-17', due: '2026-11-24', total: T(54000), minimum: T(16200) }));
+  const st = run('2026-11-17', () => recordDocument(b, { key: 'seed-statement', type: 'card-statement', cardId: 'card-garanti', branchId: 'merkez', docNo: 'Kasım ekstresi', date: '2026-11-17', due: '2026-11-24', total: T(54000), minimum: T(16200) }));
   run('2026-11-24', () => recordPayment(b, { key: 'seed-statement-pay', date: '2026-11-24', method: 'transfer', accountId: 'bank-garanti', allocations: [{ obligationId: ob(st).id, amount: T(54000) }], ref: 'Ekstre ödemesi' }));
   // Şahsi / aile: şirket hesabından ödenen şahsi sağlık sigortası → işletme gideri değil, ortak carisi
-  const pers = run('2026-11-20', () => recordDocument(b, { key: 'seed-personal', type: 'personal', partyId: 'sigorta', date: '2026-11-20', due: '2026-11-21', amount: T(8000), beneficiary: 'Şirket sahibi', purpose: 'Şahsi sağlık sigortası' }));
+  const pers = run('2026-11-20', () => recordDocument(b, { key: 'seed-personal', type: 'personal', partyId: 'sigorta', branchId: 'merkez', date: '2026-11-20', due: '2026-11-21', amount: T(8000), beneficiary: 'Şirket sahibi', purpose: 'Şahsi sağlık sigortası' }));
   run('2026-11-21', () => recordPayment(b, { key: 'seed-personal-pay', date: '2026-11-21', method: 'transfer', accountId: 'bank-is', allocations: [{ obligationId: ob(pers).id, amount: T(8000) }] }));
   // Ekim muhtasar ve SGK tahakkukları (bordro kesintileriyle eşleşir)
-  run('2026-11-20', () => recordDocument(b, { key: 'seed-muhtasar', type: 'tax', taxType: 'MUHTASAR', period: '2026-10', date: '2026-11-20', due: '2026-11-26', amount: T(6305.4) }));
-  run('2026-11-20', () => recordDocument(b, { key: 'seed-sgk', type: 'tax', taxType: 'SGK', period: '2026-10', date: '2026-11-20', due: '2026-11-30', amount: T(17850) }));
+  run('2026-11-20', () => recordDocument(b, { key: 'seed-muhtasar', type: 'tax', taxType: 'MUHTASAR', branchId: 'merkez', period: '2026-10', date: '2026-11-20', due: '2026-11-26', amount: T(6305.4) }));
+  run('2026-11-20', () => recordDocument(b, { key: 'seed-sgk', type: 'tax', taxType: 'SGK', branchId: 'merkez', period: '2026-10', date: '2026-11-20', due: '2026-11-30', amount: T(17850) }));
   // Açık faturalar
-  run('2026-11-21', () => recordDocument(b, { key: 'seed-elektrik', type: 'expense', partyId: 'elektrik', categoryId: 'utilities', docNo: 'ELK-99812', date: '2026-11-21', due: '2026-11-28', net: T(4500), vat: T(900) }));
-  run('2026-11-23', () => recordDocument(b, { key: 'seed-cam', type: 'purchase', partyId: 'cam', docNo: 'CAM-18', date: '2026-11-23', due: '2026-12-10', net: T(40000), vat: T(8000), note: 'Stok cam alımı' }));
+  run('2026-11-21', () => recordDocument(b, { key: 'seed-elektrik', type: 'expense', partyId: 'elektrik', categoryId: 'utilities', branchId: 'atrium', docNo: 'ELK-99812', date: '2026-11-21', due: '2026-11-28', net: T(4500), vat: T(900) }));
+  run('2026-11-23', () => recordDocument(b, { key: 'seed-cam', type: 'purchase', partyId: 'cam', branchId: 'atrium', docNo: 'CAM-18', date: '2026-11-23', due: '2026-12-10', net: T(40000), vat: T(4000), note: 'Stok cam alımı', lines: [{ sku: 'CAM-001', qty: 40, unitCost: T(1000) }] }));
+  // Taksitli alış: Merve Optik, 3 eşit vade
+  const merveId = b.parties.find((x) => x.label === 'Merve Optik').id;
+  run('2026-11-20', () => recordDocument(b, { key: 'seed-merve', type: 'purchase', partyId: merveId, branchId: 'atrium', docNo: 'MRV-7781', date: '2026-11-20', net: T(240000), vat: T(24000), lines: [{ sku: 'GOZ-010', label: 'Merve Optik çerçeve (karma)', qty: 48, unitCost: T(5000) }], schedule: [{ due: '2026-11-30', amount: T(88000) }, { due: '2026-12-30', amount: T(88000) }, { due: '2027-01-30', amount: T(88000) }] }));
+  // Mağazada personelin kasadan yaptığı masraflar (muhasebe onayı bekliyor) ve gün sonu sayımı
+  run('2026-11-24', () => pettyExpense(b, { key: 'seed-petty-1', date: '2026-11-24', branchId: 'atrium', accountId: 'cash-store', amount: T(350), categoryId: 'cleaning', note: 'Temizlik malzemesi', hasReceipt: true, by: 'Sema' }));
+  run('2026-11-24', () => pettyExpense(b, { key: 'seed-petty-2', date: '2026-11-24', branchId: 'atrium', accountId: 'cash-store', amount: T(180), categoryId: 'cargo', note: 'Müşteriye kurye', hasReceipt: false, by: 'Erdoğan' }));
+  run('2026-11-24', () => cashCount(b, { key: 'seed-count-24', date: '2026-11-24', accountId: 'cash-store', counted: T(16300), deposit: { bankId: 'bank-is', amount: T(10000) }, note: 'Akşam sayımı', by: 'Sema' }));
   b.today = '2026-11-25';
   // Tekrarlayan ödemeler ve Aralık için belgesi beklenen planlar
   saveTemplate(b, { label: 'Mağaza kirası', partyId: 'evsahibi', categoryId: 'rent', day: 5, amount: T(24000), withholding: true });
@@ -1467,6 +2076,8 @@ export function demoBooks() {
   saveTemplate(b, { label: 'Atrium aidatı', partyId: 'avm', categoryId: 'dues', day: 5, amount: T(15000) });
   saveTemplate(b, { label: 'Sosyal medya danışmanlığı', partyId: 'sosyal', categoryId: 'social', day: 30 - 2, amount: T(20000) });
   generateRecurring(b, '2026-12');
+  // Kasım bütçesi (tüm işletme, örnek)
+  for (const [key, v] of [['sales', 400000], ['cogs', 120000], ['rent', 30000], ['personnel', 70000], ['advertising', 12000], ['social', 20000], ['accounting', 10000], ['utilities', 6000], ['pos-fee', 9000], ['interest', 6500]]) setBudget(b, { period: '2026-11', key, amount: T(v) });
   b.audit = [];
   return b;
 }

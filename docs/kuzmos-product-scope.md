@@ -208,3 +208,12 @@ Referanslar (uygulama kapsamı ve güncel oranlar ayrıca doğrulanır):
 - Kart ekstresi sistemdeki kart borcuyla karşılaştırılır; açıklanmayan fark ödemede İnceleme hesabına düşer ve elle sınıflandırılır.
 - Ödeme raporu, nakit raporu ve gider raporu ayrı; aralarındaki köprü sıfır farkla kapanır.
 - Önizleme HTML'i build script'iyle test edilen modüllerden üretilir. Eski önizlemede çalışmayan demo rol seçici düzeltildi.
+
+## v0.8: stok–finans bağlantısı ve satış döngüsü
+- Satılan malın maliyeti stok defterinden (ağırlıklı ortalama) gelir; SKU’suz satışlar “maliyeti bağlanmamış” olarak raporlanır.
+- Şube / masraf merkezi boyutu; e-ticaret ayrı şube. Merkez giderleri dağıtılmaz (dağıtım anahtarı sonraki adım).
+- Sipariş föyü dar bir köprüyle finansa bağlandı; tahsilat → avans → teslimde hasılat + SMM; iade ve iptal ters kayıtla.
+- POS komisyonu banka/taksit bazında tanımlanabilir, varsayılan elle giriş; otomatik mod POS bazında açılır.
+- Personel masraf girişi ve gün sonu kasa sayımı; muhasebe onayı.
+- Taksitli alış, aylık bütçe, belge eki.
+- Kapsam dışı bırakılanlar (kararla): Excel veri aktarımı (yıl sonu ayrı göç planı), banka ekstresi içe aktarma, ortak cari ekranı. Kalıcı veri/kimlik doğrulama demo oturduktan sonra.

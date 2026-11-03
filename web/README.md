@@ -1,4 +1,4 @@
-# Kuzmos ERP önizlemesi · v0.7
+# Kuzmos ERP önizlemesi · v0.8
 
 Açmak için: `hostinger-preview/index.html` (bağımsız sayfa) veya `web/previews/kuzmos-panels.html` (gömülebilir parça).
 Personel sipariş föyü `reference/sales/Index.html` olarak korunur; önizleme ona yalnızca dar bir barkod köprüsü ekler.
@@ -34,3 +34,14 @@ Seiko örneği demo verisinde hazırdır: 50.000 TL devreden borç 10 Kasım'da 
 
 ## Prototip sınırı
 Veri yalnızca sayfa oturumunda yaşar. Kimlik doğrulama, canlı veritabanı, banka bağlantısı yoktur; rol seçimi güvenlik değildir. Vergi oranları örnektir; hesap kodları TDHP önerisidir, muhasebeci onayı gerekir. Satılan malın maliyeti stok modülü bağlanınca eklenecek. Üretimde aynı kurallar sunucu tarafında (Supabase RLS, transaction, idempotency, audit) zorunlu kılınmalıdır.
+
+## v0.8: stok → finans, şubeler, satış, kasa, bütçe
+- **Şubeler / masraf merkezi:** Atrium mağaza, E-ticaret (online satışlar, sosyal medya ve ajans giderleri; stok Atrium deposundan düşer), Merkez (ortak giderler). Belgelere ve satışlara şube atanır; Raporlar › Şubeler şube kâr/zararını gösterir. Yapı işletmeye göre tanımlanır (tek şube zorunlu değil).
+- **Stok defteri:** SKU bazında ağırlıklı ortalama maliyet, şube bazında miktar. Alış faturası stok satırlarıyla stoğa girer; faturası sonra gelen mal kabul (329) ve sayım farkı desteklenir. Muhasebe stoğu (153) ile stok defteri kapanış kontrolünde karşılaştırılır.
+- **Sipariş föyü → finans:** Föyde kaydet, `saveRecordToServer` üzerinden finansa iletilir (föy değişmedi). Kapora avanstır (340); “Teslim Edildi” olunca hasılat (600), kategori KDV’si (391) ve SKU bağlı satırlar için satılan malın maliyeti (621). Aynı kayıt tekrar gelirse çift tahsilat oluşmaz. Temsilciye göre şube (ör. “Fahri Can”, “İnternet” → E-ticaret).
+- **İade / iptal:** Satış iadesi (610 + KDV düzeltmesi), stoğa teslim maliyetiyle geri giriş, nakit/POS/banka iadesi; teslim edilmemiş siparişte kapora iadesi.
+- **POS:** Banka ve taksit bazında komisyon oranı ve valör tanımlanır. Varsayılan: komisyon ertesi gün ekstreden elle (oran yalnızca tahmin). Otomatik mod açılan POS’ta valörü gelenler tanımlı oranla bankaya aktarılır.
+- **Mağaza kasası:** Satış personeli kasadan küçük masraf girer (fiş/foto eki), muhasebe onaylar / yeniden sınıflar. Gün sonu sayımı: bankaya yatan virman, açık incelemeye, fazla 649’a.
+- **Taksitli alış:** Fatura borcu eşit taksitlere bölünür; her taksit ayrı ödeme kalemidir.
+- **Bütçe:** Ay ve şube bazında plan / fiili / sapma; önceki aydan kopyalama.
+- **Belge eki:** Fatura, fiş, dekont (PDF/görsel, 10 MB). Önizlemede yalnızca tarayıcı belleğinde tutulur; canlıda özel depolama gerekir.
