@@ -1,4 +1,4 @@
-# v0.6 erişim durumu
+# v0.7 erişim durumu
 
 Bu statik paket gerçek müşteri veya şirket verisi için YAYINA HAZIR DEĞİLDİR. Demo rol seçimi yalnız ekran akışını gösterir; kullanıcı kimliği doğrulamaz. Kaynak kod ve örnek veriler tarayıcıya gönderilir. Sekme gizlemek güvenlik değildir. Demo kullanıcı davet taslakları hesap açmaz ve e-posta göndermez.
 

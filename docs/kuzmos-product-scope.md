@@ -201,3 +201,10 @@ Referanslar (uygulama kapsamı ve güncel oranlar ayrıca doğrulanır):
 - Yeni hesaplar sıfır örnek açılışla başlar. Her hesabın hareketi ve borcu ayrı hesaplanır.
 - Şimdi öde için gerçek ödeme tarihi vadeden ayrıdır. Dekont no ve ödeme hesabının o andaki adı geçmişte saklanır.
 - Hover/seçili/pasif buton durumlarına açık metin/zemin çiftleri eklendi. Gerçek tarayıcı görsel kabul testi henüz yapılmadı.
+
+## v0.7: gider tarafı yeniden kuruldu
+- Ödeme planı listesi yerine tek finans motoru (`web/finance/engine.mjs`): belge → açık kalem → ödeme → nakit; her adım dengeli fiş. Ekranlar ayrı sayaç kullanmaz.
+- Eski `payments/catalogs/journal/service-tax/review` modülleri motorda birleşti; testleri yeni motora taşındı (Seiko, tevkifat/stopaj, çek/senet, kart ekstresi, idempotency, kilit, ters kayıt).
+- Kart ekstresi sistemdeki kart borcuyla karşılaştırılır; açıklanmayan fark ödemede İnceleme hesabına düşer ve elle sınıflandırılır.
+- Ödeme raporu, nakit raporu ve gider raporu ayrı; aralarındaki köprü sıfır farkla kapanır.
+- Önizleme HTML'i build script'iyle test edilen modüllerden üretilir. Eski önizlemede çalışmayan demo rol seçici düzeltildi.

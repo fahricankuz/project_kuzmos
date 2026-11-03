@@ -1,13 +1,13 @@
 # Kuzmos · Hostinger deneme yayını
 
-Bu klasör güncel v0.5 arayüzünü açılış sayfası olarak sunar. Gerçek Supabase bağlantısı veya giriş koruması yoktur. Yalnızca örnek veri kullanın. Sayfa yenilenince kayıtlar sıfırlanır. Domain satın almak gerekmez; Hostinger geçici adresi kullanılabilir.
+Bu klasör güncel v0.7 arayüzünü açılış sayfası olarak sunar. Gerçek Supabase bağlantısı veya giriş koruması yoktur. Yalnızca örnek veri kullanın. Sayfa yenilenince kayıtlar sıfırlanır. Domain satın almak gerekmez; Hostinger geçici adresi kullanılabilir.
 
 ## En kolay yayın: statik dosya
 1. Hostinger'da geçici domain ile boş bir HTML/PHP hosting sitesi oluşturun (Website Builder kullanmayın).
 2. File Manager'da **yeni deneme sitesinin** public_html dizinine girin.
 3. Bu klasördeki index.html dosyasını yükleyin. Alternatif ZIP paketini bu dizinde açın; index.html doğrudan public_html altında olmalı.
 4. Yeni sitenin varsayılan karşılama index.php dosyası varsa kaldırın/yeniden adlandırın. Başka sitenin dosyalarına dokunmayın.
-5. HTTPS geçici adresini açın. Ödeme, Tanımlar, Envanter ve Personel sekmelerini deneyin.
+5. HTTPS geçici adresini açın. Finans (Özet, Yeni kayıt, Ödemeler, İnceleme, Raporlar), Envanter ve Personel sekmelerini deneyin. Dosya `node web/app/build.mjs` ile üretilir; elle düzenlemeyin.
 
 Bu statik sürüm için Node.js, npm, API anahtarı, veritabanı veya build gerekmez. GitHub bağlantısının tek başına bu klasörü otomatik public_html içine kopyaladığını varsaymayın; statik dosya yükleme yöntemi bağımsızdır.
 

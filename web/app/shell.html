@@ -1,0 +1,198 @@
+<div id="kuzmos-app">
+<style>
+#kuzmos-app{--bg:#f5f5f7;--panel:#fff;--text:#1d1d1f;--soft:#6e6e73;--faint:#8e8e93;--line:#e5e5ea;--line2:#d2d2d7;--yellow:#f5c800;--yellow-d:#8a6d00;--tint:#fff8d9;--green:#1f7a45;--green-bg:#e9f6ee;--red:#b4362a;--red-bg:#fdecea;--blue:#2457a6;--blue-bg:#eaf1fb;--amber-bg:#fff4d6;color-scheme:light;color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg)}
+#kuzmos-app *{box-sizing:border-box}
+#kuzmos-app button,#kuzmos-app input,#kuzmos-app select,#kuzmos-app textarea{font:inherit;color:inherit}
+#kuzmos-app button{min-height:34px;border:1px solid var(--line2);border-radius:99px;background:var(--panel);padding:6px 14px;cursor:pointer;color:var(--text);white-space:nowrap}
+#kuzmos-app button:hover{background:var(--tint);border-color:var(--yellow)}
+#kuzmos-app button:focus-visible,#kuzmos-app input:focus-visible,#kuzmos-app select:focus-visible,#kuzmos-app textarea:focus-visible,#kuzmos-app a:focus-visible{outline:2px solid #bd9b00;outline-offset:2px}
+#kuzmos-app button[aria-pressed=true]{background:var(--text);color:#fff;border-color:var(--text)}
+#kuzmos-app button.primary{background:var(--yellow);border-color:var(--yellow);color:#1d1d1f;font-weight:600}
+#kuzmos-app button.primary:hover{background:#ffd60a}
+#kuzmos-app button.ghost{border-color:transparent;background:transparent;color:var(--blue);padding:4px 8px;min-height:28px}
+#kuzmos-app button.ghost:hover{background:var(--blue-bg)}
+#kuzmos-app button.danger{color:var(--red)}
+#kuzmos-app button.small{min-height:28px;padding:3px 10px;font-size:12px}
+#kuzmos-app button:disabled{opacity:.5;cursor:not-allowed;background:var(--bg)}
+#kuzmos-app input,#kuzmos-app select,#kuzmos-app textarea{border:1px solid var(--line2);border-radius:8px;padding:9px 11px;background:var(--panel);width:100%;min-width:0}
+#kuzmos-app input[readonly]{background:var(--bg);color:var(--soft)}
+#kuzmos-app textarea{min-height:64px;resize:vertical}
+#kuzmos-app h1,#kuzmos-app h2,#kuzmos-app h3,#kuzmos-app h4{margin:0;font-weight:600;letter-spacing:-.3px}
+#kuzmos-app h2{font-size:24px;letter-spacing:-.7px}
+#kuzmos-app h3{font-size:15px}
+#kuzmos-app h4{font-size:13px}
+#kuzmos-app p{margin:0}
+#kuzmos-app .muted{color:var(--soft)}
+#kuzmos-app .small{font-size:12px}
+#kuzmos-app .num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+#kuzmos-app .pos{color:var(--green)}
+#kuzmos-app .neg{color:var(--red)}
+/* kabuk */
+#kuzmos-app .top{display:flex;align-items:center;gap:16px;background:var(--panel);padding:14px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+#kuzmos-app .brand{font-size:24px;letter-spacing:-1.4px;font-weight:700}
+#kuzmos-app .brand span{color:var(--yellow)}
+#kuzmos-app .company{border-left:1px solid var(--line);padding-left:16px;font-size:12px;color:var(--soft)}
+#kuzmos-app .company strong{display:block;color:var(--text);font-weight:600;font-size:13px}
+#kuzmos-app .top-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#kuzmos-app .today{font-size:12px;background:var(--tint);border-radius:99px;padding:6px 12px}
+#kuzmos-app .role{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--soft)}
+#kuzmos-app .role select{width:auto;padding:6px 10px;border-radius:99px}
+#kuzmos-app .tabs{display:flex;gap:6px;padding:10px 22px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto}
+#kuzmos-app .demo-note{font-size:11px;color:#5b4a0a;background:var(--amber-bg);padding:7px 22px;border-bottom:1px solid #f1e2a8}
+#kuzmos-app .layout{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:640px}
+#kuzmos-app .layout.single{grid-template-columns:minmax(0,1fr)}
+#kuzmos-app .side{background:var(--panel);border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+#kuzmos-app .side .grp{font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;color:var(--faint);padding:12px 10px 4px}
+#kuzmos-app .side button{border:0;border-radius:8px;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 10px;min-height:32px;background:transparent}
+#kuzmos-app .side button:hover{background:var(--bg)}
+#kuzmos-app .side button[aria-pressed=true]{background:var(--text);color:#fff}
+#kuzmos-app .badge{font-size:11px;border-radius:99px;padding:1px 7px;background:var(--red);color:#fff;font-weight:600}
+#kuzmos-app .badge.soft{background:var(--line);color:var(--text)}
+#kuzmos-app .content{padding:22px 24px 40px;min-width:0}
+#kuzmos-app .head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+#kuzmos-app .head p{color:var(--soft);font-size:13px;margin-top:4px;max-width:720px}
+#kuzmos-app .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#kuzmos-app .flash{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 14px;border-radius:10px;margin-bottom:16px;font-size:13px;background:var(--green-bg);color:#14532d;border:1px solid #c7e8d3}
+#kuzmos-app .flash.err{background:var(--red-bg);color:#7f1d1d;border-color:#f5c2bd}
+/* kartlar */
+#kuzmos-app .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+#kuzmos-app .kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px 16px;min-width:0}
+#kuzmos-app .kpi small{display:block;font-size:12px;color:var(--soft)}
+#kuzmos-app .kpi strong{display:block;font-size:22px;font-weight:650;letter-spacing:-.6px;margin:8px 0 4px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+#kuzmos-app .kpi em{font-style:normal;font-size:11.5px;color:var(--soft)}
+#kuzmos-app .kpi.hl{background:var(--tint);border-color:#f3e3a0}
+#kuzmos-app .kpi.bad strong{color:var(--red)}
+#kuzmos-app .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-bottom:16px;min-width:0}
+#kuzmos-app .card>header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+#kuzmos-app .card>header p{font-size:12px;color:var(--soft);margin-top:2px}
+#kuzmos-app .card .pad{padding:16px}
+#kuzmos-app .grid2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;align-items:start}
+#kuzmos-app .grid2e{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+#kuzmos-app .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+#kuzmos-app .sticky{position:sticky;top:12px}
+/* tablo */
+#kuzmos-app .tbl{overflow-x:auto}
+#kuzmos-app table{border-collapse:collapse;width:100%;font-size:12.5px}
+#kuzmos-app th{font-weight:500;color:var(--soft);background:#fafafa;text-align:left;font-size:11.5px}
+#kuzmos-app th,#kuzmos-app td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+#kuzmos-app tbody tr:last-child td{border-bottom:0}
+#kuzmos-app tbody tr:hover td{background:#fcfcfd}
+#kuzmos-app td small,#kuzmos-app .sub{display:block;font-size:11.5px;color:var(--soft);margin-top:2px}
+#kuzmos-app tfoot td{font-weight:600;background:#fafafa;border-top:1px solid var(--line2)}
+#kuzmos-app .empty{padding:26px 16px;text-align:center;color:var(--soft);font-size:13px}
+#kuzmos-app .tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;background:var(--bg);color:var(--soft);white-space:nowrap;font-weight:500}
+#kuzmos-app .tag.ok{background:var(--green-bg);color:var(--green)}
+#kuzmos-app .tag.warn{background:var(--amber-bg);color:#7a5b00}
+#kuzmos-app .tag.bad{background:var(--red-bg);color:var(--red)}
+#kuzmos-app .tag.info{background:var(--blue-bg);color:var(--blue)}
+#kuzmos-app .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+#kuzmos-app .chips button{min-height:30px;padding:4px 12px;font-size:12.5px}
+/* form */
+#kuzmos-app .form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px}
+#kuzmos-app .form.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+#kuzmos-app label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--soft);min-width:0}
+#kuzmos-app label.f>span.hint{font-size:11px;color:var(--faint)}
+#kuzmos-app .wide{grid-column:1/-1}
+#kuzmos-app .pair{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:8px}
+#kuzmos-app fieldset{border:1px solid var(--line);border-radius:12px;padding:12px 14px 14px;margin:0;min-width:0}
+#kuzmos-app legend{font-size:12px;font-weight:600;padding:0 6px}
+#kuzmos-app .seg{display:inline-flex;background:var(--bg);border-radius:99px;padding:3px;gap:2px;flex-wrap:wrap}
+#kuzmos-app .seg button{border:0;background:transparent;min-height:30px}
+#kuzmos-app .seg button[aria-pressed=true]{background:var(--panel);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+#kuzmos-app .savebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 16px;border-top:1px solid var(--line);background:#fcfcfd;border-radius:0 0 14px 14px}
+#kuzmos-app .savebar>span{flex:1;min-width:180px;font-size:12px;color:var(--soft)}
+#kuzmos-app .error{color:var(--red);font-size:12.5px;min-height:0}
+#kuzmos-app .error:not(:empty){padding:10px 16px;background:var(--red-bg);border-top:1px solid #f5c2bd}
+#kuzmos-app .types{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-bottom:16px}
+#kuzmos-app .types button{border-radius:12px;text-align:left;white-space:normal;padding:10px 12px;display:flex;flex-direction:column;gap:3px;align-items:flex-start;min-height:62px}
+#kuzmos-app .types button b{font-size:13px;font-weight:600}
+#kuzmos-app .types button span{font-size:11.5px;color:var(--soft);line-height:1.35}
+#kuzmos-app .types button[aria-pressed=true]{background:var(--tint);color:var(--text);border-color:var(--yellow);box-shadow:inset 0 0 0 1px var(--yellow)}
+#kuzmos-app .types button[aria-pressed=true] span{color:#5b4a0a}
+/* etki önizleme */
+#kuzmos-app .fx{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px 16px}
+#kuzmos-app .fx>div{background:var(--bg);border-radius:10px;padding:9px 11px;min-width:0}
+#kuzmos-app .fx small{display:block;font-size:11px;color:var(--soft)}
+#kuzmos-app .fx b{display:block;font-size:15px;font-variant-numeric:tabular-nums;margin-top:2px}
+#kuzmos-app .fx .zero b{color:var(--faint)}
+#kuzmos-app .fx .hot{background:var(--tint)}
+#kuzmos-app .journal td{padding:6px 10px;font-size:12px}
+#kuzmos-app .journal .code{color:var(--faint);font-size:11px;width:44px}
+#kuzmos-app .note{font-size:12px;color:var(--soft);padding:10px 16px;line-height:1.55}
+#kuzmos-app .note b{color:var(--text);font-weight:600}
+#kuzmos-app .callout{border-radius:12px;padding:12px 14px;font-size:12.5px;background:var(--blue-bg);color:#1c3d73;margin-bottom:14px;line-height:1.55}
+#kuzmos-app .callout.warn{background:var(--amber-bg);color:#5b4a0a}
+#kuzmos-app .callout.bad{background:var(--red-bg);color:#7f1d1d}
+#kuzmos-app .list>div{display:flex;justify-content:space-between;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line);font-size:13px;align-items:center}
+#kuzmos-app .list>div:last-child{border-bottom:0}
+#kuzmos-app .list small{display:block;font-size:11.5px;color:var(--soft)}
+/* köprü */
+#kuzmos-app .bridge{padding:6px 16px 14px}
+#kuzmos-app .bridge>div{display:grid;grid-template-columns:22px 1fr auto;gap:8px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px;align-items:baseline}
+#kuzmos-app .bridge>div:last-child{border-bottom:0;font-weight:650;border-top:1px solid var(--text)}
+#kuzmos-app .bridge i{font-style:normal;color:var(--faint);text-align:center}
+#kuzmos-app .three{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+#kuzmos-app .three>div{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+#kuzmos-app .three small{font-size:12px;color:var(--soft);display:block}
+#kuzmos-app .three strong{display:block;font-size:22px;letter-spacing:-.6px;margin:6px 0;font-variant-numeric:tabular-nums}
+#kuzmos-app .three p{font-size:11.5px;color:var(--soft)}
+/* takvim */
+#kuzmos-app .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;padding:12px}
+#kuzmos-app .cal>b{text-align:center;font-size:11px;color:var(--soft);font-weight:500;padding-bottom:4px}
+#kuzmos-app .cal button{border-radius:9px;min-height:78px;padding:6px 7px;text-align:left;display:flex;flex-direction:column;gap:2px;align-items:stretch;white-space:normal;border-color:var(--line);min-width:0}
+#kuzmos-app .cal button .d{font-size:12px;font-weight:600}
+#kuzmos-app .cal button .a{font-size:11px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+#kuzmos-app .cal button .c{font-size:10.5px;color:var(--soft)}
+#kuzmos-app .cal button.today{border-color:var(--yellow);box-shadow:inset 0 0 0 1px var(--yellow)}
+#kuzmos-app .cal button.past{background:#fbfbfc}
+#kuzmos-app .cal button.has-over .a{color:var(--red)}
+#kuzmos-app .cal button[aria-pressed=true] .c{color:#ddd}
+#kuzmos-app .dots{display:flex;gap:3px;margin-top:auto}
+#kuzmos-app .dots i{width:6px;height:6px;border-radius:99px;background:var(--line2)}
+#kuzmos-app .dots i.party{background:#1d1d1f}#kuzmos-app .dots i.tax{background:#2457a6}#kuzmos-app .dots i.instrument{background:#b4362a}#kuzmos-app .dots i.card-statement{background:#bd9b00}#kuzmos-app .dots i.expected{background:#c7c7cc}#kuzmos-app .dots i.loan{background:#6b4fa3}#kuzmos-app .dots i.staff{background:#1f7a45}
+/* grafik */
+#kuzmos-app .chart{padding:10px 12px 4px}
+#kuzmos-app .chart svg{width:100%;height:auto;display:block}
+#kuzmos-app .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--soft);padding:0 16px 12px}
+#kuzmos-app .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+#kuzmos-app .acc-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-bottom:16px}
+#kuzmos-app .acc{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;text-align:left;white-space:normal;display:block;border-radius:14px;min-height:auto}
+#kuzmos-app .acc[aria-pressed=true]{background:var(--panel);color:var(--text);border-color:var(--text);box-shadow:inset 0 0 0 1px var(--text)}
+#kuzmos-app .acc small{display:block;font-size:11.5px;color:var(--soft)}
+#kuzmos-app .acc strong{display:block;font-size:20px;margin:6px 0 2px;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+#kuzmos-app .meter{height:5px;border-radius:9px;background:var(--bg);margin-top:8px;overflow:hidden}
+#kuzmos-app .meter i{display:block;height:100%;background:var(--yellow)}
+#kuzmos-app details.fis{border-bottom:1px solid var(--line)}
+#kuzmos-app details.fis summary{display:grid;grid-template-columns:92px 1fr auto;gap:10px;padding:10px 16px;cursor:pointer;font-size:12.5px;list-style:none}
+#kuzmos-app details.fis summary::-webkit-details-marker{display:none}
+#kuzmos-app details.fis[open] summary{background:#fafafa}
+#kuzmos-app .checks>div{display:grid;grid-template-columns:26px 1fr auto;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);align-items:center;font-size:13px}
+#kuzmos-app .checks>div:last-child{border-bottom:0}
+#kuzmos-app .ck{width:22px;height:22px;border-radius:99px;display:grid;place-items:center;font-size:12px;font-weight:700}
+#kuzmos-app .ck.ok{background:var(--green-bg);color:var(--green)}#kuzmos-app .ck.no{background:var(--red-bg);color:var(--red)}#kuzmos-app .ck.info{background:var(--blue-bg);color:var(--blue)}
+#kuzmos-app .drawer{border:2px solid var(--yellow);border-radius:14px;background:var(--panel);margin-bottom:16px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
+#kuzmos-app .drawer>header{display:flex;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:flex-start}
+#kuzmos-app .staff-frame{width:100%;height:1100px;border:0;border-radius:12px;background:#fff}
+#kuzmos-app .scan{display:flex;gap:8px;max-width:560px;margin-bottom:14px}
+#kuzmos-app footer.foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 22px;background:var(--panel);border-top:1px solid var(--line);font-size:11px;color:var(--soft)}
+@media(max-width:1080px){#kuzmos-app .grid2{grid-template-columns:1fr}#kuzmos-app .sticky{position:static}#kuzmos-app .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:860px){#kuzmos-app .layout{grid-template-columns:1fr}#kuzmos-app .side{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:8px 10px;gap:4px}#kuzmos-app .side .grp{display:none}#kuzmos-app .side button{flex:0 0 auto;border:1px solid var(--line);border-radius:99px}#kuzmos-app .three,#kuzmos-app .grid3,#kuzmos-app .grid2e{grid-template-columns:1fr}}
+@media(max-width:620px){#kuzmos-app .content{padding:16px}#kuzmos-app .top{padding:12px 16px}#kuzmos-app .tabs{padding:8px 16px}#kuzmos-app .demo-note{padding:7px 16px}#kuzmos-app .company{display:none}#kuzmos-app .top-right{margin-left:0;width:100%}#kuzmos-app .form,#kuzmos-app .form.three{grid-template-columns:1fr}#kuzmos-app .fx{grid-template-columns:1fr 1fr}#kuzmos-app .kpi strong{font-size:19px}#kuzmos-app .cal{padding:6px;gap:2px}#kuzmos-app .cal button{min-height:58px;padding:4px}#kuzmos-app .cal button .c,#kuzmos-app .cal button .a{display:none}#kuzmos-app input,#kuzmos-app select{font-size:16px}#kuzmos-app h2{font-size:21px}}
+</style>
+<header class="top">
+ <div class="brand">kuzmos<span>●</span></div>
+ <div class="company"><strong>Damla Kuz Optik</strong>Atrium · pilot işletme</div>
+ <div class="top-right">
+  <span class="today" id="kz-today"></span>
+  <label class="role">Demo rolü <select id="kz-role" aria-label="Demo rolü"></select></label>
+  <button type="button" class="small" data-act="reset-demo">Demoyu sıfırla</button>
+ </div>
+</header>
+<nav class="tabs" id="kz-tabs" aria-label="Paneller"></nav>
+<div class="demo-note">Ürün önizlemesi · Sentetik örnek veri; sayfa yenilenince sıfırlanır. Rol seçimi gerçek giriş güvenliği değildir. Oranlar örnektir, muhasebeci onayı gerekir.</div>
+<div id="kz-main"></div>
+<footer class="foot"><span>Kuz Management Operating System · v0.7 önizleme</span><span>Canlı banka / Supabase bağlantısı yok</span></footer>
+<script>
+/*__BUNDLE__*/
+</script>
+</div>

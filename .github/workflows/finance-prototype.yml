@@ -3,17 +3,23 @@ on:
   pull_request:
     paths:
       - 'web/finance/**'
+      - 'web/app/**'
+      - 'web/previews/**'
       - 'web/inventory/**'
       - 'web/tests/**'
       - 'web/templates/**'
+      - 'hostinger-preview/index.html'
       - '.github/workflows/finance-prototype.yml'
   push:
     branches: ['codex/kuzmos-erp-preview']
     paths:
       - 'web/finance/**'
+      - 'web/app/**'
+      - 'web/previews/**'
       - 'web/inventory/**'
       - 'web/tests/**'
       - 'web/templates/**'
+      - 'hostinger-preview/index.html'
 jobs:
   finance:
     runs-on: ubuntu-latest
@@ -25,3 +31,4 @@ jobs:
         with:
           node-version: '24'
       - run: node --test web/tests/*.test.mjs
+      - run: node web/app/build.mjs --check

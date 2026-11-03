@@ -1,31 +1,36 @@
-# Kuzmos ERP prototype · v0.5
+# Kuzmos ERP önizlemesi · v0.7
 
-Review `previews/kuzmos-panels.html`. This branch preserves the original Apps Script staff form in `reference/sales/Index.html`. The preview adds a narrow barcode adapter around that source.
+Açmak için: `hostinger-preview/index.html` (bağımsız sayfa) veya `web/previews/kuzmos-panels.html` (gömülebilir parça).
+Personel sipariş föyü `reference/sales/Index.html` olarak korunur; önizleme ona yalnızca dar bir barkod köprüsü ekler.
 
-## Payment workflow
-One payment form covers suppliers, service providers, tax/SGK, company card statements and owner/family payments. Save a plan without moving cash, or confirm a payment with its actual date and account. Use the calendar to confirm due payments. The example day is 20 November 2026.
+## Yapı
+```
+web/finance/engine.mjs   Finans motoru: belge → borç → ödeme → nakit; dengeli çift taraflı fişler
+web/inventory/*.mjs      Varyant, barkod, Excel stok aktarımı
+web/app/helpers.mjs      Arayüz yardımcıları (rol, takvim, TL ayrıştırma, CSV)
+web/app/app.js           Arayüz (Yönetici, Finans, Personel, Envanter)
+web/app/shell.html       Stil + iskelet
+web/app/build.mjs        Modülleri tek HTML'e paketler → previews/ ve hostinger-preview/
+web/tests/*.test.mjs     node --test
+```
+Önizlemedeki kod elle kopyalanmaz; `node web/app/build.mjs` test edilen modüllerden üretir. CI `--check` ile güncelliği doğrular.
 
-- Cheque/promissory-note delivery does not move cash. Confirm redemption once, at its actual date.
-- Card supplier payments increase card debt; statement settlement moves bank/cash once.
-- Bank/cash payments can be partial. Prototype cheque/note redemption requires the full outstanding amount.
-- Owner/family payments require a beneficiary and purpose, and remain separate from company operating expenses.
+## Finans (gider) tarafı — nasıl çalışır
+Her ekrandaki rakam aynı fişlerden türetilir. Üç soru ayrı cevaplanır ve birbirine eklenmez:
+1. **Kime ne ödendi** (ödeme raporu: kart, çek, senet dahil)
+2. **Kasadan / bankadan ne çıktı** (nakit raporu, nakit akışı; virman hariç)
+3. **Gider ne** (kâr/zarar; belgeye göre, ödemeden bağımsız)
 
-## Inventory / Excel
-Download `templates/Kuzmos_Stok_Aktarim_Sablonu.xlsx` or use the download in the preview. Fill the Stok sheet; the Kilavuz sheet explains the fields. Upload, inspect validation and before/after quantities, then apply. One invalid row blocks the complete batch.
+Özet ve Raporlar ekranı ikisi arasındaki farkı kalem kalem gösterir (köprü): ödemeler − kartla ödenen − çek/senetle verilen + ekstre ödemeleri + vadesi gelen çek/senet = nakit çıkışı.
 
-EKLE adds stock, SAYIM sets physical stock without going below reservations, URUN changes product metadata/price only. Duplicate file and SKU/branch/action/reference checks prevent repeated additions. SKU and manufacturer barcode are separate text identifiers. Lens identity includes brand, model, power and color.
+Belge türleri: mal alışı (stoğa girer, gider değil), hizmet/gider faturası (KDV, KDV tevkifatı, stopaj ayrı borçlar), kira, serbest meslek, demirbaş (yatırım), bordro (net maaş / SGK / muhtasar ayrı), vergi-SGK tahakkuku (kesintilerle eşleşir, fazlası incelemeye), KDV beyanı (hesaplanan − indirilecek − devreden), kredi taksiti (anapara gider değil), kart ekstresi, şahsi/aile (ortak carisi, gider değil), belgesi beklenen plan (fiş yok), faturasız avans (sonra mahsup).
 
-The native XLSX reader accepts standard XLSX, up to 10 MB / 2000 data rows, and requires modern browser DecompressionStream support. Formulas in Stok, encrypted archives and ZIP64 are rejected. No spreadsheet formulas or macros execute.
+Ödeme: havale/EFT, nakit, şirket kartı (kart borcu doğar), çek (keşide bankasından vadede tam tutar), senet. Kısmi ödeme, aynı firmanın birden çok kalemi, avans, çek iadesi (borç yeniden açılır), ters kayıtla geri alma, dönem kilidi, ekstre mutabakatı, tekrarlayan ödemeler, 30 günlük nakit projeksiyonu, CSV dışa aktarma.
 
-## Validation
-Node 24: `node --test web/tests/*.test.mjs` from repository root. Tests cover payment timing, duplicate confirmations, card versus cash, cheque/note redemption, lens power, barcode mapping, import atomicity, stale previews, reservations and the actual XLSX template.
+Seiko örneği demo verisinde hazırdır: 50.000 TL devreden borç 10 Kasım'da kartla ödendi, 24 Kasım'da 54.000 TL ekstre bankadan ödendi, 4.000 TL fark **İnceleme** ekranında bekliyor (otomatik gider yazılmadı); faiz / masraf / önceki borç / şahsi harcama olarak sınıflandırılır. Çalışma günü 25 Kasım 2026.
 
-## Prototype boundary
-Preview data lives only in the current page session. No authentication, live database, bank payment, hardware scanner certification or production stock reservation is provided. Browser visual QA remains outstanding. Balanced-journal modules remain separate; the payment UI is not yet wired into a transactional production ledger. Production requires Supabase tenant/branch authorization, server-side validation and transactions, audit/reversal handling, and accountant-reviewed document/tax/account mappings.
+## Doğrulama
+`node --test web/tests/*.test.mjs hostinger-preview/server.test.mjs` ve `node web/app/build.mjs --check`.
 
-## Editable payment definitions (v0.5)
-Payee, payment method and source account are required selections. Each has a Listeyi düzenle shortcut to Tanımlar, which supports add, rename, deactivate and reactivate. IDs remain stable and new payments retain label snapshots; renaming does not rewrite old records. Duplicate names are rejected. Method accounting behavior and account type cannot be changed after creation. New accounts open at zero in the prototype.
-
-The source account list is constrained by method: transfer uses bank, cash uses cash, card uses the selected company card, cheque/note redemption uses bank/cash. Statement payment shows both the target card and the bank/cash source. Each account balance is calculated independently, including additional cards. Now-pay uses a separate actual date rather than assuming the planned due date. Settlement receipt and account-name snapshot are retained.
-
-Control foreground/background pairs are explicitly scoped for normal, hover, selected and disabled states in light/dark themes. These changes were checked through source/contrast checks and template-flow smoke tests; visual browser acceptance remains outstanding.
+## Prototip sınırı
+Veri yalnızca sayfa oturumunda yaşar. Kimlik doğrulama, canlı veritabanı, banka bağlantısı yoktur; rol seçimi güvenlik değildir. Vergi oranları örnektir; hesap kodları TDHP önerisidir, muhasebeci onayı gerekir. Satılan malın maliyeti stok modülü bağlanınca eklenecek. Üretimde aynı kurallar sunucu tarafında (Supabase RLS, transaction, idempotency, audit) zorunlu kılınmalıdır.
