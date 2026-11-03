@@ -225,7 +225,8 @@ export function saveMoneyAccount(b, input) {
     label,
     kind: input.kind,
     iban: clean(input.iban || '').slice(0, 40),
-    limit: input.kind === 'card' ? Number(input.limit) || 0 : 0,
+    // Kart: kredi limiti. Banka: KMH (kredili mevduat) limiti; bakiye en fazla bu kadar eksiye düşebilir.
+    limit: ['card', 'bank'].includes(input.kind) ? Number(input.limit) || 0 : 0,
     active: true,
   };
   b.accounts.push(row);
@@ -335,16 +336,21 @@ function postAll(b, entries) {
     b.entries.push(structuredClone(e));
     b.entryKeys[e.key] = hash;
   }
-  // Nakit kasa eksiye düşemez (banka hesabı KMH nedeniyle eksiye düşebilir; uyarı olarak raporlanır).
-  for (const a of b.accounts.filter((x) => x.kind === 'cash')) {
+  // Nakit kasa eksiye düşemez. Banka hesabı yalnızca tanımlı KMH limiti kadar eksiye düşebilir (KMH gelir değildir,
+  // hesabın eksi bakiyesidir; kapatılması da gider değildir).
+  const rollback = (msg) => {
+    for (const [x] of fresh) {
+      b.entries.splice(b.entries.findIndex((y) => y.key === x.key), 1);
+      delete b.entryKeys[x.key];
+    }
+    throw Error(msg);
+  };
+  for (const a of b.accounts.filter((x) => x.kind === 'cash' || (x.kind === 'bank' && x.limit > 0))) {
     for (const [e] of fresh) {
-      if (e.lines.some((l) => l.account === a.id) && balance(b, a.id, { asOf: e.date }) < 0) {
-        for (const [x] of fresh) {
-          b.entries.splice(b.entries.findIndex((y) => y.key === x.key), 1);
-          delete b.entryKeys[x.key];
-        }
-        throw Error(a.label + ' ' + e.date + ' tarihinde eksi bakiyeye düşer.');
-      }
+      if (!e.lines.some((l) => l.account === a.id)) continue;
+      const bal = balance(b, a.id, { asOf: e.date });
+      if (a.kind === 'cash' && bal < 0) rollback(a.label + ' ' + e.date + ' tarihinde eksi bakiyeye düşer.');
+      if (a.kind === 'bank' && bal < -a.limit) rollback(a.label + ' ' + e.date + ' tarihinde KMH limitini aşar.');
     }
   }
   return fresh.length;
@@ -1297,13 +1303,15 @@ export function closingChecks(b, asOf = b.today) {
     .filter((a) => a.active && ['bank', 'card'].includes(a.kind))
     .map((a) => ({ account: a, last: [...b.reconciliations].reverse().find((r) => r.accountId === a.id) }));
   const cards = b.accounts.filter((a) => a.kind === 'card' && balance(b, a.id, { asOf }) < 0);
-  const negBanks = b.accounts.filter((a) => a.kind === 'bank' && balance(b, a.id, { asOf }) < 0);
+  const negBanks = b.accounts.filter((a) => a.kind === 'bank' && balance(b, a.id, { asOf }) < 0 && !a.limit);
+  const kmh = b.accounts.filter((a) => a.kind === 'bank' && a.limit && balance(b, a.id, { asOf }) < 0);
   const checks = [
     { ok: tb.debit === tb.credit, label: 'Tüm fişler dengeli (mizan borç = alacak)', detail: tb.debit === tb.credit ? 'Dengeli' : 'Fark var' },
     { ok: !review.length, label: 'İnceleme hesabında bekleyen fark yok', detail: review.length ? review.length + ' kalem, ' + TL(sum(review, (r) => r.remaining)) : 'Temiz', link: 'review' },
     { ok: recon.every((r) => r.last && r.last.difference === 0), label: 'Banka ve kart hesapları ekstreyle mutabık', detail: recon.filter((r) => !r.last || r.last.difference !== 0).map((r) => r.account.label).join(', ') || 'Tamam', link: 'reconcile' },
     { ok: !overdue.length, label: 'Vadesi geçmiş ödeme yok', detail: overdue.length ? overdue.length + ' kalem gecikmiş' : 'Yok', link: 'payables' },
-    { ok: !negBanks.length, label: 'Banka hesapları eksi bakiyede değil', detail: negBanks.map((a) => a.label).join(', ') || 'Tamam' },
+    { ok: !negBanks.length, label: 'KMH tanımı olmayan banka hesabı eksi bakiyede değil', detail: negBanks.map((a) => a.label).join(', ') || 'Tamam' },
+    { ok: true, info: true, label: 'KMH kullanımı (banka borcu, bilgi)', detail: kmh.map((a) => a.label + ' ' + TL(-balance(b, a.id, { asOf }))).join(', ') || 'Kullanılmıyor' },
     { ok: balance(b, 'ADVANCES_IN', { asOf }) === 0, label: 'Teslim bekleyen sipariş avansı (bilgi)', detail: TL(balance(b, 'ADVANCES_IN', { asOf })) + ' avans; teslimde hasılata döner', info: true },
     { ok: true, label: 'İndirilecek KDV muhasebeci onayı bekliyor (bilgi)', detail: TL(balance(b, 'INPUT_VAT', { asOf })), info: true },
     { ok: !cards.length, label: 'Kart alacakları (fazla ödeme) izlenir', detail: cards.map((a) => a.label).join(', ') || 'Yok', info: true },
@@ -1320,24 +1328,68 @@ export function closingChecks(b, asOf = b.today) {
 export function demoBooks() {
   const T = (tl) => Math.round(tl * 100);
   const b = createBooks({ tenant: 'damla-kuz-optik', today: '2026-11-25', company: 'Damla Kuz Optik' });
+  // Tanımlar işletmenin yönetim Excel'indeki banka, POS, kart, tedarikçi ve gider kalemlerinden alınmıştır.
+  // Tutarlar sentetiktir; gerçek bakiye ve ödeme kayıtları depoya konmaz.
   [
-    ['bank-garanti', 'Garanti BBVA · TL hesabı', 'bank', 'TR00 0006 2000 0000 0000 0000 01'],
-    ['bank-is', 'İş Bankası · TL hesabı', 'bank', 'TR00 0006 4000 0000 0000 0000 02'],
-    ['cash-store', 'Mağaza kasası', 'cash', ''],
-    ['card-garanti', 'Garanti şirket kartı', 'card', ''],
-    ['pos-garanti', 'Garanti POS', 'pos', ''],
-  ].forEach(([id, label, kind, iban]) => saveMoneyAccount(b, { newId: id, label, kind, iban, limit: kind === 'card' ? T(150000) : 0 }));
-
+    ['bank-garanti', 'Garanti BBVA · TL', 'bank', 0],
+    ['bank-teb', 'TEB · TL', 'bank', 0],
+    ['bank-ziraat', 'Ziraat Bankası · TL (KMH)', 'bank', T(500000)],
+    ['bank-akbank', 'Akbank · TL', 'bank', 0],
+    ['bank-yapikredi', 'Yapı Kredi · TL', 'bank', 0],
+    ['bank-is', 'İş Bankası · TL', 'bank', 0],
+    ['bank-qnb', 'QNB · TL', 'bank', 0],
+    ['bank-halkbank', 'Halkbank · TL', 'bank', 0],
+    ['cash-store', 'Atrium mağaza kasası', 'cash', 0],
+    ['cash-hq', 'Merkez kasa', 'cash', 0],
+    ['card-garanti', 'Garanti şirket kartı', 'card', T(150000)],
+    ['card-ziraat', 'Ziraat şirket kartı', 'card', T(600000)],
+    ['card-isbank', 'İş Bankası şirket kartı', 'card', T(50000)],
+    ['card-qnb', 'QNB şirket kartı', 'card', T(50000)],
+    ['pos-garanti', 'Garanti POS', 'pos', 0],
+    ['pos-teb', 'TEB POS', 'pos', 0],
+    ['pos-akbank', 'Akbank POS', 'pos', 0],
+    ['pos-ziraat', 'Ziraat POS', 'pos', 0],
+    ['pos-yapikredi', 'Yapı Kredi POS', 'pos', 0],
+    ['pos-is', 'İş Bankası POS', 'pos', 0],
+    ['pos-qnb', 'QNB POS', 'pos', 0],
+    ['pos-halkbank', 'Halkbank POS', 'pos', 0],
+    ['pos-vakif', 'TZH Vakıf (diğer POS)', 'pos', 0],
+  ].forEach(([id, label, kind, limit]) => saveMoneyAccount(b, { newId: id, label, kind, limit }));
   [
-    ['lux', 'Luxottica Türkiye', 'supplier', ''],
+    ['dues', 'Aidat', 'opex', '770'],
+    ['meal', 'Yemek / yan haklar', 'opex', '770'],
+    ['bonus', 'Prim / ikramiye', 'opex', '770'],
+    ['cleaning', 'Temizlik / sarf', 'opex', '770'],
+    ['safety', 'İş güvenliği / OSGB', 'opex', '770'],
+    ['social', 'Sosyal medya danışmanlığı', 'opex', '760'],
+  ].forEach(([id, label, pl, code]) => saveCategory(b, { newId: id, label, pl, code }));
+  const suppliers = [
+    // Optik (çerçeve / güneş)
+    'Ant Optik', 'BDT Optik', 'Cem-Fa Gözlük', 'Derigo Gözlük', 'Dita İthalat', 'Emko Optik', 'Marchon', 'Hantes', 'Hazel Optik', 'Mercan Optik', 'Merve Optik', 'Mykita', 'Optomod', 'Optiser', 'Safilo', 'Ser Optik', 'Turkuaz Toptan', 'Opticmet (Vanni)', 'Armati', 'Platin Optik', 'Opka Optik', 'Asal Optik', 'Maybach',
+    // Cam
+    'Adellens', 'Beta Optik', 'Turkuaz General', 'Opsa Camlar', 'Opak Optik', 'Sektör Optik', 'Opticon', 'Demirkaya', 'Hoya',
+    // Lens
+    'Opak Lens', 'Tech Contact Lens', 'Lens Medikal', 'Zepa Lens', 'Optik Dünyası',
+  ];
+  suppliers.forEach((label) => saveParty(b, { label, type: 'supplier' }));
+  [
+    ['lux', 'Luxottica Türkiye (Ziraat DBS)', 'supplier', ''],
     ['seiko', 'Seiko Optical', 'supplier', ''],
     ['cam', 'Örnek Cam Tedarikçisi', 'supplier', ''],
-    ['ajans', 'Örnek Reklam Ajansı', 'service', 'advertising'],
-    ['muhasebe', 'Örnek Mali Müşavirlik', 'service', 'accounting'],
+    ['ajans', 'Kargo / reklam ajansı', 'service', 'advertising'],
+    ['sosyal', 'Sosyal medya danışmanı', 'service', 'social'],
+    ['muhasebe', 'Mali müşavir', 'service', 'accounting'],
+    ['ikas', 'İkas / yazılım abonelikleri', 'service', 'software'],
+    ['axa', 'Axa Sigorta', 'service', 'insurance'],
+    ['osgb', 'İş güvenliği firması', 'service', 'safety'],
     ['elektrik', 'Elektrik dağıtım şirketi', 'service', 'utilities'],
-    ['internet', 'İnternet sağlayıcı', 'service', 'utilities'],
-    ['evsahibi', 'Mağaza ev sahibi (şahıs)', 'landlord', 'rent'],
+    ['internet', 'Telefon / internet operatörü', 'service', 'utilities'],
+    ['evsahibi', 'Atrium mağaza kiraya veren', 'landlord', 'rent'],
+    ['avm', 'Atrium AVM yönetimi (aidat)', 'service', 'dues'],
+    ['merkez-ev', 'Merkez ofis kiraya veren', 'landlord', 'rent'],
     ['sigorta', 'Örnek Sigorta A.Ş.', 'personal', ''],
+    ['sahsi-kart', 'Ortakların şahsi kredi kartları', 'personal', ''],
+    ['aile', 'Aile / ev giderleri', 'personal', ''],
     ['kredi-garanti', 'Garanti BBVA · işletme kredisi', 'bank', ''],
   ].forEach(([id, label, type, defaultCategory]) => saveParty(b, { newId: id, label, type, defaultCategory }));
 
@@ -1347,6 +1399,7 @@ export function demoBooks() {
     items: [
       { account: 'bank-garanti', amount: T(320000) },
       { account: 'bank-is', amount: T(185000) },
+      { account: 'bank-teb', amount: T(60000) },
       { account: 'cash-store', amount: T(6000) },
       { account: 'PAYABLE', party: 'seiko', amount: T(50000) },
       { account: 'LOAN', party: 'kredi-garanti', amount: T(300000) },
@@ -1411,6 +1464,8 @@ export function demoBooks() {
   saveTemplate(b, { label: 'Mağaza kirası', partyId: 'evsahibi', categoryId: 'rent', day: 5, amount: T(24000), withholding: true });
   saveTemplate(b, { label: 'İnternet', partyId: 'internet', categoryId: 'utilities', day: 15, amount: T(1200) });
   saveTemplate(b, { label: 'Muhasebe ücreti', partyId: 'muhasebe', categoryId: 'accounting', day: 25, amount: T(10000) });
+  saveTemplate(b, { label: 'Atrium aidatı', partyId: 'avm', categoryId: 'dues', day: 5, amount: T(15000) });
+  saveTemplate(b, { label: 'Sosyal medya danışmanlığı', partyId: 'sosyal', categoryId: 'social', day: 30 - 2, amount: T(20000) });
   generateRecurring(b, '2026-12');
   b.audit = [];
   return b;

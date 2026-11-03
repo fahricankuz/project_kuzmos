@@ -422,7 +422,8 @@ function saveMoneyAccount(b, input) {
     label,
     kind: input.kind,
     iban: clean(input.iban || '').slice(0, 40),
-    limit: input.kind === 'card' ? Number(input.limit) || 0 : 0,
+    // Kart: kredi limiti. Banka: KMH (kredili mevduat) limiti; bakiye en fazla bu kadar eksiye düşebilir.
+    limit: ['card', 'bank'].includes(input.kind) ? Number(input.limit) || 0 : 0,
     active: true,
   };
   b.accounts.push(row);
@@ -532,16 +533,21 @@ function postAll(b, entries) {
     b.entries.push(structuredClone(e));
     b.entryKeys[e.key] = hash;
   }
-  // Nakit kasa eksiye düşemez (banka hesabı KMH nedeniyle eksiye düşebilir; uyarı olarak raporlanır).
-  for (const a of b.accounts.filter((x) => x.kind === 'cash')) {
+  // Nakit kasa eksiye düşemez. Banka hesabı yalnızca tanımlı KMH limiti kadar eksiye düşebilir (KMH gelir değildir,
+  // hesabın eksi bakiyesidir; kapatılması da gider değildir).
+  const rollback = (msg) => {
+    for (const [x] of fresh) {
+      b.entries.splice(b.entries.findIndex((y) => y.key === x.key), 1);
+      delete b.entryKeys[x.key];
+    }
+    throw Error(msg);
+  };
+  for (const a of b.accounts.filter((x) => x.kind === 'cash' || (x.kind === 'bank' && x.limit > 0))) {
     for (const [e] of fresh) {
-      if (e.lines.some((l) => l.account === a.id) && balance(b, a.id, { asOf: e.date }) < 0) {
-        for (const [x] of fresh) {
-          b.entries.splice(b.entries.findIndex((y) => y.key === x.key), 1);
-          delete b.entryKeys[x.key];
-        }
-        throw Error(a.label + ' ' + e.date + ' tarihinde eksi bakiyeye düşer.');
-      }
+      if (!e.lines.some((l) => l.account === a.id)) continue;
+      const bal = balance(b, a.id, { asOf: e.date });
+      if (a.kind === 'cash' && bal < 0) rollback(a.label + ' ' + e.date + ' tarihinde eksi bakiyeye düşer.');
+      if (a.kind === 'bank' && bal < -a.limit) rollback(a.label + ' ' + e.date + ' tarihinde KMH limitini aşar.');
     }
   }
   return fresh.length;
@@ -1494,13 +1500,15 @@ function closingChecks(b, asOf = b.today) {
     .filter((a) => a.active && ['bank', 'card'].includes(a.kind))
     .map((a) => ({ account: a, last: [...b.reconciliations].reverse().find((r) => r.accountId === a.id) }));
   const cards = b.accounts.filter((a) => a.kind === 'card' && balance(b, a.id, { asOf }) < 0);
-  const negBanks = b.accounts.filter((a) => a.kind === 'bank' && balance(b, a.id, { asOf }) < 0);
+  const negBanks = b.accounts.filter((a) => a.kind === 'bank' && balance(b, a.id, { asOf }) < 0 && !a.limit);
+  const kmh = b.accounts.filter((a) => a.kind === 'bank' && a.limit && balance(b, a.id, { asOf }) < 0);
   const checks = [
     { ok: tb.debit === tb.credit, label: 'Tüm fişler dengeli (mizan borç = alacak)', detail: tb.debit === tb.credit ? 'Dengeli' : 'Fark var' },
     { ok: !review.length, label: 'İnceleme hesabında bekleyen fark yok', detail: review.length ? review.length + ' kalem, ' + TL(sum(review, (r) => r.remaining)) : 'Temiz', link: 'review' },
     { ok: recon.every((r) => r.last && r.last.difference === 0), label: 'Banka ve kart hesapları ekstreyle mutabık', detail: recon.filter((r) => !r.last || r.last.difference !== 0).map((r) => r.account.label).join(', ') || 'Tamam', link: 'reconcile' },
     { ok: !overdue.length, label: 'Vadesi geçmiş ödeme yok', detail: overdue.length ? overdue.length + ' kalem gecikmiş' : 'Yok', link: 'payables' },
-    { ok: !negBanks.length, label: 'Banka hesapları eksi bakiyede değil', detail: negBanks.map((a) => a.label).join(', ') || 'Tamam' },
+    { ok: !negBanks.length, label: 'KMH tanımı olmayan banka hesabı eksi bakiyede değil', detail: negBanks.map((a) => a.label).join(', ') || 'Tamam' },
+    { ok: true, info: true, label: 'KMH kullanımı (banka borcu, bilgi)', detail: kmh.map((a) => a.label + ' ' + TL(-balance(b, a.id, { asOf }))).join(', ') || 'Kullanılmıyor' },
     { ok: balance(b, 'ADVANCES_IN', { asOf }) === 0, label: 'Teslim bekleyen sipariş avansı (bilgi)', detail: TL(balance(b, 'ADVANCES_IN', { asOf })) + ' avans; teslimde hasılata döner', info: true },
     { ok: true, label: 'İndirilecek KDV muhasebeci onayı bekliyor (bilgi)', detail: TL(balance(b, 'INPUT_VAT', { asOf })), info: true },
     { ok: !cards.length, label: 'Kart alacakları (fazla ödeme) izlenir', detail: cards.map((a) => a.label).join(', ') || 'Yok', info: true },
@@ -1517,24 +1525,68 @@ function closingChecks(b, asOf = b.today) {
 function demoBooks() {
   const T = (tl) => Math.round(tl * 100);
   const b = createBooks({ tenant: 'damla-kuz-optik', today: '2026-11-25', company: 'Damla Kuz Optik' });
+  // Tanımlar işletmenin yönetim Excel'indeki banka, POS, kart, tedarikçi ve gider kalemlerinden alınmıştır.
+  // Tutarlar sentetiktir; gerçek bakiye ve ödeme kayıtları depoya konmaz.
   [
-    ['bank-garanti', 'Garanti BBVA · TL hesabı', 'bank', 'TR00 0006 2000 0000 0000 0000 01'],
-    ['bank-is', 'İş Bankası · TL hesabı', 'bank', 'TR00 0006 4000 0000 0000 0000 02'],
-    ['cash-store', 'Mağaza kasası', 'cash', ''],
-    ['card-garanti', 'Garanti şirket kartı', 'card', ''],
-    ['pos-garanti', 'Garanti POS', 'pos', ''],
-  ].forEach(([id, label, kind, iban]) => saveMoneyAccount(b, { newId: id, label, kind, iban, limit: kind === 'card' ? T(150000) : 0 }));
-
+    ['bank-garanti', 'Garanti BBVA · TL', 'bank', 0],
+    ['bank-teb', 'TEB · TL', 'bank', 0],
+    ['bank-ziraat', 'Ziraat Bankası · TL (KMH)', 'bank', T(500000)],
+    ['bank-akbank', 'Akbank · TL', 'bank', 0],
+    ['bank-yapikredi', 'Yapı Kredi · TL', 'bank', 0],
+    ['bank-is', 'İş Bankası · TL', 'bank', 0],
+    ['bank-qnb', 'QNB · TL', 'bank', 0],
+    ['bank-halkbank', 'Halkbank · TL', 'bank', 0],
+    ['cash-store', 'Atrium mağaza kasası', 'cash', 0],
+    ['cash-hq', 'Merkez kasa', 'cash', 0],
+    ['card-garanti', 'Garanti şirket kartı', 'card', T(150000)],
+    ['card-ziraat', 'Ziraat şirket kartı', 'card', T(600000)],
+    ['card-isbank', 'İş Bankası şirket kartı', 'card', T(50000)],
+    ['card-qnb', 'QNB şirket kartı', 'card', T(50000)],
+    ['pos-garanti', 'Garanti POS', 'pos', 0],
+    ['pos-teb', 'TEB POS', 'pos', 0],
+    ['pos-akbank', 'Akbank POS', 'pos', 0],
+    ['pos-ziraat', 'Ziraat POS', 'pos', 0],
+    ['pos-yapikredi', 'Yapı Kredi POS', 'pos', 0],
+    ['pos-is', 'İş Bankası POS', 'pos', 0],
+    ['pos-qnb', 'QNB POS', 'pos', 0],
+    ['pos-halkbank', 'Halkbank POS', 'pos', 0],
+    ['pos-vakif', 'TZH Vakıf (diğer POS)', 'pos', 0],
+  ].forEach(([id, label, kind, limit]) => saveMoneyAccount(b, { newId: id, label, kind, limit }));
   [
-    ['lux', 'Luxottica Türkiye', 'supplier', ''],
+    ['dues', 'Aidat', 'opex', '770'],
+    ['meal', 'Yemek / yan haklar', 'opex', '770'],
+    ['bonus', 'Prim / ikramiye', 'opex', '770'],
+    ['cleaning', 'Temizlik / sarf', 'opex', '770'],
+    ['safety', 'İş güvenliği / OSGB', 'opex', '770'],
+    ['social', 'Sosyal medya danışmanlığı', 'opex', '760'],
+  ].forEach(([id, label, pl, code]) => saveCategory(b, { newId: id, label, pl, code }));
+  const suppliers = [
+    // Optik (çerçeve / güneş)
+    'Ant Optik', 'BDT Optik', 'Cem-Fa Gözlük', 'Derigo Gözlük', 'Dita İthalat', 'Emko Optik', 'Marchon', 'Hantes', 'Hazel Optik', 'Mercan Optik', 'Merve Optik', 'Mykita', 'Optomod', 'Optiser', 'Safilo', 'Ser Optik', 'Turkuaz Toptan', 'Opticmet (Vanni)', 'Armati', 'Platin Optik', 'Opka Optik', 'Asal Optik', 'Maybach',
+    // Cam
+    'Adellens', 'Beta Optik', 'Turkuaz General', 'Opsa Camlar', 'Opak Optik', 'Sektör Optik', 'Opticon', 'Demirkaya', 'Hoya',
+    // Lens
+    'Opak Lens', 'Tech Contact Lens', 'Lens Medikal', 'Zepa Lens', 'Optik Dünyası',
+  ];
+  suppliers.forEach((label) => saveParty(b, { label, type: 'supplier' }));
+  [
+    ['lux', 'Luxottica Türkiye (Ziraat DBS)', 'supplier', ''],
     ['seiko', 'Seiko Optical', 'supplier', ''],
     ['cam', 'Örnek Cam Tedarikçisi', 'supplier', ''],
-    ['ajans', 'Örnek Reklam Ajansı', 'service', 'advertising'],
-    ['muhasebe', 'Örnek Mali Müşavirlik', 'service', 'accounting'],
+    ['ajans', 'Kargo / reklam ajansı', 'service', 'advertising'],
+    ['sosyal', 'Sosyal medya danışmanı', 'service', 'social'],
+    ['muhasebe', 'Mali müşavir', 'service', 'accounting'],
+    ['ikas', 'İkas / yazılım abonelikleri', 'service', 'software'],
+    ['axa', 'Axa Sigorta', 'service', 'insurance'],
+    ['osgb', 'İş güvenliği firması', 'service', 'safety'],
     ['elektrik', 'Elektrik dağıtım şirketi', 'service', 'utilities'],
-    ['internet', 'İnternet sağlayıcı', 'service', 'utilities'],
-    ['evsahibi', 'Mağaza ev sahibi (şahıs)', 'landlord', 'rent'],
+    ['internet', 'Telefon / internet operatörü', 'service', 'utilities'],
+    ['evsahibi', 'Atrium mağaza kiraya veren', 'landlord', 'rent'],
+    ['avm', 'Atrium AVM yönetimi (aidat)', 'service', 'dues'],
+    ['merkez-ev', 'Merkez ofis kiraya veren', 'landlord', 'rent'],
     ['sigorta', 'Örnek Sigorta A.Ş.', 'personal', ''],
+    ['sahsi-kart', 'Ortakların şahsi kredi kartları', 'personal', ''],
+    ['aile', 'Aile / ev giderleri', 'personal', ''],
     ['kredi-garanti', 'Garanti BBVA · işletme kredisi', 'bank', ''],
   ].forEach(([id, label, type, defaultCategory]) => saveParty(b, { newId: id, label, type, defaultCategory }));
 
@@ -1544,6 +1596,7 @@ function demoBooks() {
     items: [
       { account: 'bank-garanti', amount: T(320000) },
       { account: 'bank-is', amount: T(185000) },
+      { account: 'bank-teb', amount: T(60000) },
       { account: 'cash-store', amount: T(6000) },
       { account: 'PAYABLE', party: 'seiko', amount: T(50000) },
       { account: 'LOAN', party: 'kredi-garanti', amount: T(300000) },
@@ -1608,6 +1661,8 @@ function demoBooks() {
   saveTemplate(b, { label: 'Mağaza kirası', partyId: 'evsahibi', categoryId: 'rent', day: 5, amount: T(24000), withholding: true });
   saveTemplate(b, { label: 'İnternet', partyId: 'internet', categoryId: 'utilities', day: 15, amount: T(1200) });
   saveTemplate(b, { label: 'Muhasebe ücreti', partyId: 'muhasebe', categoryId: 'accounting', day: 25, amount: T(10000) });
+  saveTemplate(b, { label: 'Atrium aidatı', partyId: 'avm', categoryId: 'dues', day: 5, amount: T(15000) });
+  saveTemplate(b, { label: 'Sosyal medya danışmanlığı', partyId: 'sosyal', categoryId: 'social', day: 30 - 2, amount: T(20000) });
   generateRecurring(b, '2026-12');
   b.audit = [];
   return b;
@@ -2484,9 +2539,9 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
     const isCard = sel.kind === 'card';
     const lastRec = [...b.reconciliations].reverse().find((r) => r.accountId === sel.id);
     const action = S.accAction;
-    return head('Banka · kasa · kart · POS', 'Her hesap kendi hareketleriyle izlenir. Kart borçtur; POS’taki tutar bankaya geçene kadar nakit sayılmaz.', btn('acc-action', 'Virman', { data: { v: 'transfer' }, pressed: action === 'transfer' }) + btn('acc-action', 'POS → banka', { data: { v: 'pos' }, pressed: action === 'pos' }) + btn('acc-action', 'Ekstre mutabakatı', { data: { v: 'reconcile' }, pressed: action === 'reconcile' }) + btn('defs-go', 'Hesap tanımla', { data: { v: 'accounts' } })) +
+    return head('Banka · kasa · kart · POS', 'Her hesap kendi hareketleriyle izlenir. Kart borçtur; POS’taki tutar bankaya geçene kadar nakit sayılmaz. KMH, banka hesabının eksi bakiyesidir: kullanımı gelir, kapatılması gider değildir.', btn('acc-action', 'Virman', { data: { v: 'transfer' }, pressed: action === 'transfer' }) + btn('acc-action', 'POS → banka', { data: { v: 'pos' }, pressed: action === 'pos' }) + btn('acc-action', 'Ekstre mutabakatı', { data: { v: 'reconcile' }, pressed: action === 'reconcile' }) + btn('defs-go', 'Hesap tanımla', { data: { v: 'accounts' } })) +
       (action ? accActionForm(action, sel) : '') +
-      '<div class="acc-cards">' + bal.map((a) => '<button type="button" class="acc" data-act="acc-select" data-v="' + a.id + '" aria-pressed="' + (a.id === sel.id) + '"><small>' + esc(F.MONEY_KINDS[a.kind]) + '</small><b>' + esc(a.label) + '</b><strong class="' + (a.kind !== 'card' && a.balance < 0 ? 'neg' : '') + '">' + tl(a.balance) + '</strong><small>' + (a.kind === 'card' ? 'Kart borcu' + (a.limit ? ' · limit ' + tl(a.limit) : '') : a.kind === 'pos' ? 'Bankaya geçmeyi bekleyen' : 'Bakiye') + '</small>' + (a.kind === 'card' && a.limit ? '<div class="meter"><i style="width:' + Math.min(100, Math.max(0, (a.balance / a.limit) * 100)) + '%"></i></div>' : '') + '</button>').join('') + '</div>' +
+      '<div class="acc-cards">' + bal.map((a) => '<button type="button" class="acc" data-act="acc-select" data-v="' + a.id + '" aria-pressed="' + (a.id === sel.id) + '"><small>' + esc(F.MONEY_KINDS[a.kind]) + '</small><b>' + esc(a.label) + '</b><strong class="' + (a.kind !== 'card' && a.balance < 0 ? 'neg' : '') + '">' + tl(a.balance) + '</strong><small>' + (a.kind === 'card' ? 'Kart borcu' + (a.limit ? ' · limit ' + tl(a.limit) : '') : a.kind === 'pos' ? 'Bankaya geçmeyi bekleyen' : a.kind === 'bank' && a.limit ? (a.balance < 0 ? 'KMH kullanımı ' + tl(-a.balance) : 'Bakiye') + ' · KMH limiti ' + tl(a.limit) : 'Bakiye') + '</small>' + (a.kind === 'card' && a.limit ? '<div class="meter"><i style="width:' + Math.min(100, Math.max(0, (a.balance / a.limit) * 100)) + '%"></i></div>' : '') + (a.kind === 'bank' && a.limit ? '<div class="meter"><i style="background:#b4362a;width:' + Math.min(100, Math.max(0, (-a.balance / a.limit) * 100)) + '%"></i></div>' : '') + '</button>').join('') + '</div>' +
       card(esc(sel.label) + ' · hesap ekstresi', '<form class="pad row" data-form="acc-range">' + field('Başlangıç', input('from', S.accRange.from, 'type="date"')) + field('Bitiş', input('to', S.accRange.to || today(), 'type="date" max="' + today() + '"')) + '<button type="submit" style="align-self:flex-end">Uygula</button></form>' +
         table(['Tarih', 'Açıklama', '#' + (isCard ? 'Harcama (borç +)' : 'Giriş'), '#' + (isCard ? 'Ödeme (borç −)' : 'Çıkış'), '#Bakiye'], st.rows.map((r) => '<tr>' + td(dateTR(r.date, { year: true })) + td(esc(r.memo), r.cf === 'internal' ? 'İç transfer' : '') + tdn(r.in ? tl(r.in) : '') + tdn(r.out ? tl(r.out) : '') + tdn('<b>' + tl(r.balance) + '</b>') + '</tr>'), { empty: 'Bu aralıkta hareket yok.', foot: '<tr><td colspan="4">Dönem başı ' + tl(st.opening) + ' → dönem sonu</td>' + tdn(tl(st.closing)) + '</tr>' }),
         { sub: lastRec ? 'Son mutabakat ' + dateTR(lastRec.date) + ': ekstre ' + tl(lastRec.statementBalance) + ', sistem ' + tl(lastRec.system) + (lastRec.difference ? ' · fark ' + tl(lastRec.difference) : ' · mutabık') : 'Henüz ekstre mutabakatı yapılmadı.' });
@@ -2634,7 +2689,7 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
     let form = '';
     if (col === 'parties') form = field('Ad *', input('label', item?.label || '', 'maxlength="100" required')) + (item ? field('Tür', '<input readonly value="' + esc(F.PARTY_TYPES[item.type]) + '">') : field('Tür *', select('type', Object.entries(F.PARTY_TYPES).filter(([k]) => !['public', 'staff'].includes(k)), 'supplier'))) + field('VKN / TCKN', input('taxNo', item?.taxNo || '', 'maxlength="11" inputmode="numeric"')) + field('Varsayılan gider kategorisi', select('defaultCategory', [['', '—'], ...b.categories.filter((c) => c.active).map((c) => [c.id, c.label])], item?.defaultCategory || ''));
     if (col === 'categories') form = field('Ad *', input('label', item?.label || '', 'maxlength="100" required')) + (item ? field('Grup', '<input readonly value="' + esc(F.PL_GROUPS[item.pl]) + '">') : field('Gelir tablosu grubu *', select('pl', Object.entries(F.PL_GROUPS), 'opex')));
-    if (col === 'accounts') form = field('Ad *', input('label', item?.label || '', 'maxlength="100" required')) + (item ? field('Tür', '<input readonly value="' + esc(F.MONEY_KINDS[item.kind]) + '">') : field('Hesap türü *', select('kind', Object.entries(F.MONEY_KINDS), 'bank'))) + field('IBAN / kart son 4', input('iban', item?.iban || '', 'maxlength="40"')) + (!item ? field('Kart limiti', money('limit', '')) : '');
+    if (col === 'accounts') form = field('Ad *', input('label', item?.label || '', 'maxlength="100" required')) + (item ? field('Tür', '<input readonly value="' + esc(F.MONEY_KINDS[item.kind]) + '">') : field('Hesap türü *', select('kind', Object.entries(F.MONEY_KINDS), 'bank'))) + field('IBAN / kart son 4', input('iban', item?.iban || '', 'maxlength="40"')) + (!item ? field('Kart / KMH limiti', money('limit', ''), { hint: 'Banka için KMH limiti: hesap bu kadar eksiye düşebilir' }) : '');
     if (col === 'templates') form = field('Ad *', input('label', item?.label || '', 'maxlength="100" required')) + field('Firma *', select('partyId', [['', 'Seçiniz…'], ...partiesOf(['service', 'supplier', 'landlord', 'personal']).map((p) => [p.id, p.label])], item?.partyId || '')) + field('Kategori *', select('categoryId', b.categories.filter((c) => c.active).map((c) => [c.id, c.label]), item?.categoryId || 'rent')) + field('Ayın günü (1–28) *', input('day', item?.day || '5', 'type="number" min="1" max="28"')) + field('Tahmini tutar *', money('amount', formatInput(item?.amount || 0)));
     const typeOf = (x) => (col === 'parties' ? F.PARTY_TYPES[x.type] : col === 'categories' ? F.PL_GROUPS[x.pl] + (x.code ? ' · ' + x.code : '') : col === 'accounts' ? F.MONEY_KINDS[x.kind] : partyLabel(x.partyId) + ' · her ayın ' + x.day + '’i · ' + tl(x.amount));
     return head('Tanımlar', 'Listeye ekleyin, yeniden adlandırın veya pasife alın. Kullanılmış tanımlar silinmez; geçmiş kayıtlardaki ad ve davranış korunur.') + chips('defs-tab', tabs, col) +

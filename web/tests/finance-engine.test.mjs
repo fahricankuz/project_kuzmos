@@ -364,3 +364,18 @@ test('Demo defteri: tüm fişler dengeli, nakit akışı kapanışla tutarlı, S
   const br = F.reportBridge(b, { from: '2026-11-01', to: '2026-11-25' });
   assert.equal(br.other, 0, 'tüm nakit çıkışları ödeme kayıtlarıyla açıklanır');
 });
+
+test('KMH: banka hesabı limit kadar eksiye düşer, aşamaz; kullanım gelir, kapanış gider değildir', () => {
+  const b = books();
+  saveMoneyAccount(b, { newId: 'kmh', label: 'Ziraat KMH', kind: 'bank', limit: T(50000) });
+  const d = recordDocument(b, { key: 'f', type: 'purchase', partyId: 'lux', date: '2026-11-03', net: T(80000) });
+  const o = b.obligations.find((x) => x.docId === d);
+  assert.throws(() => recordPayment(b, { key: 'p0', date: '2026-11-04', method: 'transfer', accountId: 'kmh', allocations: [{ obligationId: o.id, amount: T(50001) }] }), /KMH limitini/);
+  recordPayment(b, { key: 'p1', date: '2026-11-04', method: 'transfer', accountId: 'kmh', allocations: [{ obligationId: o.id, amount: T(40000) }] });
+  assert.equal(balance(b, 'kmh'), -T(40000));
+  transfer(b, { key: 't', date: '2026-11-05', from: 'bank', to: 'kmh', amount: T(40000) });
+  assert.equal(balance(b, 'kmh'), 0);
+  const pl = profitAndLoss(b);
+  assert.equal(pl.expenses, 0, 'KMH kullanımı ve kapatılması gelir/gider yaratmaz');
+  assert.equal(cashFlow(b).classes.internal.in, T(40000));
+});
