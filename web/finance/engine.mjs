@@ -1597,7 +1597,7 @@ export function cashCount(b, { key, date, accountId, counted, deposit, note = ''
     const cbr = (b.branches.find((x) => x.cashAccount === acc.id) || { id: defaultBranch(b) }).id;
     if (diff < 0) {
       postAll(b, [{ key: 'cc:' + id, date, kind: 'cash-count', memo: 'Kasa sayım açığı · ' + acc.label + (note ? ' · ' + clean(note) : ''), lines: [L('REVIEW', -diff, 0, { review: 'R-' + id }), L(acc.id, 0, -diff, { cf: 'operating' })] }]);
-      b.reviews.push({ id: 'R-' + id, date, amount: -diff, branchId: cbr, source: 'Kasa sayım açığı', label: acc.label + ' ' + date + ': sayılan ' + (counted / 100).toLocaleString('tr-TR') + ' TL, sistem ' + (system / 100).toLocaleString('tr-TR') + ' TL', resolutions: [] });
+      b.reviews.push({ id: 'R-' + id, date, amount: -diff, branchId: cbr, source: 'Kasa sayım açığı', label: acc.label + ' · ' + date.split('-').reverse().join('.') + ' sayımı: sayılan ' + (counted / 100).toLocaleString('tr-TR') + ' TL, sistem ' + (system / 100).toLocaleString('tr-TR') + ' TL', resolutions: [] });
     } else if (diff > 0) {
       postAll(b, [{ key: 'cc:' + id, date, kind: 'cash-count', memo: 'Kasa fazlası · ' + acc.label + (note ? ' · ' + clean(note) : ''), lines: [L(acc.id, diff, 0, { cf: 'operating' }), L('OTHER_INCOME', 0, diff, { branch: cbr })] }]);
     }

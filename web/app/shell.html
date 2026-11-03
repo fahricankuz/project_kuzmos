@@ -178,6 +178,82 @@
 @media(max-width:1080px){#kuzmos-app .grid2{grid-template-columns:1fr}#kuzmos-app .sticky{position:static}#kuzmos-app .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:860px){#kuzmos-app .layout{grid-template-columns:1fr}#kuzmos-app .side{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:8px 10px;gap:4px}#kuzmos-app .side .grp{display:none}#kuzmos-app .side button{flex:0 0 auto;border:1px solid var(--line);border-radius:99px}#kuzmos-app .three,#kuzmos-app .grid3,#kuzmos-app .grid2e{grid-template-columns:1fr}}
 @media(max-width:620px){#kuzmos-app .content{padding:16px}#kuzmos-app .top{padding:12px 16px}#kuzmos-app .tabs{padding:8px 16px}#kuzmos-app .demo-note{padding:7px 16px}#kuzmos-app .company{display:none}#kuzmos-app .top-right{margin-left:0;width:100%}#kuzmos-app .form,#kuzmos-app .form.three{grid-template-columns:1fr}#kuzmos-app .fx{grid-template-columns:1fr 1fr}#kuzmos-app .kpi strong{font-size:19px}#kuzmos-app .cal{padding:6px;gap:2px}#kuzmos-app .cal button{min-height:58px;padding:4px}#kuzmos-app .cal button .c,#kuzmos-app .cal button .a{display:none}#kuzmos-app input,#kuzmos-app select{font-size:16px}#kuzmos-app h2{font-size:21px}}
+
+/* özet kartı satırları */
+#kuzmos-app .kpi-l{display:flex;flex-direction:column}
+#kuzmos-app .kl{list-style:none;margin:6px 0 0;padding:8px 0 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+#kuzmos-app .kpi.hl .kl{border-color:#efdf9a}
+#kuzmos-app .kl li{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;align-items:baseline}
+#kuzmos-app .kl li span{color:var(--soft);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#kuzmos-app .kl li em{font-style:normal;color:var(--faint);font-size:11px}
+#kuzmos-app .kl li b{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+#kuzmos-app .kl-empty{font-size:11.5px;color:var(--faint);margin-top:6px}
+/* hesaplar */
+#kuzmos-app .acclayout{display:grid;grid-template-columns:minmax(300px,.85fr) minmax(0,1.35fr);gap:16px;align-items:start}
+#kuzmos-app .accgroup{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-bottom:14px;overflow:hidden}
+#kuzmos-app .accgroup>header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;background:#fafafa;border-bottom:1px solid var(--line)}
+#kuzmos-app .accgroup>header span{text-align:right}
+#kuzmos-app .accgroup>header small{display:block;font-size:11px;color:var(--soft)}
+#kuzmos-app .accgroup>header b{font-variant-numeric:tabular-nums}
+#kuzmos-app .accrow{display:flex;width:100%;justify-content:space-between;align-items:center;gap:12px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:var(--panel);padding:11px 14px;text-align:left;white-space:normal;min-height:56px}
+#kuzmos-app .accrow:last-of-type{border-bottom:0}
+#kuzmos-app .accrow:hover{background:#fcfaf0;border-color:var(--line)}
+#kuzmos-app .accrow[aria-pressed=true]{background:var(--tint);color:var(--text);border-color:var(--line);box-shadow:inset 3px 0 0 var(--yellow)}
+#kuzmos-app .ar-name{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+#kuzmos-app .ar-name b{font-weight:600;font-size:13.5px}
+#kuzmos-app .ar-name small{font-size:11.5px;color:var(--soft)}
+#kuzmos-app .ar-name .meter{max-width:220px;margin-top:5px}
+#kuzmos-app .ar-amt{font-weight:650;font-variant-numeric:tabular-nums;font-size:15px;white-space:nowrap}
+#kuzmos-app .idle{padding:6px 8px;border-top:1px solid var(--line)}
+#kuzmos-app .idle button{white-space:normal;text-align:left;color:var(--soft)}
+#kuzmos-app .stmt-sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:0 16px 14px}
+#kuzmos-app .stmt-sum>div{background:var(--bg);border-radius:10px;padding:8px 10px;min-width:0}
+#kuzmos-app .stmt-sum small{display:block;font-size:11px;color:var(--soft)}
+#kuzmos-app .stmt-sum b{font-variant-numeric:tabular-nums;font-size:13.5px}
+/* inceleme */
+#kuzmos-app .rvlayout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:16px;align-items:start}
+#kuzmos-app .rvlist{display:flex;flex-direction:column}
+#kuzmos-app .rvitem{display:flex;flex-direction:column;align-items:stretch;gap:6px;width:100%;text-align:left;white-space:normal;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:12px 16px;background:var(--panel);min-height:auto}
+#kuzmos-app .rvitem:last-child{border-bottom:0}
+#kuzmos-app .rvitem:hover{background:#fcfaf0;border-color:var(--line)}
+#kuzmos-app .rvitem[aria-pressed=true]{background:var(--tint);color:var(--text);border-color:var(--line);box-shadow:inset 3px 0 0 var(--yellow)}
+#kuzmos-app .rv-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+#kuzmos-app .rv-top b{font-size:15px;font-variant-numeric:tabular-nums}
+#kuzmos-app .rv-label{font-size:13px;line-height:1.45}
+#kuzmos-app .rvitem small{font-size:11.5px;color:var(--soft)}
+/* tablolar: dar alanda yana kaydırma yerine kart görünümü */
+#kuzmos-app .tbl{container-type:inline-size}
+#kuzmos-app .tbl:not(.stack) td:first-child{white-space:nowrap}
+@container (max-width: 620px){
+ #kuzmos-app .tbl table,#kuzmos-app .tbl tbody,#kuzmos-app .tbl tfoot,#kuzmos-app .tbl tr,#kuzmos-app .tbl td{display:block;width:100%}
+ #kuzmos-app .tbl thead{display:none}
+ #kuzmos-app .tbl tr{padding:10px 14px;border-bottom:1px solid var(--line)}
+ #kuzmos-app .tbl tbody tr:last-child{border-bottom:0}
+ #kuzmos-app .tbl td{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:3px 0;border:0;text-align:right;background:transparent!important}
+ #kuzmos-app .tbl td>*{text-align:right}
+ #kuzmos-app .tbl td::before{content:attr(data-label);flex:0 0 38%;text-align:left;color:var(--soft);font-size:11.5px;font-weight:400}
+ #kuzmos-app .tbl td[data-label=""]::before{display:none}
+ #kuzmos-app .tbl td[data-label=""]{justify-content:flex-end}
+ #kuzmos-app .tbl td:empty{display:none}
+ #kuzmos-app .tbl td small{display:block}
+ #kuzmos-app .tbl tfoot td{background:transparent}
+}
+
+ #kuzmos-app .tbl.stack table,#kuzmos-app .tbl.stack tbody,#kuzmos-app .tbl.stack tfoot,#kuzmos-app .tbl.stack tr,#kuzmos-app .tbl.stack td{display:block;width:100%}
+ #kuzmos-app .tbl.stack thead{display:none}
+ #kuzmos-app .tbl.stack tr{padding:10px 14px;border-bottom:1px solid var(--line)}
+ #kuzmos-app .tbl.stack tbody tr:last-child{border-bottom:0}
+ #kuzmos-app .tbl.stack td{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:3px 0;border:0;text-align:right;background:transparent!important}
+ #kuzmos-app .tbl.stack td>*{text-align:right}
+ #kuzmos-app .tbl.stack td::before{content:attr(data-label);flex:0 0 38%;text-align:left;color:var(--soft);font-size:11.5px;font-weight:400}
+ #kuzmos-app .tbl.stack td[data-label=""]::before{display:none}
+ #kuzmos-app .tbl.stack td[data-label=""]{justify-content:flex-end}
+ #kuzmos-app .tbl.stack td:empty{display:none}
+ #kuzmos-app .tbl.stack td small{display:block}
+ #kuzmos-app .tbl.stack tfoot td{background:transparent}
+
+@media(max-width:1080px){#kuzmos-app .acclayout,#kuzmos-app .rvlayout{grid-template-columns:1fr}}
+@media(max-width:620px){#kuzmos-app .stmt-sum{grid-template-columns:1fr 1fr}}
 </style>
 <header class="top">
  <div class="brand">kuzmos<span>●</span></div>
