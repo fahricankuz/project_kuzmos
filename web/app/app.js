@@ -41,6 +41,9 @@
     petty: { attachments: [] },
     pettyCat: {},
     stockAction: '',
+    // Föydeki AUTO_NOTIFY_START ile aynı: bu tarihten önce açılmış siparişlere geriye dönük mail atılmaz.
+    notify: N.createNotifier({ startDate: '2026-10-31' }),
+    mailPreview: '',
   };
   const today = () => S.books.today;
   S.accRange.to = today();
@@ -1057,12 +1060,27 @@
   // ───────────────────────── Personel (korunan föy + barkod köprüsü) ─────────────────────────
   function staffScreen() {
     const v = S.staffView;
-    return head('Personel · Sipariş föyü', 'Kaynak form korunur. Föy kaydedildiğinde tahsilat ve teslim finansa işlenir; barkod ürün satırına bağlanır.', '<div class="seg">' + btn('staff-view', 'Sipariş föyü', { data: { v: 'form' }, pressed: v === 'form' }) + btn('staff-view', 'Kasa & masraf', { data: { v: 'kasa' }, pressed: v === 'kasa' }) + '</div>') +
-      (v === 'kasa' ? staffKasa() :
+    return head('Personel · Sipariş föyü', 'Kaynak form korunur. Föy kaydedildiğinde tahsilat ve teslim finansa işlenir; barkod ürün satırına bağlanır.', '<div class="seg">' + btn('staff-view', 'Sipariş föyü', { data: { v: 'form' }, pressed: v === 'form' }) + btn('staff-view', 'Kasa & masraf', { data: { v: 'kasa' }, pressed: v === 'kasa' }) + btn('staff-view', 'Müşteri bildirimleri' + (N.summary(S.notify).missing ? ' <span class="badge">' + N.summary(S.notify).missing + '</span>' : ''), { data: { v: 'mail' }, pressed: v === 'mail' }) + '</div>') +
+      (v === 'mail' ? notifyScreen() : v === 'kasa' ? staffKasa() :
         '<form class="scan" data-form="staff-scan"><input name="barcode" aria-label="Sipariş için barkod" value="' + esc(S.staff.barcode) + '" placeholder="Ürün barkodu okutun"><button type="submit" class="primary">Ürün satırına ekle</button></form>' +
-        '<div id="staff-sync">' + (S.staff.notice ? '<div class="callout ' + (S.staff.notice.kind === 'err' ? 'bad' : '') + '">' + esc(S.staff.notice.text) + '</div>' : '') + '</div>' +
+        '<div id="staff-sync">' + (S.staff.notice ? '<div class="callout ' + (S.staff.notice.kind === 'err' ? 'bad' : '') + '" style="white-space:pre-line">' + esc(S.staff.notice.text) + '</div>' : '') + '</div>' +
         (S.staff.product ? '<div class="callout">' + esc(S.staff.product.urun) + ' · ' + esc(S.staff.product.sku) + ' · ' + esc(S.staff.product.fiyat) + ' TL · Satılabilir ' + S.staff.product.available + '</div>' : '') +
         '<iframe class="staff-frame" title="Kaynak personel sipariş formu" sandbox="allow-scripts allow-modals"></iframe>');
+  }
+  function notifyScreen() {
+    const n = S.notify;
+    const sm = N.summary(n);
+    const admin = S.role === 'admin';
+    const items = [...n.outbox].reverse();
+    const pv = n.outbox.find((x) => x.id === S.mailPreview);
+    const tone = { sent: 'ok', queued: 'info', failed: 'bad', 'no-email': 'warn', 'invalid-email': 'warn', 'opted-out': '' };
+    const types = Object.entries(N.MAIL_TYPES);
+    return '<div class="callout">Sipariş föyünde durum değişince müşteriye otomatik e-posta gider. Mail tasarımları föyün kendi şablonlarıdır. Her sipariş için her mail <b>bir kez</b> gönderilir; aynı kaydı tekrar kaydetmek ikinci maili göndermez. <b>Önizlemede gerçek e-posta gönderilmez</b>, gönderilmiş gibi kaydedilir.</div>' +
+      '<div class="kpis">' + kpi('Gönderildi', String(sm.sent), 'Toplam ' + sm.total + ' mail', 'hl') + kpi('E-posta eksik / hatalı', String(sm.missing), sm.missing ? 'Föyde e-postayı ekleyip kaydedin' : 'Yok', sm.missing ? 'bad' : '') + kpi('Gönderilemedi', String(sm.failed), sm.failed ? 'Otomatik tekrar denenir (3 kez)' : 'Yok') + kpi('Mail istemeyen', String(n.optOut.length), 'müşteri') + '</div>' +
+      (pv ? '<section class="drawer"><header><div><h3>' + esc(pv.subject) + '</h3><p class="small muted">Alıcı: ' + esc(pv.to || '—') + ' · ' + esc(N.MAIL_TYPES[pv.type].title) + ' · ' + esc(N.ITEM_STATUS[pv.status]) + '</p></div>' + btn('mail-preview', '✕ Kapat', { cls: 'small', data: { id: '' } }) + '</header><iframe class="mail-frame" sandbox="" title="Mail önizlemesi" srcdoc="' + esc(pv.html) + '"></iframe></section>' : '') +
+      '<div class="grid2"><div>' + card('Gönderim kutusu', items.length ? '<div class="rvlist">' + items.map((it) => '<div class="rvitem" style="cursor:default"><span class="rv-top"><span>' + tag(N.ITEM_STATUS[it.status] + (it.status === 'sent' && it.demo ? ' · önizleme' : ''), tone[it.status]) + (it.manual ? ' ' + tag('Elle', '') : '') + '</span><small>' + esc(new Date(it.createdAt).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) + '</small></span><span class="rv-label"><b>' + esc(N.MAIL_TYPES[it.type].title) + '</b> · ' + esc(it.no) + ' · ' + esc(it.customer) + '</span><small>' + (it.to ? esc(it.to) : 'E-posta yok') + (it.error ? ' · ' + esc(it.error) : '') + '</small><span class="row" style="gap:6px">' + btn('mail-preview', 'Önizle', { cls: 'small', data: { id: it.id } }) + (it.status === 'sent' || it.status === 'failed' ? btn('mail-resend', 'Tekrar gönder', { cls: 'small', data: { id: it.id } }) : '') + (it.to && N.isEmail(it.to) ? btn('mail-optout', n.optOut.includes(it.to.toLocaleLowerCase('tr-TR')) ? 'Maile izin ver' : 'Bu müşteriye mail gönderme', { cls: 'small ghost', data: { to: it.to } }) : '') + '</span></div>').join('') + '</div>' : '<div class="empty">Henüz mail yok. “Sipariş föyü” sekmesinde e-postası olan bir sipariş kaydedin; durumu “Montaj Yapıldı” ve “Teslim Edildi” yapınca sıradaki mailler gider.</div>') + '</div>' +
+      '<div>' + card('Otomatik mailler', '<div class="list">' + types.map(([k, t]) => '<div><span><b>' + esc(t.title) + '</b><small>' + esc(t.when) + '</small></span>' + (admin ? btn('mail-toggle', n.settings.enabled[k] ? 'Açık' : 'Kapalı', { cls: 'small' + (n.settings.enabled[k] ? ' primary' : ''), data: { v: k } }) : tag(n.settings.enabled[k] ? 'Açık' : 'Kapalı', n.settings.enabled[k] ? 'ok' : '')) + '</div>').join('') + '</div><p class="note">“Cam Siparişi Verildi” aşamasında mail gitmez. Bir aşama atlanırsa yalnızca güncel durumun maili gider (ör. satıştan doğrudan teslim → yalnızca teşekkür). ' + esc(n.settings.startDate.split('-').reverse().join('.')) + ' öncesi açılmış siparişlere geriye dönük mail atılmaz.</p>', { sub: admin ? 'Yönetici açıp kapatabilir.' : 'Ayarları yönetici değiştirir.' }) +
+      (admin ? '<form data-form="notify-settings">' + card('Gönderen bilgisi', '<div class="pad form">' + field('Gönderen adı', input('senderName', n.settings.senderName, 'maxlength="60"')) + field('Yanıt adresi (reply-to)', input('replyTo', n.settings.replyTo, 'type="email" maxlength="120" placeholder="ornek@damlakuzoptik.com"')) + '</div><div id="ns-error" class="error"></div><div class="savebar"><span>Canlıda mailler işletmenin kendi alan adından (SPF/DKIM tanımlı) sunucu üzerinden gönderilir.</span><button class="primary" type="submit">Kaydet</button></div>') + '</form>' : '') + '</div></div>';
   }
   function staffKasa() {
     const b = S.books;
@@ -1081,7 +1099,7 @@
       card('Son sayımlar', table(['Tarih', 'Sayan', '#Sayılan', '#Sistem', '#Fark', '#Bankaya'], counts.map((x) => '<tr>' + td(dateTR(x.date)) + td(esc(x.by)) + tdn(tl(x.counted)) + tdn(tl(x.system)) + tdn(x.diff ? tl(x.diff) : '✓', x.diff < 0 ? 'neg' : x.diff > 0 ? 'pos' : '') + tdn(x.deposit ? tl(x.deposit) : '—') + '</tr>'), { empty: 'Sayım yok.' })) + '</div>';
   }
   function bridgeScript(nonce) {
-    return '<script>(function(){const token=' + JSON.stringify(nonce) + ';window.addEventListener("message",function(e){if(e.source!==parent||!e.data||e.data.type!=="kuzmos-add-product"||e.data.nonce!==token)return;const p=e.data.product;if(!p||!["urun","ekartman","kopru","kol","kategori","fiyat","sku"].every(k=>typeof p[k]==="string"&&p[k].length<200))return;let row=[...document.querySelectorAll("#productRows .product-row")].find(r=>!r.querySelector("input").value.trim());if(!row){addProductRow();row=document.querySelector("#productRows .product-row:last-child")}const inputs=row.querySelectorAll("input");[p.urun,"1",p.ekartman,p.kopru,p.kol,p.kategori,p.fiyat].forEach((v,i)=>{if(inputs[i])inputs[i].value=v});row.dataset.kuzmosSku=p.sku;calcSubtotal();parent.postMessage({type:"kuzmos-product-added",nonce:token,sku:p.sku},"*")});try{var _save=saveRecordToServer;saveRecordToServer=function(rec,onOk){try{var skus={};document.querySelectorAll("#productRows .product-row").forEach(function(r){var i=r.querySelector("input");if(r.dataset.kuzmosSku&&i)skus[i.value.trim()]=r.dataset.kuzmosSku});var pays=getPayments(rec).map(function(p){return{amount:Math.round(parseTRMoney(p.tutar)*100),date:String(p.tarih||rec.siparisTarihi||""),method:p.yontem==="kk"?"card":"cash",detail:String(p.ccDetail||"")}});var lines=(rec.products||[]).map(function(p){var v=getCatVAT(p.kategori);return{label:String(p.urun||""),qty:parseInt(p.adet,10)||1,unitPrice:Math.round(parseTRMoney(p.fiyat)*100),vatRate:v===null?-1:v,category:String(p.kategori||""),sku:skus[String(p.urun||"").trim()]||""}});parent.postMessage({type:"kuzmos-order-saved",nonce:token,order:{id:String(rec.id),no:String(rec.no||""),date:String(rec.siparisTarihi||""),customer:String(rec.adSoyad||""),seller:String(rec.satisTem||""),total:Math.round(parseTRMoney(rec.tutar)*100),lines:lines,payments:pays,delivered:rec.siparisDurumu==="Teslim Edildi",deliveredOn:String(rec.teslimTarihi||"")}},"*")}catch(err){parent.postMessage({type:"kuzmos-order-error",nonce:token,message:String(err&&err.message||err)},"*")}return _save(rec,onOk)}}catch(e){}parent.postMessage({type:"kuzmos-staff-ready",nonce:token},"*")})();<\/script>';
+    return '<script>(function(){const token=' + JSON.stringify(nonce) + ';window.addEventListener("message",function(e){if(e.source!==parent||!e.data||e.data.type!=="kuzmos-add-product"||e.data.nonce!==token)return;const p=e.data.product;if(!p||!["urun","ekartman","kopru","kol","kategori","fiyat","sku"].every(k=>typeof p[k]==="string"&&p[k].length<200))return;let row=[...document.querySelectorAll("#productRows .product-row")].find(r=>!r.querySelector("input").value.trim());if(!row){addProductRow();row=document.querySelector("#productRows .product-row:last-child")}const inputs=row.querySelectorAll("input");[p.urun,"1",p.ekartman,p.kopru,p.kol,p.kategori,p.fiyat].forEach((v,i)=>{if(inputs[i])inputs[i].value=v});row.dataset.kuzmosSku=p.sku;calcSubtotal();parent.postMessage({type:"kuzmos-product-added",nonce:token,sku:p.sku},"*")});try{var _save=saveRecordToServer;saveRecordToServer=function(rec,onOk){try{var skus={};document.querySelectorAll("#productRows .product-row").forEach(function(r){var i=r.querySelector("input");if(r.dataset.kuzmosSku&&i)skus[i.value.trim()]=r.dataset.kuzmosSku});var pays=getPayments(rec).map(function(p){return{amount:Math.round(parseTRMoney(p.tutar)*100),date:String(p.tarih||rec.siparisTarihi||""),method:p.yontem==="kk"?"card":"cash",detail:String(p.ccDetail||"")}});var lines=(rec.products||[]).map(function(p){var v=getCatVAT(p.kategori);return{label:String(p.urun||""),qty:parseInt(p.adet,10)||1,unitPrice:Math.round(parseTRMoney(p.fiyat)*100),vatRate:v===null?-1:v,category:String(p.kategori||""),sku:skus[String(p.urun||"").trim()]||""}});var mails={};["siparis","hazir","tesekkur"].forEach(function(t){try{var m=buildMail(rec,t);mails[t]={subject:String(m.subject),html:String(m.html)}}catch(e){}});parent.postMessage({type:"kuzmos-order-saved",nonce:token,mails:mails,order:{id:String(rec.id),no:String(rec.no||""),date:String(rec.siparisTarihi||""),customer:String(rec.adSoyad||""),email:String(rec.eposta||""),status:String(rec.siparisDurumu||""),seller:String(rec.satisTem||""),total:Math.round(parseTRMoney(rec.tutar)*100),lines:lines,payments:pays,delivered:rec.siparisDurumu==="Teslim Edildi",deliveredOn:String(rec.teslimTarihi||"")}},"*")}catch(err){parent.postMessage({type:"kuzmos-order-error",nonce:token,message:String(err&&err.message||err)},"*")}return _save(rec,onOk)};maybeAutoNotify=function(rec,type){try{if(type==="hazir"&&typeof showNotifyCard==="function")showNotifyCard(rec,String(rec.eposta||"").trim()?true:null)}catch(e){}};sendCustomerMail=function(rec,type,opts){opts=opts||{};var to=String(rec.eposta||"").trim();if(!to){if(!opts.silent)toast("Bu kayıtta e-posta adresi yok",false);if(opts.done)opts.done(false);return}var m=buildMail(rec,type);parent.postMessage({type:"kuzmos-mail-manual",nonce:token,mail:{orderId:String(rec.id),no:String(rec.no||""),customer:String(rec.adSoyad||""),to:to,type:type,subject:String(m.subject),html:String(m.html)}},"*");markMailSent(rec,type);saveLocal();if(!opts.silent)toast("Mail Kuzmos gönderim kutusuna alındı · "+to,true);if(opts.done)opts.done(true)}}catch(e){}parent.postMessage({type:"kuzmos-staff-ready",nonce:token},"*")})();<\/script>';
   }
   function mountStaffFrame() {
     const f = main.querySelector('iframe.staff-frame');
@@ -1104,12 +1122,33 @@
       s.ready = true;
       sendStaffProduct();
     }
-    if (e.data.type === 'kuzmos-order-saved') receiveOrder(e.data.order);
+    if (e.data.type === 'kuzmos-order-saved') receiveOrder(e.data.order, e.data.mails || {});
+    if (e.data.type === 'kuzmos-mail-manual') {
+      try {
+        N.queueManual(S.notify, e.data.mail);
+        N.deliver(S.notify, demoSender);
+        staffNotice('ok', '“' + N.MAIL_TYPES[e.data.mail.type].title + '” maili ' + e.data.mail.to + ' adresine tekrar gönderildi (önizleme: gerçek gönderim yok).');
+      } catch (err) {
+        staffNotice('err', 'Mail gönderilemedi: ' + err.message);
+      }
+    }
     if (e.data.type === 'kuzmos-order-error') staffNotice('err', 'Föy kaydı finansa aktarılamadı: ' + String(e.data.message).slice(0, 200));
   });
   /** Föyden gelen siparişi finansa işler. Föyün kendi durumunu bozmamak için sayfa yeniden çizilmez. */
   const skuMemory = {};
-  function receiveOrder(raw) {
+  /** Önizleme göndericisi: gerçek e-posta göndermez, yalnızca gönderildi olarak işaretler. */
+  const demoSender = () => ({ ok: true, demo: true });
+  function notifyOrder(o, mails) {
+    try {
+      const items = N.onOrderSaved(S.notify, { id: o.id, no: o.no, customer: o.customer, email: o.email, status: o.status, date: o.date }, mails);
+      N.deliver(S.notify, demoSender);
+      return items.map((it) => (it.status === 'sent' ? '✉ “' + N.MAIL_TYPES[it.type].title + '” maili ' + it.to + ' adresine gönderildi' : '⚠ “' + N.MAIL_TYPES[it.type].title + '” maili gönderilmedi: ' + N.ITEM_STATUS[it.status].toLowerCase() + (it.status === 'no-email' ? ' (föyde e-postayı ekleyip kaydedin)' : ''))).join(' · ');
+    } catch (err) {
+      return '⚠ Bildirim: ' + err.message;
+    }
+  }
+  function receiveOrder(raw, mails = {}) {
+    const mailNote = notifyOrder(raw, mails);
     const o = structuredClone(raw);
     const mem = (skuMemory[o.id] ||= {});
     o.lines.forEach((l) => {
@@ -1121,21 +1160,21 @@
     o.payments.forEach((p) => (p.date = clamp(p.date)));
     o.deliveredOn = o.deliveredOn ? clamp(o.deliveredOn) : '';
     const bad = o.lines.find((l) => l.vatRate < 0);
-    if (bad) return staffNotice('err', '“' + bad.label + '” için kategori seçilmemiş; KDV oranı bilinmediği için finansa işlenmedi. Föyde kategoriyi seçip tekrar kaydedin.');
+    if (bad) return staffNotice('err', '“' + bad.label + '” için kategori seçilmemiş; KDV oranı bilinmediği için finansa işlenmedi. Föyde kategoriyi seçip tekrar kaydedin.' + (mailNote ? '\n' + mailNote : ''));
     const next = structuredClone(S.books);
     try {
       const r = F.syncOrder(next, o);
       S.books = next;
       syncStock();
-      staffNotice('ok', o.no + ' finansa işlendi: ' + (r.payments ? r.payments + ' yeni tahsilat' : 'yeni tahsilat yok') + (r.delivered ? ' · teslim edildi: hasılat, KDV ve satılan malın maliyeti kaydedildi' : '') + '.');
+      staffNotice('ok', o.no + ' finansa işlendi: ' + (r.payments ? r.payments + ' yeni tahsilat' : 'yeni tahsilat yok') + (r.delivered ? ' · teslim edildi: hasılat, KDV ve satılan malın maliyeti kaydedildi' : '') + '.' + (mailNote ? '\n' + mailNote : ''));
     } catch (err) {
-      staffNotice('err', o.no + ' finansa işlenemedi: ' + friendly(err.message));
+      staffNotice('err', o.no + ' finansa işlenemedi: ' + friendly(err.message) + (mailNote ? '\n' + mailNote : ''));
     }
   }
   function staffNotice(kind, text) {
     S.staff.notice = { kind, text };
     const box = main.querySelector('#staff-sync');
-    if (box) box.innerHTML = '<div class="callout ' + (kind === 'err' ? 'bad' : '') + '">' + esc(text) + '</div>';
+    if (box) box.innerHTML = '<div class="callout ' + (kind === 'err' ? 'bad' : '') + '" style="white-space:pre-line">' + esc(text) + '</div>';
   }
   function scanIntoStaff(barcode) {
     const product = I.orderProductFromBarcode(S.stock, barcode, 'Atrium');
@@ -1194,7 +1233,7 @@
     fin: (el) => { S.pay = null; S.plan = null; go('finance', el.dataset.v); },
     'go-fin': (el) => go('finance', el.dataset.v),
     dismiss: () => { S.flash = null; render(); },
-    'reset-demo': () => { if (confirm('Demo verisi başlangıç haline dönsün mü?')) { S.books = F.demoBooks(); S.stock = I.inventorySeed(); syncStock(); S.pay = S.plan = S.ret = null; S.doc = newDocDraft('expense'); flash('Demo verisi sıfırlandı.'); render(); } },
+    'reset-demo': () => { if (confirm('Demo verisi başlangıç haline dönsün mü?')) { S.books = F.demoBooks(); S.stock = I.inventorySeed(); S.notify = N.createNotifier({ startDate: '2026-10-31' }); syncStock(); S.pay = S.plan = S.ret = null; S.doc = newDocDraft('expense'); flash('Demo verisi sıfırlandı.'); render(); } },
     'doc-type': (el) => { S.doc = newDocDraft(el.dataset.v); S.quickParty = false; render(); },
     'doc-new': (el) => { S.doc = newDocDraft(el.dataset.v, el.dataset.party ? { partyId: el.dataset.party } : {}); go('finance', 'new'); },
     'doc-clear': () => resetDoc(),
@@ -1311,6 +1350,25 @@
       mutate((b) => F.copyBudget(b, { from: prev, to: S.report.period, branchId: S.report.budgetBranch }), (n) => n ? monthTR(prev) + ' bütçesinden ' + n + ' kalem kopyalandı.' : monthTR(prev) + ' için bütçe yok.');
     },
     'staff-view': (el) => { S.staffView = el.dataset.v; render(); },
+    'mail-preview': (el) => { S.mailPreview = el.dataset.id; render(); },
+    'mail-resend': (el) => {
+      const it = N.resend(S.notify, el.dataset.id);
+      N.deliver(S.notify, demoSender);
+      flash(it.status === 'sent' ? 'Mail tekrar gönderildi (önizleme).' : 'Mail gönderilmedi: ' + N.ITEM_STATUS[it.status].toLowerCase() + '.', it.status === 'sent' ? 'ok' : 'err');
+      render();
+    },
+    'mail-optout': (el) => {
+      const on = !S.notify.optOut.includes(el.dataset.to.toLocaleLowerCase('tr-TR'));
+      N.setOptOut(S.notify, el.dataset.to, on);
+      if (!on) N.deliver(S.notify, demoSender);
+      flash(on ? el.dataset.to + ' adresine bundan sonra otomatik mail gönderilmeyecek.' : el.dataset.to + ' için mail izni açıldı.');
+      render();
+    },
+    'mail-toggle': (el) => {
+      if (S.role !== 'admin') return;
+      N.setEnabled(S.notify, el.dataset.v, !S.notify.settings.enabled[el.dataset.v]);
+      render();
+    },
     'go-report': () => { S.report.tab = 'branches'; go('finance', 'reports'); },
   };
   /** Excel / manuel stok satırlarını stok defterine işler: EKLE → mal kabul (maliyetle), SAYIM → sayım farkı. */
@@ -1509,6 +1567,13 @@
       if (!u.email || !H.ROLE_LABELS[u.role]) return (el.textContent = 'Geçerli kullanıcı taslağı girin.');
       if (S.users.some((x) => x.email.toLowerCase() === u.email.toLowerCase())) return (el.textContent = 'E-posta zaten taslaklarda var.');
       S.users.push(u);
+      render();
+    },
+    'notify-settings': (f) => {
+      const v = readForm(f);
+      if (v.replyTo && !N.isEmail(v.replyTo)) return (main.querySelector('#ns-error').textContent = 'Yanıt adresi geçerli bir e-posta olmalı.');
+      Object.assign(S.notify.settings, { senderName: v.senderName.trim().slice(0, 60) || 'Damla Kuz Optik', replyTo: v.replyTo.trim() });
+      flash('Gönderen bilgisi kaydedildi.');
       render();
     },
     'staff-scan': (f) => { try { scanIntoStaff(readForm(f).barcode.trim()); } catch (e) { showError(e); } },

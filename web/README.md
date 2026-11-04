@@ -45,3 +45,12 @@ Veri yalnızca sayfa oturumunda yaşar. Kimlik doğrulama, canlı veritabanı, b
 - **Taksitli alış:** Fatura borcu eşit taksitlere bölünür; her taksit ayrı ödeme kalemidir.
 - **Bütçe:** Ay ve şube bazında plan / fiili / sapma; önceki aydan kopyalama.
 - **Belge eki:** Fatura, fiş, dekont (PDF/görsel, 10 MB). Önizlemede yalnızca tarayıcı belleğinde tutulur; canlıda özel depolama gerekir.
+
+## Müşteri bildirimleri (otomatik e-posta)
+Föydeki üç mail şablonu korunur: **Satış Yapıldı** → “Siparişiniz için teşekkürler”, **Montaj Yapıldı** → “Gözlüğünüz teslimata hazır”, **Teslim Edildi** → “Teşekkürler + kullanım önerileri”. Föy her kayıtta şablonları Kuzmos’a iletir; gönderim kararını `web/notify/notify.mjs` verir:
+- Her sipariş × mail türü bir kez (tekrar kaydetmek, durumu geri alıp ilerletmek ikinci mail göndermez). Elle “Mail İlet / Tekrar gönder” ayrı kayıt açar.
+- Ara aşama atlanırsa yalnızca güncel durumun maili gider; “Cam Siparişi Verildi”de mail yok.
+- E-postası olmayan / hatalı sipariş görünür kalır; föyde e-posta eklenip kaydedilince aynı mail gider.
+- Müşteri bazında “mail istemiyor”; yönetici mail türlerini açıp kapatabilir; başlangıç tarihi öncesi siparişlere geriye dönük mail atılmaz.
+- Gönderim hatası en fazla 3 kez tekrar denenir.
+Önizlemede gerçek e-posta gönderilmez. Canlıda gönderim sunucu tarafında, işletmenin alan adından (SPF/DKIM/DMARC tanımlı SMTP) yapılır; mevcut Apps Script föyünde `musteriyeMailGonder` aynı şekilde çalışmaya devam eder. Mailler sipariş bilgilendirmesidir; içerikte kampanya/tanıtım olursa ticari ileti onayı (İYS) gerekir.
