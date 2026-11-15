@@ -3,7 +3,7 @@
 #kuzmos-app{--bg:#f5f5f7;--panel:#fff;--text:#1d1d1f;--soft:#6e6e73;--faint:#8e8e93;--line:#e5e5ea;--line2:#d2d2d7;--yellow:#f5c800;--yellow-d:#8a6d00;--tint:#fff8d9;--green:#1f7a45;--green-bg:#e9f6ee;--red:#b4362a;--red-bg:#fdecea;--blue:#2457a6;--blue-bg:#eaf1fb;--amber-bg:#fff4d6;color-scheme:light;color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg)}
 #kuzmos-app *{box-sizing:border-box}
 #kuzmos-app button,#kuzmos-app input,#kuzmos-app select,#kuzmos-app textarea{font:inherit;color:inherit}
-#kuzmos-app button{min-height:34px;border:1px solid var(--line2);border-radius:99px;background:var(--panel);padding:6px 14px;cursor:pointer;color:var(--text);white-space:nowrap}
+#kuzmos-app button{min-height:38px;border:1px solid var(--line2);border-radius:99px;background:var(--panel);padding:6px 14px;cursor:pointer;color:var(--text);white-space:nowrap}
 #kuzmos-app button:hover{background:var(--tint);border-color:var(--yellow)}
 #kuzmos-app button:focus-visible,#kuzmos-app input:focus-visible,#kuzmos-app select:focus-visible,#kuzmos-app textarea:focus-visible,#kuzmos-app a:focus-visible{outline:2px solid #bd9b00;outline-offset:2px}
 #kuzmos-app button[aria-pressed=true]{background:var(--text);color:#fff;border-color:var(--text)}
@@ -12,9 +12,9 @@
 #kuzmos-app button.ghost{border-color:transparent;background:transparent;color:var(--blue);padding:4px 8px;min-height:28px}
 #kuzmos-app button.ghost:hover{background:var(--blue-bg)}
 #kuzmos-app button.danger{color:var(--red)}
-#kuzmos-app button.small{min-height:28px;padding:3px 10px;font-size:12px}
+#kuzmos-app button.small{min-height:32px;padding:4px 12px;font-size:12.5px}
 #kuzmos-app button:disabled{opacity:.5;cursor:not-allowed;background:var(--bg)}
-#kuzmos-app input,#kuzmos-app select,#kuzmos-app textarea{border:1px solid var(--line2);border-radius:8px;padding:9px 11px;background:var(--panel);width:100%;min-width:0}
+#kuzmos-app input,#kuzmos-app select,#kuzmos-app textarea{border:1px solid var(--line2);border-radius:10px;padding:10px 12px;min-height:42px;background:var(--panel);width:100%;min-width:0}
 #kuzmos-app input[readonly]{background:var(--bg);color:var(--soft)}
 #kuzmos-app textarea{min-height:64px;resize:vertical}
 #kuzmos-app h1,#kuzmos-app h2,#kuzmos-app h3,#kuzmos-app h4{margin:0;font-weight:600;letter-spacing:-.3px}
@@ -38,12 +38,20 @@
 #kuzmos-app .role{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--soft)}
 #kuzmos-app .role select{width:auto;padding:6px 10px;border-radius:99px}
 #kuzmos-app .tabs{display:flex;gap:6px;padding:10px 22px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto}
+#kuzmos-app .tabs button{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:6px 16px;font-weight:500}
+#kuzmos-app .ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
 #kuzmos-app .demo-note{font-size:11px;color:#5b4a0a;background:var(--amber-bg);padding:7px 22px;border-bottom:1px solid #f1e2a8}
 #kuzmos-app .layout{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:640px}
 #kuzmos-app .layout.single{grid-template-columns:minmax(0,1fr)}
 #kuzmos-app .side{background:var(--panel);border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
 #kuzmos-app .side .grp{font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;color:var(--faint);padding:12px 10px 4px}
-#kuzmos-app .side button{border:0;border-radius:8px;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 10px;min-height:32px;background:transparent}
+#kuzmos-app .side button{border:0;border-radius:10px;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;min-height:40px;background:transparent}
+#kuzmos-app .side .nl{display:inline-flex;align-items:center;gap:9px}
+#kuzmos-app .side .nl .ic{color:var(--soft)}
+#kuzmos-app .side button[aria-pressed=true] .nl .ic{color:var(--yellow)}
+#kuzmos-app .side button.navnew{background:var(--yellow);justify-content:center;gap:6px;font-weight:600;margin-bottom:6px}
+#kuzmos-app .side button.navnew:hover{background:#ffd60a}
+#kuzmos-app .side button.navnew[aria-pressed=true]{background:var(--text);color:#fff}
 #kuzmos-app .side button:hover{background:var(--bg)}
 #kuzmos-app .side button[aria-pressed=true]{background:var(--text);color:#fff}
 #kuzmos-app .badge{font-size:11px;border-radius:99px;padding:1px 7px;background:var(--red);color:#fff;font-weight:600}
@@ -123,6 +131,48 @@
 #kuzmos-app .callout{border-radius:12px;padding:12px 14px;font-size:12.5px;background:var(--blue-bg);color:#1c3d73;margin-bottom:14px;line-height:1.55}
 #kuzmos-app .callout.warn{background:var(--amber-bg);color:#5b4a0a}
 #kuzmos-app .callout.bad{background:var(--red-bg);color:#7f1d1d}
+#kuzmos-app .callout.ok{background:var(--green-bg);color:#14532d}
+/* hızlı işlemler */
+#kuzmos-app .quick{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px}
+#kuzmos-app .qt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;white-space:normal;border-radius:14px;padding:14px 16px;min-height:96px;background:var(--panel);border:1px solid var(--line)}
+#kuzmos-app .qt:hover{border-color:var(--yellow);background:var(--tint)}
+#kuzmos-app .qt b{font-size:14px;font-weight:600;margin-top:6px}
+#kuzmos-app .qt>span:last-child{font-size:12px;color:var(--soft)}
+#kuzmos-app .qi{width:34px;height:34px;border-radius:10px;background:var(--tint);display:grid;place-items:center;color:#7a5b00}
+#kuzmos-app .qi .ic{width:20px;height:20px}
+/* yapılacaklar */
+#kuzmos-app .todo>div{padding:12px 16px}
+#kuzmos-app .todo-t{display:flex;gap:10px;align-items:baseline;min-width:0}
+#kuzmos-app .todo-t b{font-weight:600}
+#kuzmos-app .dot{width:9px;height:9px;border-radius:99px;flex:none;display:inline-block;transform:translateY(-1px)}
+#kuzmos-app .dot.bad{background:var(--red)}#kuzmos-app .dot.warn{background:#d9a400}
+#kuzmos-app details.more{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-bottom:16px}
+#kuzmos-app details.more>summary{display:flex;gap:12px;align-items:center;padding:14px 16px;cursor:pointer;list-style:none}
+#kuzmos-app details.more>summary::-webkit-details-marker{display:none}
+#kuzmos-app details.more>summary small{display:block;color:var(--soft);font-size:12px}
+#kuzmos-app details.more>summary::after{content:'›';margin-left:auto;font-size:20px;color:var(--soft);transition:transform .15s}
+#kuzmos-app details.more[open]>summary::after{transform:rotate(90deg)}
+#kuzmos-app details.more[open]>summary{border-bottom:1px solid var(--line)}
+/* sekmeli seçim (büyük) */
+#kuzmos-app .seg.big{display:flex;margin-bottom:16px;overflow-x:auto;flex-wrap:nowrap;border-radius:14px;padding:4px}
+#kuzmos-app .seg.big button{display:inline-flex;align-items:center;gap:7px;min-height:42px;border-radius:10px;padding:6px 14px}
+/* kartla tahsilat */
+#kuzmos-app .amount-big input{font-size:30px;font-weight:650;letter-spacing:-.6px;padding:12px 14px;min-height:62px;font-variant-numeric:tabular-nums}
+#kuzmos-app button.big{min-height:50px;padding:10px 22px;font-size:15px;display:inline-flex;align-items:center;gap:8px;border-radius:14px}
+#kuzmos-app .tap{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:34px 20px;margin-bottom:16px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px}
+#kuzmos-app .tap b{font-size:20px;letter-spacing:-.4px}
+#kuzmos-app .tap>span{font-size:26px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.6px}
+#kuzmos-app .tap small{color:var(--soft);font-size:12.5px}
+#kuzmos-app .tap .row{margin-top:14px}
+#kuzmos-app .tap-ring{width:92px;height:92px;border-radius:99px;display:grid;place-items:center;background:var(--tint);color:#7a5b00;margin-bottom:8px;font-size:34px;font-weight:700}
+#kuzmos-app .tap-ring .ic{width:44px;height:44px}
+#kuzmos-app .tap:not(.ok):not(.bad) .tap-ring{animation:kzpulse 1.4s ease-out infinite}
+#kuzmos-app .tap.ok .tap-ring{background:var(--green-bg);color:var(--green)}
+#kuzmos-app .tap.bad .tap-ring{background:var(--red-bg);color:var(--red)}
+#kuzmos-app .tap-note b{font-size:inherit;letter-spacing:0}
+#kuzmos-app .tap-note{max-width:440px;font-size:13px;background:var(--amber-bg);color:#5b4a0a;border-radius:10px;padding:10px 12px;margin-top:10px}
+@keyframes kzpulse{0%{box-shadow:0 0 0 0 rgba(245,200,0,.55)}100%{box-shadow:0 0 0 26px rgba(245,200,0,0)}}
+@media (prefers-reduced-motion:reduce){#kuzmos-app .tap-ring{animation:none!important}}
 #kuzmos-app .list>div{display:flex;justify-content:space-between;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line);font-size:13px;align-items:center}
 #kuzmos-app .list>div:last-child{border-bottom:0}
 #kuzmos-app .list small{display:block;font-size:11.5px;color:var(--soft)}
@@ -178,7 +228,7 @@
 #kuzmos-app footer.foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 22px;background:var(--panel);border-top:1px solid var(--line);font-size:11px;color:var(--soft)}
 @media(max-width:1080px){#kuzmos-app .grid2{grid-template-columns:1fr}#kuzmos-app .sticky{position:static}#kuzmos-app .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:860px){#kuzmos-app .layout{grid-template-columns:1fr}#kuzmos-app .side{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:8px 10px;gap:4px}#kuzmos-app .side .grp{display:none}#kuzmos-app .side button{flex:0 0 auto;border:1px solid var(--line);border-radius:99px}#kuzmos-app .three,#kuzmos-app .grid3,#kuzmos-app .grid2e{grid-template-columns:1fr}}
-@media(max-width:620px){#kuzmos-app .content{padding:16px}#kuzmos-app .top{padding:12px 16px}#kuzmos-app .tabs{padding:8px 16px}#kuzmos-app .demo-note{padding:7px 16px}#kuzmos-app .company{display:none}#kuzmos-app .top-right{margin-left:0;width:100%}#kuzmos-app .form,#kuzmos-app .form.three{grid-template-columns:1fr}#kuzmos-app .fx{grid-template-columns:1fr 1fr}#kuzmos-app .kpi strong{font-size:19px}#kuzmos-app .cal{padding:6px;gap:2px}#kuzmos-app .cal button{min-height:58px;padding:4px}#kuzmos-app .cal button .c,#kuzmos-app .cal button .a{display:none}#kuzmos-app input,#kuzmos-app select{font-size:16px}#kuzmos-app h2{font-size:21px}}
+@media(max-width:620px){#kuzmos-app button.big{width:100%;justify-content:center}#kuzmos-app .quick{grid-template-columns:1fr 1fr}#kuzmos-app .qt{min-height:84px;padding:12px}#kuzmos-app .content{padding:16px}#kuzmos-app .top{padding:12px 16px}#kuzmos-app .tabs{padding:8px 16px}#kuzmos-app .demo-note{padding:7px 16px}#kuzmos-app .company{display:none}#kuzmos-app .top-right{margin-left:0;width:100%}#kuzmos-app .form,#kuzmos-app .form.three{grid-template-columns:1fr}#kuzmos-app .fx{grid-template-columns:1fr 1fr}#kuzmos-app .kpi strong{font-size:19px}#kuzmos-app .cal{padding:6px;gap:2px}#kuzmos-app .cal button{min-height:58px;padding:4px}#kuzmos-app .cal button .c,#kuzmos-app .cal button .a{display:none}#kuzmos-app input,#kuzmos-app select{font-size:16px}#kuzmos-app h2{font-size:21px}}
 
 /* özet kartı satırları */
 #kuzmos-app .kpi-l{display:flex;flex-direction:column}
@@ -261,14 +311,14 @@
  <div class="company"><strong>Damla Kuz Optik</strong>Atrium · pilot işletme</div>
  <div class="top-right">
   <span class="today" id="kz-today"></span>
-  <label class="role">Demo rolü <select id="kz-role" aria-label="Demo rolü"></select></label>
-  <button type="button" class="small" data-act="reset-demo">Demoyu sıfırla</button>
+  <label class="role">Görünüm <select id="kz-role" aria-label="Kimin gözünden bakılıyor"></select></label>
+  <button type="button" class="small ghost" data-act="reset-demo">Demoyu sıfırla</button>
  </div>
 </header>
 <nav class="tabs" id="kz-tabs" aria-label="Paneller"></nav>
-<div class="demo-note">Ürün önizlemesi · Sentetik örnek veri; sayfa yenilenince sıfırlanır. Rol seçimi gerçek giriş güvenliği değildir. Oranlar örnektir, muhasebeci onayı gerekir.</div>
+<div class="demo-note">Deneme ortamı · örnek verilerle çalışır, sayfa yenilenince sıfırlanır. Oranlar örnektir.</div>
 <div id="kz-main"></div>
-<footer class="foot"><span>Kuz Management Operating System · v0.8 önizleme</span><span>Canlı banka / Supabase bağlantısı yok</span></footer>
+<footer class="foot"><span>Kuz Management Operating System · v0.9 önizleme</span><span>Canlı banka, SoftPOS ve Medula bağlantısı yok · görünüm seçimi güvenlik değildir</span></footer>
 <script>
 /*__BUNDLE__*/
 </script>

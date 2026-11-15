@@ -29,6 +29,8 @@ export function buildFragment() {
     toNamespace('X', read('inventory/xlsx.mjs'), { import: 'I' }),
     toNamespace('H', read('app/helpers.mjs')),
     toNamespace('N', read('notify/notify.mjs')),
+    toNamespace('P', read('payments/terminal.mjs')),
+    toNamespace('M', read('medula/medula.mjs')),
   ];
   const form = JSON.stringify(read('reference/sales/Index.html')).replace(/</g, '\\u003c');
   const template = readFileSync(at('templates/Kuzmos_Stok_Aktarim_Sablonu.xlsx')).toString('base64');

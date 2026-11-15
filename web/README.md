@@ -54,3 +54,15 @@ Föydeki üç mail şablonu korunur: **Satış Yapıldı** → “Siparişiniz i
 - Müşteri bazında “mail istemiyor”; yönetici mail türlerini açıp kapatabilir; başlangıç tarihi öncesi siparişlere geriye dönük mail atılmaz.
 - Gönderim hatası en fazla 3 kez tekrar denenir.
 Önizlemede gerçek e-posta gönderilmez. Canlıda gönderim sunucu tarafında, işletmenin alan adından (SPF/DKIM/DMARC tanımlı SMTP) yapılır; mevcut Apps Script föyünde `musteriyeMailGonder` aynı şekilde çalışmaya devam eder. Mailler sipariş bilgilendirmesidir; içerikte kampanya/tanıtım olursa ticari ileti onayı (İYS) gerekir.
+
+## v0.9: sade arayüz, tablet kart tahsilatı (NFC), SGK Medula
+**Arayüz.** Muhasebe jargonu yerine gündelik dil; finans açılış ekranı “Bugün”: hızlı işlem kutucukları (fatura gir, ödeme yap, kartla tahsilat, SGK reçetesi, kasadan masraf), önceliklendirilmiş “Yapılacaklar” listesi ve her maddede doğrudan eylem düğmesi. “Üç soru / köprü” muhasebe ayrıntısı katlanır bölüme alındı. İkonlu, dokunmaya uygun (≥ 38–42 px) menü ve sekmeler. Sipariş föyü (`reference/sales/Index.html`) **değiştirilmedi**.
+
+**Kartla tahsilat (`web/payments/terminal.mjs`).** Satış › Kartla tahsilat: bakiyesi kalan siparişi seç → tutar/taksit → “Kartla ödeme al”. Onaylanan ödeme mağazanın POS hesabına işlenir (`F.terminalPayment`, idempotent, aynı `txnId` iki kez kaydedilmez). Personel aynı ödemeyi föye kart ödemesi olarak girdiğinde `syncOrder` onu tablet kaydıyla eşler, çift tahsilat oluşmaz; föye girilmeyenler hatırlatılır.
+- Tarayıcıdaki Web NFC temassız kartın EMV çipini **okuyamaz**. Gerçek ödeme için onaylı SoftPOS gerekir: bankanın SoftPOS uygulaması, lisanslı ödeme kuruluşunun SoftPOS SDK’sı ya da Android ÖKC-POS. Kuzmos bunlarla `window.KuzmosPOS.pay(json)` köprüsü üzerinden konuşur (Android tablet uygulamasında sağlanacak); kart verisi Kuzmos’a gelmez, yanıt tutar/referans/onay kodu doğrulanmadan kabul edilmez.
+- Her mağaza kendi üye işyeri sözleşmesiyle çalışır; para mağazanın hesabına geçer. Başka işletmelerin parasını tek ortak hesapta toplamak ödeme kuruluşu lisansı (6493 s. Kanun) gerektirdiğinden desteklenmez; lisanslı kuruluşla alt üye işyeri modeli kullanılabilir.
+- Ayarlar › Tablet ödeme: mağaza bazında sağlayıcı, üye işyeri/terminal no, POS hesabı, azami taksit. Gizli anahtarlar yalnızca sunucuda (ayarda referans adı tutulur).
+
+**SGK Medula (`web/medula/medula.mjs`).** Satış › SGK / Medula: T.C. + e-reçete sorgulama (TC algoritma kontrolü, ekranda maskeli), hak durumu, föydeki siparişe provizyon; teslimde SGK payı müşteri alacağından `127 SGK’dan alacaklar`a geçer (`F.sgkClaim`), ay sonu teslim edilenler tek SGK faturasında toplanır, SGK ödemesi bankaya işlenince alacak kapanır (`F.sgkCollect`).
+- Medula web servisleri tesis kodu ve gizli kullanıcı bilgisi ister; bağlantı tarayıcıdan değil Kuzmos sunucusundan yapılır (`serverAdapter('/api/medula')`). Önizlemede `demoAdapter` çalışır; sunucu ucu henüz yazılmadı.
+- SGK tutarları SUT’tan gelir ve değişir; kodda sabit tutar yok. Tarife Ayarlar › Medula’dan girilir (demo değerleri örnektir), Medula’nın bildirdiği tutar her zaman önceliklidir.

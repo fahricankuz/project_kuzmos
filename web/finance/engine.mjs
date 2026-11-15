@@ -64,6 +64,7 @@ export const TAX_TYPES = {
 
 const SYS = {
   RECEIVABLE: { code: '120', label: 'Alıcılar (müşteri bakiyeleri)', type: 'asset' },
+  SGK_RECEIVABLE: { code: '127', label: 'SGK’dan alacaklar (Medula)', type: 'asset' },
   INVENTORY: { code: '153', label: 'Ticari mallar (stok)', type: 'asset' },
   CARRY_VAT: { code: '190', label: 'Devreden KDV', type: 'asset' },
   INPUT_VAT: { code: '191', label: 'İndirilecek KDV', type: 'asset' },
@@ -1375,6 +1376,13 @@ export function syncOrder(b, input) {
     const k = order.id + ':' + p.date + ':' + p.amount + ':' + p.method + ':' + clean(p.detail) + ':' + seen.filter((x) => x === p.date + p.amount).length;
     seen.push(p.date + p.amount);
     if (order.paymentKeys.includes(k)) return;
+    // Tabletten (NFC) zaten alınmış kart ödemesi föye girildiyse ikinci kez işlenmez: aynı tutarlı ilk eşleşmemiş kayıtla kapanır.
+    const tp = p.method === 'card' && (order.terminal || []).find((t) => !t.matchedKey && t.amount === p.amount);
+    if (tp) {
+      tp.matchedKey = k;
+      order.paymentKeys.push(k);
+      return;
+    }
     const accountId = p.accountId || (p.method === 'card' ? posForCard(b, p.detail) : br.cashAccount || b.accounts.find((a) => a.kind === 'cash' && a.active)?.id);
     postOrderPayment(b, order, { ...p, accountId, installments: installmentsOf(p.detail) }, k);
     order.paymentKeys.push(k);
@@ -1506,6 +1514,77 @@ export function deliverOrder(b, { collectionId, date = b.today }) {
   c.delivered = true;
   c.deliveredOn = date;
   c.unlinked = c.gross - c.vat;
+}
+
+// ───────────────────────── tablet (NFC / SoftPOS) tahsilatı ─────────────────────────
+/**
+ * Tabletten onaylanmış kart ödemesi. Siparişe bağlıysa sipariş tahsilatı olur (avans / alacak kapanır); föyde aynı
+ * tutarlı kart ödemesi sonradan girildiğinde syncOrder onu bu kayıtla eşler, çift tahsilat oluşmaz.
+ * Sipariş yoksa föy dışı tahsilat (avans) olarak girer.
+ * input: {key, date, posId, amount, installments, orderId?, orderNo?, customer?, branchId?, txnId, authCode}
+ */
+export function terminalPayment(b, input) {
+  return once(b, input.key, { ...input, key: undefined }, () => {
+    if (!clean(input.txnId) || !clean(input.authCode)) throw Error('Onay kodu olmayan kart işlemi kaydedilemez.');
+    if (b.collections.some((c) => c.txnId && c.txnId === clean(input.txnId))) throw Error('Bu kart işlemi zaten kaydedilmiş.');
+    const pos = money(b, input.posId, ['pos']);
+    const date = input.date || b.today;
+    const inst = input.installments || 1;
+    let id;
+    if (input.orderId) {
+      const order = b.orders.find((o) => o.id === input.orderId);
+      if (!order || order.cancelled) throw Error('Sipariş bulunamadı.');
+      // Föyde bu kart ödemesi tabletten önce girilip kaydedildiyse yeni tahsilat açılmaz; mevcut kayda onay kodu bağlanır.
+      const pre = b.collections.find((c) => c.orderId === order.id && !c.txnId && c.gross === input.amount && c.date === date && b.accounts.find((a) => a.id === c.accountId)?.kind === 'pos');
+      if (pre) {
+        Object.assign(pre, { source: 'terminal', txnId: clean(input.txnId), authCode: clean(input.authCode) });
+        (order.terminal ||= []).push({ amount: input.amount, date, txnId: clean(input.txnId), matchedKey: 'föy-önce' });
+        audit(b, 'Tablet kart tahsilatı (föydeki ödemeyle eşlendi)', pre.id, clean(input.txnId));
+        return pre.id;
+      }
+      const open = order.total - order.collected;
+      if (input.amount > open) throw Error('Tutar siparişin kalan bakiyesini (' + (open / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + ' TL) aşıyor.');
+      id = postOrderPayment(b, order, { amount: input.amount, date, accountId: pos.id, installments: inst }, 'tp:' + input.key);
+      (order.terminal ||= []).push({ amount: input.amount, date, txnId: clean(input.txnId), matchedKey: '' });
+    } else {
+      id = recordCollection(b, { key: 'tpc:' + input.key, date, accountId: pos.id, gross: input.amount, orderNo: input.orderNo || 'Tablet tahsilatı', customer: input.customer || '', installments: inst, branchId: input.branchId });
+    }
+    const c = b.collections.find((x) => x.id === id);
+    Object.assign(c, { source: 'terminal', txnId: clean(input.txnId), authCode: clean(input.authCode) });
+    audit(b, 'Tablet kart tahsilatı', id, clean(input.txnId));
+    return id;
+  });
+}
+/** Föye henüz girilmemiş tablet tahsilatları (personel hatırlatması). */
+export function unmatchedTerminal(b) {
+  return b.orders.flatMap((o) => (o.terminal || []).filter((t) => !t.matchedKey).map((t) => ({ ...t, orderId: o.id, orderNo: o.no, customer: o.customer })));
+}
+
+// ───────────────────────── SGK (Medula) alacağı ─────────────────────────
+/** Teslim edilmiş siparişte SGK'nın ödeyeceği pay müşteriden SGK'ya aktarılır (müşteri yalnızca farkı öder). */
+export function sgkClaim(b, { key, orderId, amount, date = b.today, takipNo }) {
+  return once(b, key, { orderId, amount, date, takipNo }, () => {
+    const o = b.orders.find((x) => x.id === orderId);
+    if (!o || o.cancelled) throw Error('Sipariş bulunamadı.');
+    if (!o.delivered) throw Error('SGK payı teslimden sonra işlenir; önce siparişi teslim edin.');
+    amt(amount, 'SGK payı');
+    if (!clean(takipNo)) throw Error('Medula takip numarası gerekli.');
+    const due = balance(b, 'RECEIVABLE', { order: o.id });
+    if (amount > due) throw Error('SGK payı müşterinin açık bakiyesinden (' + (due / 100).toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + ' TL) büyük olamaz.');
+    postAll(b, [{ key: 'sgk:' + key, date, kind: 'sgk-claim', memo: 'SGK payı (Medula ' + clean(takipNo) + ') · ' + o.no + ' · ' + o.customer, lines: [L('SGK_RECEIVABLE', amount, 0, { branch: o.branchId }), L('RECEIVABLE', 0, amount, { order: o.id, branch: o.branchId })] }]);
+    o.sgk = (o.sgk || 0) + amount;
+    return true;
+  });
+}
+/** SGK'nın aylık ödemesi bankaya geldiğinde alacak kapanır. */
+export function sgkCollect(b, { key, date = b.today, bankId, amount, invoiceNo = '' }) {
+  return once(b, key, { date, bankId, amount, invoiceNo }, () => {
+    const bank = money(b, bankId, ['bank']);
+    amt(amount, 'SGK ödemesi');
+    if (amount > balance(b, 'SGK_RECEIVABLE', { asOf: date })) throw Error('SGK’dan bu kadar alacak yok.');
+    postAll(b, [{ key: 'sgkc:' + key, date, kind: 'sgk-collect', memo: 'SGK ödemesi' + (clean(invoiceNo) ? ' · fatura ' + clean(invoiceNo) : ''), lines: [L(bank.id, amount, 0, { cf: 'operating' }), L('SGK_RECEIVABLE', 0, amount)] }]);
+    return true;
+  });
 }
 
 // ───────────────────────── POS → banka ─────────────────────────
