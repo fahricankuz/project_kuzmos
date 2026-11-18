@@ -170,6 +170,7 @@
 #kuzmos-app .tap.ok .tap-ring{background:var(--green-bg);color:var(--green)}
 #kuzmos-app .tap.bad .tap-ring{background:var(--red-bg);color:var(--red)}
 #kuzmos-app .tap-note b{font-size:inherit;letter-spacing:0}
+#kuzmos-app .tap-note.ok-note{background:var(--green-bg);color:#14532d}
 #kuzmos-app .tap-note{max-width:440px;font-size:13px;background:var(--amber-bg);color:#5b4a0a;border-radius:10px;padding:10px 12px;margin-top:10px}
 @keyframes kzpulse{0%{box-shadow:0 0 0 0 rgba(245,200,0,.55)}100%{box-shadow:0 0 0 26px rgba(245,200,0,0)}}
 @media (prefers-reduced-motion:reduce){#kuzmos-app .tap-ring{animation:none!important}}
@@ -222,6 +223,9 @@
 #kuzmos-app .ck.ok{background:var(--green-bg);color:var(--green)}#kuzmos-app .ck.no{background:var(--red-bg);color:var(--red)}#kuzmos-app .ck.info{background:var(--blue-bg);color:var(--blue)}
 #kuzmos-app .drawer{border:2px solid var(--yellow);border-radius:14px;background:var(--panel);margin-bottom:16px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
 #kuzmos-app .drawer>header{display:flex;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:flex-start}
+#kuzmos-app .frame-host{padding:0 24px 40px}
+#kuzmos-app .frame-host[hidden]{display:none}
+@media(max-width:620px){#kuzmos-app .frame-host{padding:0 16px 32px}}
 #kuzmos-app .mail-frame{width:100%;height:640px;border:0;border-top:1px solid var(--line);background:#f3f3f5;border-radius:0 0 12px 12px;display:block}
 #kuzmos-app .staff-frame{width:100%;height:1100px;border:0;border-radius:12px;background:#fff}
 #kuzmos-app .scan{display:flex;gap:8px;max-width:560px;margin-bottom:14px}
@@ -318,6 +322,7 @@
 <nav class="tabs" id="kz-tabs" aria-label="Paneller"></nav>
 <div class="demo-note">Deneme ortamı · örnek verilerle çalışır, sayfa yenilenince sıfırlanır. Oranlar örnektir.</div>
 <div id="kz-main"></div>
+<div id="kz-frame-host" class="frame-host" hidden></div>
 <footer class="foot"><span>Kuz Management Operating System · v0.9 önizleme</span><span>Canlı banka, SoftPOS ve Medula bağlantısı yok · görünüm seçimi güvenlik değildir</span></footer>
 <script>
 /*__BUNDLE__*/

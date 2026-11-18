@@ -142,3 +142,18 @@ test('SGK payı finansta müşteri alacağından SGK alacağına geçer; SGK öd
   F.syncOrder(nd, order());
   assert.throws(() => F.sgkClaim(nd, { key: 's', orderId: 'o1', amount: T(1), takipNo: 'X' }), /teslimden sonra/);
 });
+
+test('Föyde kartla girilen ödeme, tabletten çekilince aynı kayda bağlanır (tarih farklı olsa da); çift tahsilat yok', async () => {
+  const F = await import('../finance/engine.mjs');
+  const b = F.demoBooks();
+  const T = (x) => Math.round(x * 100);
+  F.syncOrder(b, { id: 'fy-1', no: 'DK-1', date: '2026-11-18', customer: 'Ayşe', seller: 'Sema', total: T(9000), lines: [{ label: 'Çerçeve', qty: 1, unitPrice: T(9000), vatRate: 10, category: 'Optik Çerçeve' }], payments: [{ amount: T(3000), date: '2026-11-18', method: 'card', detail: 'Garanti 3 Taksit' }], delivered: false });
+  const c = b.collections.find((x) => x.orderId === 'fy-1');
+  const n = b.collections.length;
+  F.terminalPayment(b, { key: 'tp-x', collectionId: c.id, date: b.today, posId: 'pos-garanti', amount: T(3000), installments: 3, orderId: 'fy-1', orderNo: 'DK-1', txnId: 'T1', authCode: 'A1' });
+  assert.equal(b.collections.length, n);
+  assert.equal(c.txnId, 'T1');
+  assert.equal(b.orders.find((o) => o.id === 'fy-1').collected, T(3000));
+  assert.throws(() => F.terminalPayment(b, { key: 'tp-y', collectionId: c.id, date: b.today, posId: 'pos-garanti', amount: T(3000), orderId: 'fy-1', txnId: 'T2', authCode: 'A2' }), /zaten çekilmiş/);
+  assert.throws(() => F.terminalPayment(b, { key: 'tp-z', collectionId: c.id, date: b.today, posId: 'pos-garanti', amount: T(2999), orderId: 'fy-1', txnId: 'T3', authCode: 'A3' }));
+});

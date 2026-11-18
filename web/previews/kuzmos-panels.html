@@ -170,6 +170,7 @@
 #kuzmos-app .tap.ok .tap-ring{background:var(--green-bg);color:var(--green)}
 #kuzmos-app .tap.bad .tap-ring{background:var(--red-bg);color:var(--red)}
 #kuzmos-app .tap-note b{font-size:inherit;letter-spacing:0}
+#kuzmos-app .tap-note.ok-note{background:var(--green-bg);color:#14532d}
 #kuzmos-app .tap-note{max-width:440px;font-size:13px;background:var(--amber-bg);color:#5b4a0a;border-radius:10px;padding:10px 12px;margin-top:10px}
 @keyframes kzpulse{0%{box-shadow:0 0 0 0 rgba(245,200,0,.55)}100%{box-shadow:0 0 0 26px rgba(245,200,0,0)}}
 @media (prefers-reduced-motion:reduce){#kuzmos-app .tap-ring{animation:none!important}}
@@ -222,6 +223,9 @@
 #kuzmos-app .ck.ok{background:var(--green-bg);color:var(--green)}#kuzmos-app .ck.no{background:var(--red-bg);color:var(--red)}#kuzmos-app .ck.info{background:var(--blue-bg);color:var(--blue)}
 #kuzmos-app .drawer{border:2px solid var(--yellow);border-radius:14px;background:var(--panel);margin-bottom:16px;box-shadow:0 8px 24px rgba(0,0,0,.06)}
 #kuzmos-app .drawer>header{display:flex;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:flex-start}
+#kuzmos-app .frame-host{padding:0 24px 40px}
+#kuzmos-app .frame-host[hidden]{display:none}
+@media(max-width:620px){#kuzmos-app .frame-host{padding:0 16px 32px}}
 #kuzmos-app .mail-frame{width:100%;height:640px;border:0;border-top:1px solid var(--line);background:#f3f3f5;border-radius:0 0 12px 12px;display:block}
 #kuzmos-app .staff-frame{width:100%;height:1100px;border:0;border-radius:12px;background:#fff}
 #kuzmos-app .scan{display:flex;gap:8px;max-width:560px;margin-bottom:14px}
@@ -318,6 +322,7 @@
 <nav class="tabs" id="kz-tabs" aria-label="Paneller"></nav>
 <div class="demo-note">Deneme ortamı · örnek verilerle çalışır, sayfa yenilenince sıfırlanır. Oranlar örnektir.</div>
 <div id="kz-main"></div>
+<div id="kz-frame-host" class="frame-host" hidden></div>
 <footer class="foot"><span>Kuz Management Operating System · v0.9 önizleme</span><span>Canlı banka, SoftPOS ve Medula bağlantısı yok · görünüm seçimi güvenlik değildir</span></footer>
 <script>
 "use strict";
@@ -1859,7 +1864,15 @@ function terminalPayment(b, input) {
       const order = b.orders.find((o) => o.id === input.orderId);
       if (!order || order.cancelled) throw Error('Sipariş bulunamadı.');
       // Föyde bu kart ödemesi tabletten önce girilip kaydedildiyse yeni tahsilat açılmaz; mevcut kayda onay kodu bağlanır.
-      const pre = b.collections.find((c) => c.orderId === order.id && !c.txnId && c.gross === input.amount && c.date === date && b.accounts.find((a) => a.id === c.accountId)?.kind === 'pos');
+      // collectionId verilirse (föy kaydından kart ekranına yönlendirme) tam o kayıt eşlenir; tarih aranmaz.
+      const isPos = (c) => b.accounts.find((a) => a.id === c.accountId)?.kind === 'pos';
+      let pre = null;
+      if (input.collectionId) {
+        pre = b.collections.find((c) => c.id === input.collectionId);
+        if (!pre || pre.orderId !== order.id || !isPos(pre)) throw Error('Kart onayı bekleyen föy ödemesi bulunamadı.');
+        if (pre.txnId) throw Error('Bu föy ödemesi için kart zaten çekilmiş (onay ' + pre.authCode + ').');
+        if (pre.gross !== input.amount) throw Error('Çekilen tutar föydeki kart ödemesiyle aynı olmalı.');
+      } else pre = b.collections.find((c) => c.orderId === order.id && !c.txnId && c.gross === input.amount && c.date === date && isPos(c));
       if (pre) {
         Object.assign(pre, { source: 'terminal', txnId: clean(input.txnId), authCode: clean(input.authCode) });
         (order.terminal ||= []).push({ amount: input.amount, date, txnId: clean(input.txnId), matchedKey: 'föy-önce' });
@@ -3257,6 +3270,8 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
     termEditBranch: '',
     termDraft: null,
     term: { orderId: '', amount: '', installments: '1', customer: '', state: '', intent: null, result: null },
+    // Föyde kartla girilip henüz tabletten çekilmemiş ödemeler: [{collectionId, orderId, orderNo, customer, amount, installments}]
+    awaitCard: [],
     termLog: P.createTerminalLog(),
     // SGK Medula: önizlemede demo adaptör; tarife ÖRNEK tutardır, Ayarlar › Medula'dan değiştirilir
     medula: M.createMedulaState({ tariff: { 'uzak-cam': 15000, 'yakin-cam': 15000, cerceve: 10000 } }),
@@ -3440,13 +3455,12 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
     const roleSel = root.querySelector('#kz-role');
     roleSel.innerHTML = Object.entries(H.ROLE_LABELS).map(([v, t]) => '<option value="' + v + '"' + (v === S.role ? ' selected' : '') + '>' + t + '</option>').join('');
     root.querySelector('#kz-tabs').innerHTML = PANELS.filter(([p]) => H.canPanel(S.role, p)).map(([p, t, i]) => btn('panel', ic(i) + '<span>' + t + '</span>', { data: { v: p }, pressed: p === S.panel || (p === 'manager' && S.panel === 'users') })).join('');
-    S.staff.frame = null;
-    S.staff.ready = false;
+
     const fl = S.flash ? '<div class="flash ' + (S.flash.kind === 'err' ? 'err' : '') + '" role="status"><span>' + esc(S.flash.text) + '</span>' + btn('dismiss', '✕', { cls: 'ghost' }) + '</div>' : '';
     if (S.panel === 'finance') main.innerHTML = '<div class="layout">' + financeNav() + '<div class="content">' + fl + financeScreen() + '</div></div>';
     else main.innerHTML = '<div class="layout single"><div class="content">' + fl + ({ manager: managerScreen, staff: staffScreen, inventory: inventoryScreen, users: usersScreen }[S.panel] || managerScreen)() + '</div></div>';
     labelTables();
-    if (S.panel === 'staff') mountStaffFrame();
+    showStaffFrame(S.panel === 'staff' && S.staffView === 'form');
     if (S.panel === 'finance' && S.fin === 'new') refreshDocPreview();
     if (S.panel === 'finance' && S.pay) refreshPayPreview();
   }
@@ -4332,7 +4346,7 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
         '<form class="scan" data-form="staff-scan"><input name="barcode" aria-label="Sipariş için barkod" value="' + esc(S.staff.barcode) + '" placeholder="Ürün barkodu okutun"><button type="submit" class="primary">Ürün satırına ekle</button></form>' +
         '<div id="staff-sync">' + (S.staff.notice ? '<div class="callout ' + (S.staff.notice.kind === 'err' ? 'bad' : '') + '" style="white-space:pre-line">' + esc(S.staff.notice.text) + '</div>' : '') + '</div>' +
         (S.staff.product ? '<div class="callout">' + esc(S.staff.product.urun) + ' · ' + esc(S.staff.product.sku) + ' · ' + esc(S.staff.product.fiyat) + ' TL · Satılabilir ' + S.staff.product.available + '</div>' : '') +
-        '<iframe class="staff-frame" title="Kaynak personel sipariş formu" sandbox="allow-scripts allow-modals"></iframe>');
+        '');
   }
   function notifyScreen() {
     const n = S.notify;
@@ -4368,10 +4382,24 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
   function bridgeScript(nonce) {
     return '<script>(function(){const token=' + JSON.stringify(nonce) + ';window.addEventListener("message",function(e){if(e.source!==parent||!e.data||e.data.type!=="kuzmos-add-product"||e.data.nonce!==token)return;const p=e.data.product;if(!p||!["urun","ekartman","kopru","kol","kategori","fiyat","sku"].every(k=>typeof p[k]==="string"&&p[k].length<200))return;let row=[...document.querySelectorAll("#productRows .product-row")].find(r=>!r.querySelector("input").value.trim());if(!row){addProductRow();row=document.querySelector("#productRows .product-row:last-child")}const inputs=row.querySelectorAll("input");[p.urun,"1",p.ekartman,p.kopru,p.kol,p.kategori,p.fiyat].forEach((v,i)=>{if(inputs[i])inputs[i].value=v});row.dataset.kuzmosSku=p.sku;calcSubtotal();parent.postMessage({type:"kuzmos-product-added",nonce:token,sku:p.sku},"*")});try{var _save=saveRecordToServer;saveRecordToServer=function(rec,onOk){try{var skus={};document.querySelectorAll("#productRows .product-row").forEach(function(r){var i=r.querySelector("input");if(r.dataset.kuzmosSku&&i)skus[i.value.trim()]=r.dataset.kuzmosSku});var pays=getPayments(rec).map(function(p){return{amount:Math.round(parseTRMoney(p.tutar)*100),date:String(p.tarih||rec.siparisTarihi||""),method:p.yontem==="kk"?"card":"cash",detail:String(p.ccDetail||"")}});var lines=(rec.products||[]).map(function(p){var v=getCatVAT(p.kategori);return{label:String(p.urun||""),qty:parseInt(p.adet,10)||1,unitPrice:Math.round(parseTRMoney(p.fiyat)*100),vatRate:v===null?-1:v,category:String(p.kategori||""),sku:skus[String(p.urun||"").trim()]||""}});var mails={};["siparis","hazir","tesekkur"].forEach(function(t){try{var m=buildMail(rec,t);mails[t]={subject:String(m.subject),html:String(m.html)}}catch(e){}});parent.postMessage({type:"kuzmos-order-saved",nonce:token,mails:mails,order:{id:String(rec.id),no:String(rec.no||""),date:String(rec.siparisTarihi||""),customer:String(rec.adSoyad||""),email:String(rec.eposta||""),status:String(rec.siparisDurumu||""),seller:String(rec.satisTem||""),total:Math.round(parseTRMoney(rec.tutar)*100),lines:lines,payments:pays,delivered:rec.siparisDurumu==="Teslim Edildi",deliveredOn:String(rec.teslimTarihi||"")}},"*")}catch(err){parent.postMessage({type:"kuzmos-order-error",nonce:token,message:String(err&&err.message||err)},"*")}return _save(rec,onOk)};maybeAutoNotify=function(rec,type){try{if(type==="hazir"&&typeof showNotifyCard==="function")showNotifyCard(rec,String(rec.eposta||"").trim()?true:null)}catch(e){}};sendCustomerMail=function(rec,type,opts){opts=opts||{};var to=String(rec.eposta||"").trim();if(!to){if(!opts.silent)toast("Bu kayıtta e-posta adresi yok",false);if(opts.done)opts.done(false);return}var m=buildMail(rec,type);parent.postMessage({type:"kuzmos-mail-manual",nonce:token,mail:{orderId:String(rec.id),no:String(rec.no||""),customer:String(rec.adSoyad||""),to:to,type:type,subject:String(m.subject),html:String(m.html)}},"*");markMailSent(rec,type);saveLocal();if(!opts.silent)toast("Mail Kuzmos gönderim kutusuna alındı · "+to,true);if(opts.done)opts.done(true)}}catch(e){}parent.postMessage({type:"kuzmos-staff-ready",nonce:token},"*")})();<\/script>';
   }
-  function mountStaffFrame() {
-    const f = main.querySelector('iframe.staff-frame');
-    if (!f) return;
+  /** Föy tek bir kez yüklenir ve ekranlar arası geçişte kaybolmaz (yazılan bilgiler ve föy listesi korunur). */
+  function showStaffFrame(on) {
+    const host = root.querySelector('#kz-frame-host');
+    host.hidden = !on;
+    if (on && !S.staff.frame) mountStaffFrame(host);
+  }
+  function resetStaffFrame() {
+    root.querySelector('#kz-frame-host').innerHTML = '';
+    Object.assign(S.staff, { frame: null, ready: false, pending: null });
+  }
+  function mountStaffFrame(host) {
+    const f = document.createElement('iframe');
+    f.className = 'staff-frame';
+    f.title = 'Kaynak personel sipariş formu';
+    f.setAttribute('sandbox', 'allow-scripts allow-modals');
+    host.appendChild(f);
     S.staff.frame = f;
+    S.staff.ready = false;
     S.staff.nonce = 'kz-' + Math.random().toString(36).slice(2);
     f.srcdoc = ORIGINAL_FORM.replace('</body>', bridgeScript(S.staff.nonce) + '</body>');
   }
@@ -4429,14 +4457,34 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
     const bad = o.lines.find((l) => l.vatRate < 0);
     if (bad) return staffNotice('err', '“' + bad.label + '” için kategori seçilmemiş; KDV oranı bilinmediği için finansa işlenmedi. Föyde kategoriyi seçip tekrar kaydedin.' + (mailNote ? '\n' + mailNote : ''));
     const next = structuredClone(S.books);
+    const before = new Set(S.books.collections.map((c) => c.id));
     try {
       const r = F.syncOrder(next, o);
       S.books = next;
       syncStock();
+      // Föyde yeni kart ödemesi (kapora / tahsilat) girildiyse kart tablette çekilsin diye ödeme ekranına geç.
+      const fresh = next.collections.filter((c) => c.orderId === o.id && !before.has(c.id) && !c.txnId && next.accounts.find((a) => a.id === c.accountId)?.kind === 'pos');
+      if (fresh.length) {
+        const order = next.orders.find((x) => x.id === o.id);
+        S.awaitCard.push(...fresh.map((c) => ({ collectionId: c.id, orderId: o.id, orderNo: order.no, customer: order.customer, amount: c.gross, installments: c.installments || 1 })));
+        S.staff.notice = { kind: 'ok', text: o.no + ' kaydedildi.' + (mailNote ? '\n' + mailNote : '') };
+        return openAwaitCard(fresh[0].id);
+      }
       staffNotice('ok', o.no + ' finansa işlendi: ' + (r.payments ? r.payments + ' yeni tahsilat' : 'yeni tahsilat yok') + (r.delivered ? ' · teslim edildi: hasılat, KDV ve satılan malın maliyeti kaydedildi' : '') + '.' + (mailNote ? '\n' + mailNote : ''));
     } catch (err) {
       staffNotice('err', o.no + ' finansa işlenemedi: ' + friendly(err.message) + (mailNote ? '\n' + mailNote : ''));
     }
+  }
+  /** Föydeki kart ödemesini kartla tahsilat ekranında, tutarı ve taksidi dolu olarak açar. */
+  function openAwaitCard(collectionId) {
+    const a = S.awaitCard.find((x) => x.collectionId === collectionId);
+    if (!a) return;
+    S.term = { orderId: a.orderId, awaitId: a.collectionId, amount: formatInput(a.amount), installments: String(a.installments), customer: '', state: '', intent: null, result: null };
+    S.panel = 'staff';
+    S.staffView = 'pay';
+    S.flash = null;
+    render();
+    root.scrollIntoView({ block: 'start' });
   }
   function staffNotice(kind, text) {
     S.staff.notice = { kind, text };
@@ -4449,7 +4497,7 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
     S.staff.barcode = barcode;
     S.staff.product = product;
     S.staff.pending = product;
-    if (S.panel === 'staff' && S.staff.ready) {
+    if (S.panel === 'staff' && S.staffView === 'form' && S.staff.ready) {
       // Föyü yeniden yüklememek için tam render yapılmaz; yalnızca bilgi şeridi güncellenir.
       sendStaffProduct();
       main.querySelector('.flash')?.remove();
@@ -4457,7 +4505,9 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
       return;
     }
     S.panel = 'staff';
+    S.staffView = 'form';
     render();
+    sendStaffProduct();
   }
 
   // ───────────────────────── Envanter ─────────────────────────
@@ -4505,26 +4555,31 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
     const cfg = payCfg();
     const dev = P.deviceSupport(window);
     const t = S.term;
+    const aw = S.awaitCard.find((x) => x.collectionId === t.awaitId);
     const orders = termOrders();
+    if (aw && !orders.some((o) => o.id === aw.orderId)) orders.unshift(b.orders.find((o) => o.id === aw.orderId));
     const sel = orders.find((o) => o.id === t.orderId);
-    const remaining = sel ? sel.total - sel.collected : 0;
+    const remaining = aw ? aw.amount : sel ? sel.total - sel.collected : 0;
     const prov = P.PROVIDERS[cfg.provider];
     const unm = F.unmatchedTerminal(b);
     const log = [...S.termLog.items].reverse().slice(0, 8);
     const status = () => {
       const amount = t.intent ? tl(t.intent.amount) + (t.intent.installments > 1 ? ' · ' + t.intent.installments + ' taksit' : ' · tek çekim') : '';
       if (t.state === 'pending') return '<div class="tap" role="status" aria-live="polite"><div class="tap-ring">' + ic('nfc') + '</div><b>Kartı tabletin arkasına yaklaştırın</b><span>' + amount + '</span><small>' + esc(prov.label) + ' bekleniyor…</small></div>';
-      if (t.state === 'approved') return '<div class="tap ok" role="status"><div class="tap-ring">' + ic('check') + '</div><b>Ödeme alındı</b><span>' + amount + '</span><small>Onay ' + esc(t.result.authCode) + (t.result.maskedPan ? ' · ' + esc(t.result.maskedPan) : '') + '</small>' + (t.intent.orderId ? '<p class="tap-note">Föyde <b>' + esc(t.intent.orderNo) + '</b> siparişine <b>' + tl(t.intent.amount) + '</b> kart ödemesi olarak girin. Kuzmos ikinci kez kaydetmez.</p>' : '') + '<div class="row" style="justify-content:center">' + btn('term-new', 'Yeni tahsilat', { cls: 'primary' }) + (t.intent.orderId ? btn('staff-view', 'Föye git', { data: { v: 'form' } }) : '') + '</div></div>';
-      if (t.state) return '<div class="tap bad" role="alert"><div class="tap-ring">✕</div><b>' + esc(P.STATUS[t.state] || 'Ödeme alınamadı') + '</b><span>' + amount + '</span><small>' + esc(t.result?.message || '') + '</small><div class="row" style="justify-content:center">' + btn('term-new', 'Tekrar dene', { cls: 'primary' }) + '</div></div>';
+      if (t.state === 'approved') return '<div class="tap ok" role="status"><div class="tap-ring">' + ic('check') + '</div><b>Ödeme alındı</b><span>' + amount + '</span><small>Onay ' + esc(t.result.authCode) + (t.result.maskedPan ? ' · ' + esc(t.result.maskedPan) : '') + '</small>' + (t.awaitId ? '<p class="tap-note ok-note">Föydeki <b>' + esc(t.intent.orderNo) + '</b> kart ödemesiyle eşlendi. Föye tekrar girmenize gerek yok.</p>' : t.intent.orderId ? '<p class="tap-note">Föyde <b>' + esc(t.intent.orderNo) + '</b> siparişine <b>' + tl(t.intent.amount) + '</b> kart ödemesi olarak girin. Kuzmos ikinci kez kaydetmez.</p>' : '') + '<div class="row" style="justify-content:center">' + (t.awaitId ? (S.awaitCard.length ? btn('await-open', 'Sıradaki kart ödemesi', { cls: 'primary', data: { id: S.awaitCard[0].collectionId } }) + btn('staff-view', 'Föye dön', { data: { v: 'form' } }) : btn('staff-view', 'Föye dön', { cls: 'primary', data: { v: 'form' } }) + btn('term-new', 'Yeni tahsilat')) : btn('term-new', 'Yeni tahsilat', { cls: 'primary' }) + (t.intent.orderId ? btn('staff-view', 'Föye git', { data: { v: 'form' } }) : '')) + '</div></div>';
+      if (t.state) return '<div class="tap bad" role="alert"><div class="tap-ring">✕</div><b>' + esc(P.STATUS[t.state] || 'Ödeme alınamadı') + '</b><span>' + amount + '</span><small>' + esc(t.result?.message || '') + '</small>' + (t.awaitId ? '<p class="tap-note">Föyde bu kart ödemesi kayıtlı ama kart çekilmedi. Tekrar deneyin; müşteri başka yolla ödediyse föyden bu ödemeyi düzeltin.</p>' : '') + '<div class="row" style="justify-content:center">' + (t.awaitId ? btn('await-retry', 'Tekrar dene', { cls: 'primary', data: { id: t.awaitId } }) + btn('staff-view', 'Föye dön', { data: { v: 'form' } }) : btn('term-new', 'Tekrar dene', { cls: 'primary' })) + '</div></div>';
       return '';
     };
     const orderBtn = (o) => '<button type="button" class="rvitem" data-act="term-order" data-id="' + o.id + '" aria-pressed="' + (o.id === t.orderId) + '"><span class="rv-top"><span><b style="font-size:14px">' + esc(o.no) + '</b> <small>' + esc(o.customer) + '</small></span><b>' + tl(o.total - o.collected) + '</b></span><small>Toplam ' + tl(o.total) + ' · alınan ' + tl(o.collected) + (o.delivered ? ' · teslim edildi' : ' · teslim bekliyor') + '</small></button>';
-    return (cfg.provider === 'demo' ? '<div class="callout warn"><b>Deneme modu:</b> gerçek kart çekilmez. Kuruşu <b>,13</b> olan tutarlar “reddedildi” sonucunu gösterir. Gerçek ödeme için yönetici Ayarlar › Tablet ödeme’den mağazanın SoftPOS bilgilerini girer.</div>' : '') +
+    const waiting = S.awaitCard.filter((x) => x.collectionId !== t.awaitId || !t.state);
+    const awaitBox = aw && !t.state ? '<div class="callout ok"><b>' + esc(aw.orderNo) + '</b> föye kaydedildi. Föyde girilen <b>' + tl(aw.amount) + (aw.installments > 1 ? ' · ' + aw.installments + ' taksit' : '') + '</b> kart ödemesini şimdi tablete okutun.</div>' : '';
+    const waitList = waiting.length && !aw ? card('Kartı çekilecek föy ödemeleri', '<div class="list">' + waiting.map((x) => '<div><span><b>' + esc(x.orderNo) + '</b><small>' + esc(x.customer) + ' · ' + (x.installments > 1 ? x.installments + ' taksit' : 'tek çekim') + '</small></span><span class="row"><b class="num">' + tl(x.amount) + '</b>' + btn('await-open', 'Kartı çek', { cls: 'small primary', data: { id: x.collectionId } }) + btn('await-done', 'POS cihazından çekildi', { cls: 'small ghost', data: { id: x.collectionId } }) + '</span></div>').join('') + '</div>', { sub: 'Föyde kartla girildi, tabletten henüz çekilmedi.' }) : '';
+    return awaitBox + waitList + (cfg.provider === 'demo' ? '<div class="callout warn"><b>Deneme modu:</b> gerçek kart çekilmez. Kuruşu <b>,13</b> olan tutarlar “reddedildi” sonucunu gösterir. Gerçek ödeme için yönetici Ayarlar › Tablet ödeme’den mağazanın SoftPOS bilgilerini girer.</div>' : '') +
       (t.state ? status() :
         '<div class="grid2">' +
         card('1 · Hangi sipariş?', '<div class="rvlist">' + orders.map(orderBtn).join('') + '<button type="button" class="rvitem" data-act="term-order" data-id="" aria-pressed="' + (!t.orderId) + '"><span class="rv-top"><b style="font-size:14px">Siparişsiz tahsilat</b></span><small>Föyde kaydı olmayan ön ödeme / kapora</small></button></div>', { sub: orders.length ? 'Bakiyesi kalan siparişler. Dokunarak seçin.' : 'Bakiyesi kalan sipariş yok.' }) +
         '<form data-form="term" class="sticky">' + card('2 · Tutar', '<div class="pad">' +
-          '<label class="f amount-big">Çekilecek tutar (TL)' + money('amount', t.amount || (sel ? formatInput(remaining) : ''), 'required aria-describedby="term-hint"') + '<span class="hint" id="term-hint">' + (sel ? esc(sel.no) + ' · kalan ' + tl(remaining) : 'Siparişsiz tahsilat avans olarak kaydedilir') + '</span></label>' +
+          '<label class="f amount-big">Çekilecek tutar (TL)' + money('amount', t.amount || (sel ? formatInput(remaining) : ''), 'required aria-describedby="term-hint"' + (aw ? ' readonly' : '')) + '<span class="hint" id="term-hint">' + (aw ? 'Föyde girilen kart ödemesi · değiştirmek için föyü düzeltin' : sel ? esc(sel.no) + ' · kalan ' + tl(remaining) : 'Siparişsiz tahsilat avans olarak kaydedilir') + '</span></label>' +
           '<div class="form" style="margin-top:12px">' + field('Taksit', select('installments', Array.from({ length: cfg.maxInstallments }, (_, i) => [String(i + 1), i ? i + 1 + ' taksit' : 'Tek çekim']), t.installments || '1')) + (sel ? field('Müşteri', '<input readonly value="' + esc(sel.customer) + '">') : field('Müşteri adı', input('customer', t.customer || '', 'maxlength="60" placeholder="İsteğe bağlı"'))) + '</div>' +
           '</div><div id="term-error" class="error"></div><div class="savebar"><span>' + esc(prov.label) + '</span><button class="primary big" type="submit">' + ic('nfc') + ' Kartla ödeme al</button></div>') + '</form></div>') +
       '<div class="grid2e">' +
@@ -4534,6 +4589,7 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
   }
   async function runTerminal(intent) {
     const cfg = payCfg(intent.branchId);
+    const awaitId = S.term.awaitId || '';
     const wait = intent.provider === 'demo' ? new Promise((r) => setTimeout(r, 1400)) : Promise.resolve();
     let r;
     try {
@@ -4544,11 +4600,12 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
     P.logFinish(S.termLog, intent.id, r);
     if (r.status === 'approved') {
       const posId = cfg.posAccountId || activeAccounts(['pos'])[0]?.id;
-      const ok = mutate((b) => F.terminalPayment(b, { key: intent.id, date: today(), posId, amount: intent.amount, installments: r.installments, orderId: intent.orderId, orderNo: intent.orderNo, customer: intent.customer, branchId: intent.branchId, txnId: r.txnId, authCode: r.authCode }), 'Kart ödemesi alındı ve kaydedildi.');
+      const ok = mutate((b) => F.terminalPayment(b, { key: intent.id, collectionId: awaitId || undefined, date: today(), posId, amount: intent.amount, installments: r.installments, orderId: intent.orderId, orderNo: intent.orderNo, customer: intent.customer, branchId: intent.branchId, txnId: r.txnId, authCode: r.authCode }), 'Kart ödemesi alındı ve kaydedildi.');
       if (!ok) {
         r = { ...r, status: 'error', message: 'Kart çekildi ancak kayıt yapılamadı (' + (S.flash?.text || '') + '). Onay kodu ' + r.authCode + ' ile muhasebeye bildirin; tekrar çekmeyin.' };
       }
     }
+    if (r.status === 'approved' && awaitId) S.awaitCard = S.awaitCard.filter((x) => x.collectionId !== awaitId);
     S.term.state = r.status;
     S.term.result = r;
     if (S.panel === 'staff' && S.staffView === 'pay') render();
@@ -4627,7 +4684,7 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
     fin: (el) => { S.pay = null; S.plan = null; go('finance', el.dataset.v); },
     'go-fin': (el) => go('finance', el.dataset.v),
     dismiss: () => { S.flash = null; render(); },
-    'reset-demo': () => { if (confirm('Demo verisi başlangıç haline dönsün mü?')) { S.books = F.demoBooks(); S.stock = I.inventorySeed(); S.notify = N.createNotifier({ startDate: '2026-10-31' }); syncStock(); S.pay = S.plan = S.ret = null; S.doc = newDocDraft('expense'); S.term = { orderId: '', amount: '', installments: '1', customer: '', state: '', intent: null, result: null }; S.termLog = P.createTerminalLog(); S.medula = M.createMedulaState({ tariff: { 'uzak-cam': 15000, 'yakin-cam': 15000, cerceve: 10000 } }); S.med = { tc: '', receteNo: '', q: null, orderId: '', busy: false, err: '' }; flash('Demo verisi sıfırlandı.'); render(); } },
+    'reset-demo': () => { if (confirm('Demo verisi başlangıç haline dönsün mü?')) { resetStaffFrame(); S.awaitCard = []; S.books = F.demoBooks(); S.stock = I.inventorySeed(); S.notify = N.createNotifier({ startDate: '2026-10-31' }); syncStock(); S.pay = S.plan = S.ret = null; S.doc = newDocDraft('expense'); S.term = { orderId: '', amount: '', installments: '1', customer: '', state: '', intent: null, result: null }; S.termLog = P.createTerminalLog(); S.medula = M.createMedulaState({ tariff: { 'uzak-cam': 15000, 'yakin-cam': 15000, cerceve: 10000 } }); S.med = { tc: '', receteNo: '', q: null, orderId: '', busy: false, err: '' }; flash('Demo verisi sıfırlandı.'); render(); } },
     'doc-type': (el) => { S.doc = newDocDraft(el.dataset.v); S.quickParty = false; render(); },
     'doc-new': (el) => { S.doc = newDocDraft(el.dataset.v, el.dataset.party ? { partyId: el.dataset.party } : {}); go('finance', 'new'); },
     'doc-clear': () => resetDoc(),
@@ -4743,9 +4800,21 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
       const prev = H.shiftMonth(S.report.period, -1);
       mutate((b) => F.copyBudget(b, { from: prev, to: S.report.period, branchId: S.report.budgetBranch }), (n) => n ? monthTR(prev) + ' bütçesinden ' + n + ' kalem kopyalandı.' : monthTR(prev) + ' için bütçe yok.');
     },
-    'staff-view': (el) => { S.staffView = el.dataset.v; render(); },
+    'staff-view': (el) => {
+      // Sonuçlanmış kart işleminin ekranı, ödeme sekmesinden çıkınca temizlenir (bekleyen föy ödemeleri listede kalır).
+      if (el.dataset.v !== 'pay' && S.term.state && S.term.state !== 'pending') S.term = { orderId: '', amount: '', installments: '1', customer: '', state: '', intent: null, result: null };
+      S.staffView = el.dataset.v;
+      render();
+    },
     'staff-go': (el) => { S.staffView = el.dataset.v; go('staff'); },
-    'term-order': (el) => { if (S.term.state === 'pending') return; S.term.orderId = el.dataset.id; S.term.amount = ''; render(); },
+    'await-open': (el) => openAwaitCard(el.dataset.id),
+    'await-retry': (el) => { S.term.state = ''; openAwaitCard(el.dataset.id); },
+    'await-done': (el) => {
+      S.awaitCard = S.awaitCard.filter((x) => x.collectionId !== el.dataset.id);
+      flash('Ödeme mağazadaki POS cihazından çekilmiş olarak bırakıldı.');
+      render();
+    },
+    'term-order': (el) => { if (S.term.state === 'pending') return; S.term.awaitId = ''; S.term.orderId = el.dataset.id; S.term.amount = ''; render(); },
     'term-new': () => { if (S.term.state === 'pending') return; S.term = { orderId: '', amount: '', installments: '1', customer: '', state: '', intent: null, result: null }; render(); },
     'med-clear': () => { S.med = { tc: '', receteNo: '', q: null, orderId: '', busy: false, err: '' }; render(); },
     'med-deliver': (el) => {
@@ -5010,7 +5079,9 @@ const TEMPLATE_B64 = "UEsDBBQAAAAIADiXYV0JJeoa3AAAAK8BAAAPAAAAeGwvd29ya2Jvb2sueG
       try {
         const o = S.books.orders.find((x) => x.id === S.term.orderId);
         intent = P.createIntent({ id: 'tp-' + uid(), amount: parseTL(v.amount), installments: Number(v.installments) || 1, orderId: o?.id || '', orderNo: o?.no || '', customer: o?.customer || v.customer || '', branchId: storeBranch(), config: payCfg() });
-        if (o && intent.amount > o.total - o.collected) throw Error('Tutar siparişin kalan bakiyesinden (' + tl(o.total - o.collected) + ') büyük.');
+        const aw = S.awaitCard.find((x) => x.collectionId === S.term.awaitId);
+        if (aw && intent.amount !== aw.amount) throw Error('Tutar föydeki kart ödemesiyle aynı olmalı (' + tl(aw.amount) + ').');
+        if (o && !aw && intent.amount > o.total - o.collected) throw Error('Tutar siparişin kalan bakiyesinden (' + tl(o.total - o.collected) + ') büyük.');
         P.logStart(S.termLog, intent);
       } catch (e) {
         return showError(e, '#term-error');

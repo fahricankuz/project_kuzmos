@@ -1535,7 +1535,15 @@ export function terminalPayment(b, input) {
       const order = b.orders.find((o) => o.id === input.orderId);
       if (!order || order.cancelled) throw Error('Sipariş bulunamadı.');
       // Föyde bu kart ödemesi tabletten önce girilip kaydedildiyse yeni tahsilat açılmaz; mevcut kayda onay kodu bağlanır.
-      const pre = b.collections.find((c) => c.orderId === order.id && !c.txnId && c.gross === input.amount && c.date === date && b.accounts.find((a) => a.id === c.accountId)?.kind === 'pos');
+      // collectionId verilirse (föy kaydından kart ekranına yönlendirme) tam o kayıt eşlenir; tarih aranmaz.
+      const isPos = (c) => b.accounts.find((a) => a.id === c.accountId)?.kind === 'pos';
+      let pre = null;
+      if (input.collectionId) {
+        pre = b.collections.find((c) => c.id === input.collectionId);
+        if (!pre || pre.orderId !== order.id || !isPos(pre)) throw Error('Kart onayı bekleyen föy ödemesi bulunamadı.');
+        if (pre.txnId) throw Error('Bu föy ödemesi için kart zaten çekilmiş (onay ' + pre.authCode + ').');
+        if (pre.gross !== input.amount) throw Error('Çekilen tutar föydeki kart ödemesiyle aynı olmalı.');
+      } else pre = b.collections.find((c) => c.orderId === order.id && !c.txnId && c.gross === input.amount && c.date === date && isPos(c));
       if (pre) {
         Object.assign(pre, { source: 'terminal', txnId: clean(input.txnId), authCode: clean(input.authCode) });
         (order.terminal ||= []).push({ amount: input.amount, date, txnId: clean(input.txnId), matchedKey: 'föy-önce' });
