@@ -24,6 +24,7 @@ const html = oku(WEB, 'index.html');
 const govde = html
   .substring(html.indexOf('<body>') + '<body>'.length, html.indexOf('</body>'))
   .replace(/<script[\s\S]*?<\/script>/g, '')
+  .replace(/<div class="login-alt" data-hosted-only>.*?<\/div>/g, '')
   .trim();
 
 const css = oku(WEB, 'app.css');

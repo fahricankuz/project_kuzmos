@@ -1,5 +1,13 @@
 # Kuzmos
 
+Supabase tabanlı mağaza uygulaması, Kuzmos platform yönetimi ve ERP önizlemesi aynı depodadır.
+
+- [Mağaza uygulaması ve satış demosu](web/README.md)
+- [Veritabanı kurulumu ve platform kullanıcı yetkisi](supabase/README.md)
+- [ERP önizlemesi ve Hostinger paketi](hostinger-preview/README.md)
+
+## Apps Script Kasa modülü
+
 **Optik işletmeleri için sipariş ve kasa yönetimi.** Mağaza siparişi girer ve
 tahsilatı işler; tahsilat aynı anda kasaya gelir olarak düşer; muhasebe ve
 yönetici aynı veriden rapor alır. Mağaza kasanın tamamını göremez.

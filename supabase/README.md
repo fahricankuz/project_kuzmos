@@ -83,7 +83,7 @@ vardır.
    **Frankfurt (eu-central-1)**, veritabanı şifresini kaydet.
 2. **SQL Editor** → aşağıdaki dosyaların içeriğini **sırayla** yapıştır + Run:
    `0001_sema` → `0002_mantik` → `0003_guvenlik` → `0004_api` →
-   `0005_kullanicilar` → `0006_onboarding` → `0007_logo` → `seed.sql`
+   `0005_kullanicilar` → `0006_onboarding` → `0007_logo` → `0008_oranlar` → `seed.sql`
 
 ### 2. Kayıt akışını aç
 **Authentication → Providers → Email**: "Enable email provider" açık olsun.
@@ -154,7 +154,8 @@ Kod tarafı hazır; bunlar **senin ticari kararına** bağlı ve ayrıca kurulma
   metinleri abonenin yükümlülüğü, saklama/silme süreleri tanımlanmalı.
   Teknik taraf hazır: veri aktarımı (`isletme_verisi_aktar`), işletme silme
   (`delete from isletmeler ... cascade`), erişim günlüğü (`log`).
-- **Platform paneli.** `platform_ozet()` verisi hazır; ayrı bir yönetim
-  ekranı henüz yok (şimdilik SQL Editor).
+- **Platform paneli.** Yayınlanan web adresinde `/platform/` yolunu açın.
+  Yukarıdaki yöntemle yetkilendirilmiş bir Kuzmos hesabıyla giriş yapın.
+  İşletme arama, abonelik güncelleme ve son hareketler bu ekrandadır.
 - **Logo kovası** `0007_logo.sql` ile açılır; Storage → `logolar` kovasının
   oluştuğunu Supabase panelinden doğrulayabilirsin.

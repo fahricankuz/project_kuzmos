@@ -141,3 +141,13 @@ Sunucuya ulaşılamazsa sipariş ve kasa kayıtları `localStorage` kuyruğuna
 alınır, üstte "senkron bekleyen kayıt" bandı görünür; bağlantı gelince
 kuyruk gönderilir. Kuyruktaki kayıt gönderilene kadar veritabanında
 **yoktur** — kasa bu yüzden kuyruk boşken sayılmalıdır.
+
+## ERP önizlemesi ve Kuzmos platform paneli
+
+- `/previews/` barkod, stok, gelişmiş finans, ödeme ve Medula örneklerini
+  açar. Örnek işlemler tarayıcı belleğindedir. Canlı mağaza kayıtları bu
+  ekrana gönderilmez. Önizleme dosyalarını `node web/app/build.mjs` üretir.
+- `/platform/` Kuzmos ekibinin abonelikleri yönettiği ekrandır. Var olan
+  Supabase projesini ve uygulamanın bağlantı ayarlarını kullanır. İlk
+  platform kullanıcısını [veri katmanı rehberi](../supabase/README.md#3-kendini-platform-yöneticisi-yap)
+  üzerinden yetkilendirin. İşletme yöneticisi rolü bu panele erişim vermez.
