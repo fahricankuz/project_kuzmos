@@ -3,15 +3,16 @@
  *
  * Project Settings → API ekranından alınır:
  *   SUPABASE_URL      → "Project URL"
- *   SUPABASE_ANON_KEY → "anon public" anahtarı
+ *   SUPABASE_ANON_KEY → "Publishable key" veya eski "anon public" anahtarı
  *
  * Bu iki değer GİZLİ DEĞİLDİR; tarayıcıya gömülmek üzere tasarlanmıştır.
  * Veriyi koruyan şey anahtarın saklanması değil, veritabanındaki RLS
  * politikalarıdır (bkz. supabase/migrations/0003_guvenlik.sql).
  *
- * "service_role" anahtarı ASLA buraya yazılmaz: o anahtar RLS'i baypas eder.
+ * Bu ayarlar Kuzmos demo projesine aittir.
+ * service_role ve sb_secret anahtarları sunucu tarafında tutulur.
  */
 window.KUZMOS_CONFIG = {
-  SUPABASE_URL: 'BURAYA_PROJECT_URL',
-  SUPABASE_ANON_KEY: 'BURAYA_ANON_PUBLIC_ANAHTAR'
+  SUPABASE_URL: 'https://haqhtktrsbalkbjmlzlg.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable__9ZhkIPx9t1p7aU818T4MQ_4qVis9aq'
 };
